@@ -1,0 +1,48 @@
+﻿<info>
+  <version>1.2.24</version>
+  <build>11/26/2020 7:01:50 PM</build>
+  <setting>
+    <hs_firmware>
+      <hsfilename />
+      <hsaddress />
+    </hs_firmware>
+    <mode>0</mode>
+    <flash_opt>
+      <flashIO>0</flashIO>
+      <flashPin>0</flashPin>
+      <fwidx>0</fwidx>
+      <offset />
+    </flash_opt>
+    <uart_opt>
+      <port>0</port>
+      <baudrate>3000000</baudrate>
+      <parity>0</parity>
+      <flowctrl>0</flowctrl>
+    </uart_opt>
+    <erase_opt>
+      <eraseoffset />
+      <eraselength />
+      <erasemode>1</erasemode>
+    </erase_opt>
+    <keep_sys_data>True</keep_sys_data>
+    <verify>False</verify>
+    <erase>False</erase>
+    <customize>
+      <serialtimeout>10000</serialtimeout>
+      <normalbaud>115200</normalbaud>
+    </customize>
+    <encrypt_tool>
+      <ipaddress />
+      <port />
+      <CApath />
+      <IsGivenKeys>True</IsGivenKeys>
+      <IsSSLAuthen>False</IsSSLAuthen>
+      <EncKey>000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E5F</EncKey>
+      <HashKey>000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E5F</HashKey>
+      <IsProgram>False</IsProgram>
+      <PartOffset>0x110000</PartOffset>
+      <BootOffset>0x111000</BootOffset>
+      <BootLength>0x8000</BootLength>
+    </encrypt_tool>
+  </setting>
+</info>

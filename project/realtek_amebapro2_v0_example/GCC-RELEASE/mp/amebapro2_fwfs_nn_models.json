@@ -1,0 +1,29 @@
+{
+    "msg_level":3,
+
+	"PROFILE":["FWFS"],
+	"FWFS":{
+        "files":[
+			"MODEL0",
+			"MODEL2"
+		]
+	},
+    "MODEL0":{
+		"name" : "yolov4_tiny.nb",
+		"source":"binary",
+		"file":"yolov4_tiny.nb"
+ 
+    },
+    "MODEL1":{
+		"name" : "yamnet_fp16.nb",
+		"source":"binary",
+		"file":"yamnet_fp16.nb"
+
+    },
+    "MODEL2":{
+		"name" : "yamnet_s.nb",
+		"source":"binary",
+		"file":"yamnet_s.nb"
+
+    }
+}
