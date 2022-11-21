@@ -135,7 +135,8 @@ typedef struct
  * https://stackoverflow.com/questions/8146541/duplicate-external-static-declarations-not-allowed-in-visual-studio
  */
 #if !defined(_MSC_VER)
-static mbedtls_f_rng_t *const mbedtls_psa_get_random;
+// ESSENTIALS2: already defined in psa_util.h
+//static mbedtls_f_rng_t *const mbedtls_psa_get_random;
 #endif
 
 /** The maximum number of bytes that mbedtls_psa_get_random() is expected to

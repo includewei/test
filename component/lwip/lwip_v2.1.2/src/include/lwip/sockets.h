@@ -433,13 +433,15 @@ typedef struct ipv6_mreq {
 #define SIOCATMARK  _IOR('s',  7, unsigned long)  /* at oob mark? */
 #endif
 
-/* commands for fnctl */
+/* commands for fcntl */
 #ifndef F_GETFL
 #define F_GETFL 3
 #endif
 #ifndef F_SETFL
 #define F_SETFL 4
 #endif
+
+#include "fcntl.h"
 
 /* File status flags and file access modes for fnctl,
    these are bits in an int. */

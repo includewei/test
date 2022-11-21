@@ -486,11 +486,15 @@ int mbedtls_psa_get_random( void *p_rng,
 #if defined(MBEDTLS_CTR_DRBG_C)
 #include "mbedtls/ctr_drbg.h"
 typedef mbedtls_ctr_drbg_context mbedtls_psa_drbg_context_t;
-static mbedtls_f_rng_t *const mbedtls_psa_get_random = mbedtls_ctr_drbg_random;
+// ESSENTIALS2: replace with macro to avoid undefined reference when linking with pjsip
+//static mbedtls_f_rng_t *const mbedtls_psa_get_random = mbedtls_ctr_drbg_random;
+#define mbedtls_psa_get_random mbedtls_ctr_drbg_random
 #elif defined(MBEDTLS_HMAC_DRBG_C)
 #include "mbedtls/hmac_drbg.h"
 typedef mbedtls_hmac_drbg_context mbedtls_psa_drbg_context_t;
-static mbedtls_f_rng_t *const mbedtls_psa_get_random = mbedtls_hmac_drbg_random;
+// ESSENTIALS2: replace with macro to avoid undefined reference when linking with pjsip
+//static mbedtls_f_rng_t *const mbedtls_psa_get_random = mbedtls_hmac_drbg_random;
+#define mbedtls_psa_get_random mbedtls_hmac_drbg_random
 #endif
 extern mbedtls_psa_drbg_context_t *const mbedtls_psa_random_state;
 

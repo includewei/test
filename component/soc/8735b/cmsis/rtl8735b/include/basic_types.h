@@ -132,7 +132,9 @@ typedef enum _RTK_STATUS_ {
 
 #define _I volatile
 #define _O volatile
+#ifndef _IO  // Arlo: already defined sockets.h
 #define _IO volatile
+#endif
 
 #ifndef PVOID
 typedef void *PVOID;

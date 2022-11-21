@@ -30,7 +30,9 @@
 #define IP_FRAG                 1
 #define ARP_QUEUEING            0
 
+#ifndef CONFIG_LWIP_DHCP_COARSE_TIMER	// Arlo: use platform_opts.h
 #define CONFIG_LWIP_DHCP_COARSE_TIMER		0
+#endif
 
 /**
  * NO_SYS==1: Provides VERY minimal functionality. Otherwise,
