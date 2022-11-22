@@ -260,6 +260,7 @@ typedef struct {
 	int flick_enable;
 	uint32_t show_time;
 	uint32_t hide_time;
+	uint8_t RSVD[12];
 } rt_osd2_info_st;
 
 typedef struct {
@@ -376,5 +377,35 @@ struct rts_video_osd2_attr {
 
 	uint32_t reserved[4];
 };
+#define OSD_COLOR_TABLE_R_NUM_MAX 32
+#define OSD_COLOR_TABLE_G_NUM_MAX 32
+#define OSD_COLOR_TABLE_B_NUM_MAX 32
+#define OSD_COLOR_TABLE_A_NUM_MAX 16
+typedef struct {
+
+	int fmt;
+
+	BOOL b_update_all;
+
+	uint8_t ch_id;
+
+	uint8_t r_idx;
+	uint8_t g_idx;
+	uint8_t b_idx;
+	uint8_t a_idx;
+
+	uint8_t r_val;
+	uint8_t g_val;
+	uint8_t b_val;
+	uint8_t a_val;
+
+	uint8_t r_val_full[OSD_COLOR_TABLE_R_NUM_MAX];
+	uint8_t g_val_full[OSD_COLOR_TABLE_G_NUM_MAX];
+	uint8_t b_val_full[OSD_COLOR_TABLE_B_NUM_MAX];
+	uint8_t a_val_full[OSD_COLOR_TABLE_A_NUM_MAX];
+
+	uint8_t RSVD[2];
+
+} rt_osd2_color_table_st;
 
 #endif	// OSD_UTIL_H

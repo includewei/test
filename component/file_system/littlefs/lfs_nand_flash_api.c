@@ -1,6 +1,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
-#include "basic_types.h"
+#include <stdint.h>
 #include <cmsis.h>
 #include "FreeRTOS.h"
 #include "task.h"
@@ -10,6 +10,7 @@
 #include "lfs_util.h"
 #include "snand_api.h"
 #include "ftl_common_api.h"
+#include "lfs_reent.h"
 
 #define NAND_FLASH_BASE 0X200
 #define NAND_FLASH_BLOCK_PAGE_SIZE 64
@@ -55,6 +56,8 @@ struct lfs_config nand_cfg = {
 	.prog  = nand_block_prog,
 	.erase = nand_block_erase,
 	.sync  = nand_block_sync,
+	.lock  =  lfs_system_lock,
+	.unlock = lfs_system_unlock,
 
 	// block device configuration
 	.read_size = NAND_PAGE_SIZE,

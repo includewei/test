@@ -58,7 +58,7 @@ static void handle_json_data(char *iot_json)
 
 
 	cJSON *IOTJSObject, *sensorJSObject, *lightJSObject, *redJSObject, *greenJSObject, *blueJSObject;
-	int sensor_data, red, green, blue;
+	int sensor_data, red = 0, green = 0, blue = 0;
 
 	if ((IOTJSObject = cJSON_Parse(iot_json)) != NULL) {
 		sensorJSObject = cJSON_GetObjectItem(IOTJSObject, "Motion_Sensor");

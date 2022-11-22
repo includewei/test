@@ -23,6 +23,7 @@
 #include "../sample_config_webrtc.h"
 #include "../module_kvs_webrtc.h"
 #include "avcodec.h"
+#include "sntp/sntp.h"
 
 /******************************************************************************
  * DEFINITIONS
@@ -66,12 +67,47 @@ typedef struct {
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
-static int priv_app_media_h264_is_i_frame(u8 *frame_buf)
+int app_media_h264_is_i_frame(u8 *frame_buf)
 {
 	if ((frame_buf[4] & 0x1F) == 7) {
 		return 1;
 	} else {
 		return 0;
+	}
+}
+
+VOID app_media_sendMediaFrame(PVOID args, PVOID pFrame)
+{
+	PAppConfiguration pAppConfiguration = (PAppConfiguration)args;
+	PCodecSrcContext pCodecSrcContext = (PCodecSrcContext)pAppConfiguration->pMediaContext;
+
+	if (ATOMIC_LOAD_BOOL(&pCodecSrcContext->bIsRunning)) {
+		/* wait for skb resource release */
+		if ((skbdata_used_num > (max_skb_buf_num - 64)) || (skbbuf_used_num > (max_local_skb_num - 64))) {
+			return; //skip this frame and wait for skb resource release.
+		}
+
+		if (pCodecSrcContext->mediaSinkHook != NULL) {
+			pCodecSrcContext->mediaSinkHook(pCodecSrcContext->mediaSinkHookUserdata, (Frame *)pFrame);
+		}
+	}
+}
+
+static void kvsWebrtcMediaQueueFlushToKeyFrame(QueueHandle_t xQueue)
+{
+	webrtc_mm_t tmp_mm;
+	while (1) {
+		if (xQueuePeek(xQueue, &tmp_mm, 50 / portTICK_PERIOD_MS) != pdTRUE) {
+			break;
+		} else {
+			if (app_media_h264_is_i_frame(tmp_mm.pData)) {
+				break;
+			} else if (xQueueReceive(xQueue, &tmp_mm, 0) == pdTRUE) {
+				if (tmp_mm.pData && tmp_mm.bFreeData) {
+					free(tmp_mm.pData);
+				}
+			}
+		}
 	}
 }
 
@@ -85,27 +121,29 @@ static PVOID priv_app_media_sendVideoFrame(PVOID args)
 	STATUS status;
 	frame.presentationTs = 0;
 
-	webrtc_video_buf_t video_buf;
+	webrtc_mm_t mm;
 	DLOGD("The video source is up");
+
+	kvsWebrtcMediaQueueFlushToKeyFrame(pkvsWebrtcMediaQ->VideoSendQueue);
+
 	while (ATOMIC_LOAD_BOOL(&pCodecSrcContext->bIsRunning)) {
-		if (xQueueReceive(pkvsWebrtcMediaQ->VideoSendQueue, &video_buf, 50 / portTICK_PERIOD_MS) != pdTRUE) {
+		if (xQueueReceive(pkvsWebrtcMediaQ->VideoSendQueue, &mm, 50 / portTICK_PERIOD_MS) != pdTRUE) {
 			continue;
 		}
-		// #TBD
-		frame.flags = priv_app_media_h264_is_i_frame(video_buf.output_buffer) ? FRAME_FLAG_KEY_FRAME : FRAME_FLAG_NONE;
-		frame.frameData = video_buf.output_buffer;
-		frame.size = video_buf.output_size;
-		frame.presentationTs = getEpochTimestampInHundredsOfNanos(&video_buf.timestamp);
+
+		frame.flags = app_media_h264_is_i_frame(mm.pData) ? FRAME_FLAG_KEY_FRAME : FRAME_FLAG_NONE;
+		frame.frameData = mm.pData;
+		frame.size = mm.size;
+		frame.presentationTs = getEpochTimestampInHundredsOfNanos(&mm.timestamp);
 
 		frame.trackId = DEFAULT_VIDEO_TRACK_ID;
-		//frame.duration = 0;
 		frame.version = FRAME_CURRENT_VERSION;
 		frame.decodingTs = frame.presentationTs;
 
 		/* wait for skb resource release */
 		if ((skbdata_used_num > (max_skb_buf_num - 64)) || (skbbuf_used_num > (max_local_skb_num - 64))) {
-			if (video_buf.output_buffer != NULL) {
-				SAFE_MEMFREE(video_buf.output_buffer);
+			if (mm.pData != NULL && mm.bFreeData) {
+				SAFE_MEMFREE(mm.pData);
 			}
 			continue; //skip this frame and wait for skb resource release.
 		}
@@ -114,7 +152,9 @@ static PVOID priv_app_media_sendVideoFrame(PVOID args)
 			retStatus = pCodecSrcContext->mediaSinkHook(pCodecSrcContext->mediaSinkHookUserdata, &frame);
 		}
 
-		SAFE_MEMFREE(video_buf.output_buffer);
+		if (mm.pData != NULL && mm.bFreeData) {
+			SAFE_MEMFREE(mm.pData);
+		}
 	}
 
 CleanUp:
@@ -137,28 +177,27 @@ static PVOID priv_app_media_sendAudioFrame(PVOID args)
 	CHK(pCodecSrcContext != NULL, STATUS_MEDIA_NULL_ARG);
 
 	frame.presentationTs = 0;
-	webrtc_audio_buf_t audio_buf;
+	webrtc_mm_t mm;
 
 	DLOGD("The audio source is up");
 	while (ATOMIC_LOAD_BOOL(&pCodecSrcContext->bIsRunning)) {
-		if (xQueueReceive(pkvsWebrtcMediaQ->AudioSendQueue, &audio_buf, 50 / portTICK_PERIOD_MS) != pdTRUE) {
+		if (xQueueReceive(pkvsWebrtcMediaQ->AudioSendQueue, &mm, 50 / portTICK_PERIOD_MS) != pdTRUE) {
 			continue;
 		}
 
 		frame.flags = FRAME_FLAG_KEY_FRAME;
-		frame.frameData = audio_buf.data_buf;
-		frame.size = audio_buf.size;
-		frame.presentationTs = getEpochTimestampInHundredsOfNanos(&audio_buf.timestamp);
+		frame.frameData = mm.pData;
+		frame.size = mm.size;
+		frame.presentationTs = getEpochTimestampInHundredsOfNanos(&mm.timestamp);
 
 		frame.trackId = DEFAULT_AUDIO_TRACK_ID;
-		//frame.duration = 0;
 		frame.version = FRAME_CURRENT_VERSION;
 		frame.decodingTs = frame.presentationTs;
 
 		// wait for skb resource release
 		if ((skbdata_used_num > (max_skb_buf_num - 64)) || (skbbuf_used_num > (max_local_skb_num - 64))) {
-			if (audio_buf.data_buf != NULL) {
-				SAFE_MEMFREE(audio_buf.data_buf);
+			if (mm.pData != NULL && mm.bFreeData) {
+				SAFE_MEMFREE(mm.pData);
 			}
 			//skip this frame and wait for skb resource release.
 			continue;
@@ -168,7 +207,9 @@ static PVOID priv_app_media_sendAudioFrame(PVOID args)
 			retStatus = pCodecSrcContext->mediaSinkHook(pCodecSrcContext->mediaSinkHookUserdata, &frame);
 		}
 
-		SAFE_MEMFREE(audio_buf.data_buf);
+		if (mm.pData != NULL && mm.bFreeData) {
+			SAFE_MEMFREE(mm.pData);
+		}
 	}
 
 CleanUp:
@@ -471,35 +512,32 @@ AppMediaSrc gAppMediaSrc = {
 };
 
 #ifdef ENABLE_AUDIO_SENDRECV
+extern void kvsWebrtcMediaSendToQueue(webrtc_mm_t *pMediaItem, QueueHandle_t xQueue);
+
 static void priv_app_media_frameHandler(uint64_t customData, PFrame pFrame)
 {
 	UNUSED_PARAM(customData);
 	DLOGV("Frame received. TrackId: %" PRIu64 ", Size: %u, Flags %u", pFrame->trackId, pFrame->size, pFrame->flags);
 
-	webrtc_audio_buf_t remote_audio;
-	remote_audio.data_buf = malloc(pFrame->size);
-	if (!remote_audio.data_buf) {
+	webrtc_mm_t remote_audio;
+	remote_audio.pData = malloc(pFrame->size);
+	if (!remote_audio.pData) {
 		printf("fail to allocate memory for webrtc receiving video frame\r\n");
 		while (1);
 	}
-	memcpy(remote_audio.data_buf, pFrame->frameData, pFrame->size);
+	memcpy(remote_audio.pData, pFrame->frameData, pFrame->size);
 	remote_audio.size = pFrame->size;
 	remote_audio.timestamp = pFrame->presentationTs / HUNDREDS_OF_NANOS_IN_A_MILLISECOND;
 	remote_audio.type =  AUDIO_OPUS ? AV_CODEC_ID_OPUS : (AUDIO_G711_MULAW ? AV_CODEC_ID_PCMU : AV_CODEC_ID_PCMA);
+	remote_audio.bFreeData = true;
 
-	if (uxQueueSpacesAvailable(pkvsWebrtcMediaQ->AudioRecvQueue) == 0) {
-		DLOGV("\n\rAudio_sound queue full.\n\r");
-		webrtc_audio_buf_t tmp_item;
-		xQueueReceive(pkvsWebrtcMediaQ->AudioRecvQueue, &tmp_item, 0);
-		free(tmp_item.data_buf);
-	}
-	xQueueSend(pkvsWebrtcMediaQ->AudioRecvQueue, (void *)&remote_audio, 0);
+	kvsWebrtcMediaSendToQueue(&remote_audio, pkvsWebrtcMediaQ->AudioRecvQueue);
 
 	PStreamingSession pStreamingSession = (PStreamingSession) customData;
 	if (pStreamingSession->firstFrame) {
 		pStreamingSession->firstFrame = FALSE;
 		pStreamingSession->startUpLatency = (GETTIME() - pStreamingSession->offerReceiveTime) / HUNDREDS_OF_NANOS_IN_A_MILLISECOND;
-		DLOGD("Start up latency from offer to first frame: %" PRIu64 "ms\n", pStreamingSession->startUpLatency);
+		DLOGI("Start up latency from offer to first frame: %" PRIu64 "ms\n", pStreamingSession->startUpLatency);
 	}
 }
 

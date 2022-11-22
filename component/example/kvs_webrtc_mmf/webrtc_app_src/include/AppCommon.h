@@ -134,6 +134,9 @@ STATUS freeApp(PAppConfiguration *ppAppConfiguration);
 STATUS pollApp(PAppConfiguration pAppConfiguration);
 
 STATUS quitApp(VOID);
+
+STATUS getApp(PAppConfiguration *ppAppConfiguration);
+
 #ifdef __cplusplus
 }
 #endif

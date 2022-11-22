@@ -1,16 +1,21 @@
 #include "platform_conf.h"
 #undef ROM_REGION
 #include <stdarg.h>
+#include <string.h>
 #include "cmsis_compiler.h"
 #include "stdio_port_func.h"
 
 #if defined(__GNUC__)
 
+#include <stdio.h>
+__attribute__((constructor))
+static void init_stdout_buffer(void)
+{
+	setbuf(stdout, NULL);
+}
+
 // Set picolibc __iob api for semihosting and emit the alias name to _times.
 #ifdef _PICOLIBC__
-//#include <time.h>
-#include <stdio.h>
-
 //clock_t times (struct tms * tp) __attribute__((alias("_times")));
 
 static int dev_putc(char c, FILE *file)
@@ -24,6 +29,91 @@ static int dev_putc(char c, FILE *file)
 static FILE __stdio = FDEV_SETUP_STREAM(dev_putc, NULL, NULL, _FDEV_SETUP_RW);
 FILE *const __iob[3] = { &__stdio, &__stdio, &__stdio };
 #endif
+
+extern unsigned(*console_stdio_write_buffer)(unsigned fd, const void *buf, unsigned len);
+extern unsigned(*remote_stdio_write_buffer)(unsigned fd, const void *buf, unsigned len);
+struct _reent;
+
+#define LOWIO_STDOUT_BUF_SIZE 2048
+static char stdout_buffer[LOWIO_STDOUT_BUF_SIZE + 4];
+int convert2crlf(char *orig, int len, char *new, int new_sz)
+{
+	int cnt = 0;
+	char *o = orig;
+	char *p;
+
+	p = strchr(o, '\n');
+
+	while (p && p - orig < len && cnt < new_sz) {
+		int delta_size = p - o;
+		if (cnt + delta_size + 2 >= new_sz) {
+			delta_size = new_sz - cnt - 2;
+		}
+
+		if (delta_size > 0) {
+			memcpy(&new[cnt], o, delta_size);
+			cnt += delta_size;
+		}
+		memcpy(&new[cnt], "\n\r", 2);
+		cnt += 2;
+
+		o = p + 1;
+		p = strchr(o, '\n');
+	}
+	if (o - orig < len && cnt < new_sz) {
+		int rest_size = len - (o - orig);
+		if (rest_size + cnt > new_sz) {
+			rest_size = new_sz - cnt;
+		}
+
+		memcpy(&new[cnt], o, rest_size);
+		cnt += rest_size;
+		o += rest_size;
+	}
+
+	// extra 4 byte is for writing extra character
+	// some character still not printed
+	if (o - orig < len) {
+		new[cnt] = '.';
+		new[cnt + 1] = '.';
+		new[cnt + 2] = '.';
+		cnt += 3;
+	}
+
+	new[cnt] = 0;
+	return cnt;
+}
+
+size_t _write(int file, const void *ptr, size_t len)
+{
+	(void) file;  /* Not used, avoid warning */
+	int conv_len = convert2crlf((char *)ptr, len, stdout_buffer, LOWIO_STDOUT_BUF_SIZE);
+
+	if (console_stdio_write_buffer) {
+		console_stdio_write_buffer(0, (void *)stdout_buffer, conv_len);
+	}
+	if (remote_stdio_write_buffer) {
+		remote_stdio_write_buffer(0, (void *)stdout_buffer, conv_len);
+	}
+
+	return len;
+}
+
+_ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
+{
+	(void) file;  /* Not used, avoid warning */
+	(void) r;     /* Not used, avoid warning */
+
+	int conv_len = convert2crlf((char *)ptr, len, stdout_buffer, LOWIO_STDOUT_BUF_SIZE);
+
+	if (console_stdio_write_buffer) {
+		console_stdio_write_buffer(0, (void *)stdout_buffer, conv_len);
+	}
+	if (remote_stdio_write_buffer) {
+		remote_stdio_write_buffer(0, (void *)stdout_buffer, conv_len);
+	}
+	return len;
+}
 
 #endif
 

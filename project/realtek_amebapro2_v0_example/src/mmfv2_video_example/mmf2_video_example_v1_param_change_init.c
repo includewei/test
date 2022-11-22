@@ -117,7 +117,7 @@ void mmf2_video_example_v1_param_change_init(void)
 	video_v1_ctx = mm_module_open(&video_module);
 	if (video_v1_ctx) {
 		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v1_params);
-		mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, V1_FPS*3);
+		mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, V1_FPS * 3);
 		mm_module_ctrl(video_v1_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
 	} else {
 		rt_printf("video open fail\n\r");
@@ -173,11 +173,11 @@ void mmf2_video_example_v1_param_change_init(void)
 		rt_printf("changing bit rate test = %d\n\r", (1024 * 1024 + 1024 * (1 + i)));
 		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_BPS, (1024 * 1024 + 1024 * (1 + i)));
 	}
-
 	for (i = 0; i < 5; i++) {
 		vTaskDelay(10000);
 		rt_printf("changing QP test = %d, %d\n\r", (25 + i * 2), (35 + i * 2));
 		encode_rc_parm_t rc_parm;
+		memset(&rc_parm, 0, sizeof(encode_rc_parm_t));
 		rc_parm.minQp = (25 + i * 2);
 		rc_parm.maxQp = (35 + i * 2);
 
@@ -188,7 +188,7 @@ void mmf2_video_example_v1_param_change_init(void)
 	for (i = 0; i < 10; i++) {
 		vTaskDelay(500);
 		rt_printf("changing forcei test\n\r");
-		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_FORCE_IFRAME, NULL);
+		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_FORCE_IFRAME, 0);
 	}
 
 	return;
@@ -197,7 +197,7 @@ mmf2_video_exmaple_v1_param_change_fail:
 	return;
 }
 
-static char *example = "mmf2_video_example_v1_param_change";
+static const char *example = "mmf2_video_example_v1_param_change";
 static void example_deinit(void)
 {
 	//Pause Linker

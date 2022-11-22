@@ -4,8 +4,6 @@
 #                                                                                #
 ##################################################################################
 
-Date: 2018-06-11
-
 Table of Contents
 ~~~~~~~~~~~~~~~~~
  - Description
@@ -32,39 +30,21 @@ Setup Guide
 ~~~~~~~~~~~
         1. Add broadcast example to SDK
         
-        /component/common/example/bcast
+        /component/example/bcast
         .
         |-- example_bcast.c
         |-- example_bcast.h
         `-- readme.txt
-        
-        
-        2. Enable CONFIG_EXAMPLE_BCAST in [platform_opts.h]
-        /* For broadcast example */
-        #define CONFIG_EXAMPLE_BCAST    1
-        
-        3. Set UDP packages in [lwipopts.h]
-        #define LWIP_UDP  1
-        
-        4. Add example_bcast() to [example_entry.c]
-        #if CONFIG_EXAMPLE_BCAST
-            #include <bcast/example_bcast.h>
-        #endif
-        void example_entry(void)
-        {
-        #if CONFIG_EXAMPLE_BCAST
-            example_bcast();
-        #endif
-        }
-
-        5. Add broadcast example source files to project
+            
+        2. Set UDP packages in [lwipopts.h]
+        	#define LWIP_UDP  1
+  
+        3. Add broadcast example source files to project
         (a) For IAR project, add bcast example to group <example> 
-            $PROJ_DIR$\..\..\..\component\common\example\bcast\example_bcast.c
+            $PROJ_DIR$\..\..\..\component\example\bcast\example_bcast.c
         (b) For GCC project, add bcast example to example Makefile
-            CSRC += $(DIR)/bcast/example_bcast.c
-
-		For AmebaD2 :Amebad2 Changes how example is compiled, and Removed macro controls (CONFIG_EXAMPLE_XXX)in platform_opts.h
-			GCC: use CMD "make xip EXAMPLE=bcast" to compile bcast example.
+        	CSRC += $(DIR)/bcast/example_bcast.c
+		GCC: use CMD "make all EXAMPLE=bcast" to compile bcast example.
 
 Parameter Setting and Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -86,4 +66,4 @@ Supported List
 ~~~~~~~~~~~~~~
 [Supported List]
         Supported IC :
-                Ameba-pro, Ameba-z2, AmebaD, AmebaD2
+                 RTL8730A, RTL872XE

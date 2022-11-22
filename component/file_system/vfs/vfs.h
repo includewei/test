@@ -111,7 +111,7 @@ typedef struct _vfs_file {
 	int vfs_id;//Reserve
 	int interface_id;//Reserve
 	void *file;
-	int name[1024];
+	char name[1024];
 } vfs_file;
 
 typedef struct {
@@ -131,7 +131,7 @@ typedef struct {
 	int (*tell)(vfs_file *file);
 	int (*fputc)(int character, vfs_file *file);
 	int (*fputs)(const char *str, vfs_file *file);
-	int (*fgets)(char *str, int num, vfs_file *file);
+	char *(*fgets)(char *str, int num, vfs_file *file);
 	int (*opendir)(const char *name, vfs_file *file);
 	struct dirent   *(*readdir)(vfs_file *file);
 	int (*closedir)(vfs_file *file);
@@ -144,7 +144,7 @@ typedef struct {
 	int (*mount)(int interface);
 	int (*unmount)(int interface);
 	int (*get_interface)(int interface);
-	unsigned char	*TAG;
+	const char	*TAG;
 	unsigned char drv_num;
 	void *fs;
 	int vfs_type;
@@ -154,7 +154,7 @@ typedef struct {
 	int vfs_type;
 	int vfs_type_id;
 	int vfs_interface_type;
-	char *tag;
+	const char *tag;
 } user_config;
 
 typedef struct {
@@ -170,11 +170,12 @@ extern vfs_opt littlefs_drv;
 
 void vfs_init(void *parm);
 void vfs_deinit(void *parm);
-int vfs_user_register(char *prefix, int vfs_type, int interface);
+int vfs_user_register(const char *prefix, int vfs_type, int interface);
+int vfs_user_unregister(const char *prefix, int vfs_type, int interface);
 int vfs_scan_vfs(int vfs_type);
 int vfs_register(vfs_opt *drv, int vfs_type);
 int find_vfs_number(const char *name, int *prefix_len, int *user_id);
-int vfs_user_mount(char *prefix);
+int vfs_user_mount(const char *prefix);
 
 /* access function */
 #define	F_OK		0	/* test for existence of file */

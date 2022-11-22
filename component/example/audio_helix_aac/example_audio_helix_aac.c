@@ -7,9 +7,14 @@
 #include "semphr.h"
 #include "queue.h"
 
+#include "example_audio_helix_aac.h"
+
 #include "wifi_conf.h"
 #if defined(CONFIG_PLATFORM_8195BHP) || defined(CONFIG_PLATFORM_8735B)
 #if defined(CONFIG_PLATFORM_8735B)
+#if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
+#include "osdep_service.h"
+#endif
 #include "wifi_conf.h"
 #include "lwip_netconf.h"
 #endif
@@ -178,11 +183,20 @@ static void initialize_audio(uint8_t ch_num, int sample_rate)
 
 	audio_set_tx_dma_buffer(&audio_obj, dma_txdata, TX_PAGE_SIZE);
 #endif
+
+#if defined(CONFIG_PLATFORM_8735B)
+	//Init RX dma
+	audio_rx_irq_handler(&audio_obj, (audio_irq_handler)audio_rx_complete_irq, (uint32_t *)&audio_obj);
+
+	//Init TX dma
+	audio_tx_irq_handler(&audio_obj, (audio_irq_handler)audio_tx_complete_irq, (uint32_t *)&audio_obj);
+#else
 	//Init RX dma
 	audio_rx_irq_handler(&audio_obj, (audio_irq_handler)audio_rx_complete_irq, (uint32_t)&audio_obj);
 
 	//Init TX dma
 	audio_tx_irq_handler(&audio_obj, (audio_irq_handler)audio_tx_complete_irq, (uint32_t)&audio_obj);
+#endif
 
 #if defined(CONFIG_PLATFORM_8735B)
 	/* Use (DMA page count -1) because occur RX interrupt in first */
@@ -353,7 +367,7 @@ void file_download_thread(void *param)
 	vTaskDelete(NULL);
 }
 
-void audio_play_http_file()
+void audio_play_http_file(void)
 {
 	audio_pkt_t pkt;
 

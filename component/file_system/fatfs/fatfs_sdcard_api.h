@@ -1,6 +1,7 @@
 #ifndef _FATFS_SDCARD_API_H
 #define _FATFS_SDCARD_API_H
 #include "ff.h"
+#include <stdint.h>
 
 typedef struct fatfs_sd_param_s {
 	int drv_num;
@@ -30,8 +31,8 @@ void sd_gpio_power_on(void);
 
 int usb_sd_init(void);
 int usb_sd_deinit(void);
-int usb_sd_getcapacity(u32 *sector_count);
-int usb_sd_readblocks(u32 sector, u8 *data, u32 count);
-int usb_sd_writeblocks(u32 sector, const u8 *data, u32 count);
+int usb_sd_getcapacity(uint32_t *sector_count);
+int usb_sd_readblocks(uint32_t sector, uint8_t *data, uint32_t count);
+int usb_sd_writeblocks(uint32_t sector, const uint8_t *data, uint32_t count);
 
 #endif //_FATFS_SDCARD_API_H

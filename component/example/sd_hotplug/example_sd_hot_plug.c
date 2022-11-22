@@ -11,7 +11,7 @@
 #include "sdio_host.h"
 #include <disk_if/inc/sdcard.h>
 #include "fatfs_sdcard_api.h"
-
+#include "osdep_service.h"
 static fatfs_sd_params_t fatfs_sd;
 
 #define ENABLE_SD_POWER_RESET
@@ -126,7 +126,7 @@ static void sd_hot_plug_thread(void *param)
 		}
 		sd_checking = 0;
 	}
-fail:
+
 	vTaskDelete(NULL);
 }
 

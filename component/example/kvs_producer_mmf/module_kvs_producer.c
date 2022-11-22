@@ -1,11 +1,11 @@
 #include "platform_opts.h"
-#if !CONFIG_EXAMPLE_KVS_PRODUCER
 
 /* Headers for example */
 #include "sample_config.h"
 #include "module_kvs_producer.h"
 
 #include "wifi_conf.h"
+#include "sntp/sntp.h"
 
 /* Headers for video */
 #include "avcodec.h"
@@ -17,42 +17,44 @@
 #include "kvs/stream.h"
 
 #include "mbedtls/config.h"
+#include "mbedtls/platform.h"
 
 #define ERRNO_NONE      0
 #define ERRNO_FAIL      __LINE__
 
-static int kvsProducerModule_video_started = 0;
-static int kvsProducerModule_video_inited = 0;
-static int kvsProducerModule_audio_inited = 0;
-static int kvsProducerModule_paused = 0;
-static Kvs_t xKvs = {0};
+#define EN_SEND_END_OF_FRAMES   1
 
-typedef struct {
-	uint8_t *output_buffer;
-	uint32_t output_buffer_size;
-	uint32_t output_size;
-} producer_video_buf_t;
+static int gProducerStop = 0;
 
-int kvsVideoInitTrackInfo(producer_video_buf_t *pVideoBuf, Kvs_t *pKvs)
+typedef enum doWorkExType {
+	DO_WORK_DEFAULT = 0,  /* default behavior */
+	DO_WORK_SEND_END_OF_FRAMES = 1  /* It's similar to doWork, except that it also sends out the end of frames */
+} doWorkExType_t;
+
+typedef struct doWorkExParamter {
+	doWorkExType_t eType;
+} doWorkExParamter_t;
+
+static int kvsVideoInitTrackInfo(Kvs_t *pKvs, uint8_t *pData, size_t uDataLen)
 {
 	int res = ERRNO_NONE;
 	uint8_t *pVideoCpdData = NULL;
-	uint32_t uCpdLen = 0;
+	size_t uCpdLen = 0;
 	uint8_t *pSps = NULL;
 	size_t uSpsLen = 0;
 	uint16_t uWidth = 0;
 	uint16_t uHeight = 0;
 
-	if (pVideoBuf == NULL || pKvs == NULL) {
+	if (pKvs == NULL || pData == NULL || uDataLen == 0) {
 		printf("Invalid argument\r\n");
 		res = ERRNO_FAIL;
 	} else if (pKvs->pVideoTrackInfo != NULL) {
 		printf("VideoTrackInfo is not NULL\r\n");
 		res = ERRNO_FAIL;
-	} else if (Mkv_generateH264CodecPrivateDataFromAnnexBNalus(pVideoBuf->output_buffer, pVideoBuf->output_size, &pVideoCpdData, &uCpdLen) != ERRNO_NONE) {
+	} else if (Mkv_generateH264CodecPrivateDataFromAnnexBNalus(pData, uDataLen, &pVideoCpdData, &uCpdLen) != ERRNO_NONE) {
 		printf("Fail to get Codec Private Data from AnnexB nalus\r\n");
 		res = ERRNO_FAIL;
-	} else if (NALU_getNaluFromAnnexBNalus(pVideoBuf->output_buffer, pVideoBuf->output_size, NALU_TYPE_SPS, &pSps, &uSpsLen) != ERRNO_NONE) {
+	} else if (NALU_getNaluFromAnnexBNalus(pData, uDataLen, NALU_TYPE_SPS, &pSps, &uSpsLen) != ERRNO_NONE) {
 		printf("Fail to get SPS from AnnexB nalus\r\n");
 		res = ERRNO_FAIL;
 	} else if (NALU_getH264VideoResolutionFromSps(pSps, uSpsLen, &uWidth, &uHeight) != ERRNO_NONE) {
@@ -64,8 +66,8 @@ int kvsVideoInitTrackInfo(producer_video_buf_t *pVideoBuf, Kvs_t *pKvs)
 	} else {
 		memset(pKvs->pVideoTrackInfo, 0, sizeof(VideoTrackInfo_t));
 
-		pKvs->pVideoTrackInfo->pTrackName = VIDEO_NAME;
-		pKvs->pVideoTrackInfo->pCodecName = VIDEO_CODEC_NAME;
+		pKvs->pVideoTrackInfo->pTrackName = (char *)VIDEO_NAME;
+		pKvs->pVideoTrackInfo->pCodecName = (char *)VIDEO_CODEC_NAME;
 		pKvs->pVideoTrackInfo->uWidth = uWidth;
 		pKvs->pVideoTrackInfo->uHeight = uHeight;
 		pKvs->pVideoTrackInfo->pCodecPrivate = pVideoCpdData;
@@ -76,57 +78,17 @@ int kvsVideoInitTrackInfo(producer_video_buf_t *pVideoBuf, Kvs_t *pKvs)
 	return res;
 }
 
-static void sendVideoFrame(producer_video_buf_t *pBuffer, Kvs_t *pKvs)
-{
-	int res = ERRNO_NONE;
-	DataFrameIn_t xDataFrameIn = {0};
-	uint32_t uAvccLen = 0;
-	size_t uMemTotal = 0;
-
-	if (pBuffer == NULL || pKvs == NULL) {
-		res = ERRNO_FAIL;
-	} else {
-		if (pKvs->xStreamHandle != NULL) {
-			xDataFrameIn.bIsKeyFrame = isKeyFrame(pBuffer->output_buffer, pBuffer->output_size) ? true : false;
-			xDataFrameIn.uTimestampMs = getEpochTimestampInMs();
-			xDataFrameIn.xTrackType = TRACK_VIDEO;
-
-			xDataFrameIn.xClusterType = (xDataFrameIn.bIsKeyFrame) ? MKV_CLUSTER : MKV_SIMPLE_BLOCK;
-
-			if (NALU_convertAnnexBToAvccInPlace(pBuffer->output_buffer, pBuffer->output_size, pBuffer->output_buffer_size, &uAvccLen) != ERRNO_NONE) {
-				printf("Failed to convert Annex-B to AVCC\r\n");
-				res = ERRNO_FAIL;
-			} else if ((xDataFrameIn.pData = (char *)malloc(uAvccLen)) == NULL) {
-				printf("OOM: xDataFrameIn.pData\r\n");
-				res = ERRNO_FAIL;
-			} else if (Kvs_streamMemStatTotal(pKvs->xStreamHandle, &uMemTotal) != ERRNO_NONE) {
-				printf("Failed to get stream mem state\r\n");
-			} else {
-				if (uMemTotal < STREAM_MAX_BUFFERING_SIZE) {
-					memcpy(xDataFrameIn.pData, pBuffer->output_buffer, uAvccLen);
-					xDataFrameIn.uDataLen = uAvccLen;
-
-					Kvs_streamAddDataFrame(pKvs->xStreamHandle, &xDataFrameIn);
-				} else {
-					free(xDataFrameIn.pData);
-				}
-			}
-		}
-		free(pBuffer->output_buffer);
-	}
-}
-
 #if ENABLE_AUDIO_TRACK
-int kvsAudioInitTrackInfo(Kvs_t *pKvs)
+static void kvsAudioInitTrackInfo(Kvs_t *pKvs)
 {
 	int res = ERRNO_NONE;
 	uint8_t *pCodecPrivateData = NULL;
-	uint32_t uCodecPrivateDataLen = 0;
+	size_t uCodecPrivateDataLen = 0;
 
 	pKvs->pAudioTrackInfo = (AudioTrackInfo_t *)malloc(sizeof(AudioTrackInfo_t));
 	memset(pKvs->pAudioTrackInfo, 0, sizeof(AudioTrackInfo_t));
-	pKvs->pAudioTrackInfo->pTrackName = AUDIO_NAME;
-	pKvs->pAudioTrackInfo->pCodecName = AUDIO_CODEC_NAME;
+	pKvs->pAudioTrackInfo->pTrackName = (char *)AUDIO_NAME;
+	pKvs->pAudioTrackInfo->pCodecName = (char *)AUDIO_CODEC_NAME;
 	pKvs->pAudioTrackInfo->uFrequency = AUDIO_SAMPLING_RATE;
 	pKvs->pAudioTrackInfo->uChannelNumber = AUDIO_CHANNEL_NUMBER;
 
@@ -148,18 +110,18 @@ int kvsAudioInitTrackInfo(Kvs_t *pKvs)
 static int kvsInitialize(Kvs_t *pKvs)
 {
 	int res = ERRNO_NONE;
-	char *pcStreamName = KVS_STREAM_NAME;
+	char *pcStreamName = (char *)KVS_STREAM_NAME;
 
 	if (pKvs == NULL) {
 		res = ERRNO_FAIL;
 	} else {
 		memset(pKvs, 0, sizeof(Kvs_t));
 
-		pKvs->xServicePara.pcHost = AWS_KVS_HOST;
-		pKvs->xServicePara.pcRegion = AWS_KVS_REGION;
-		pKvs->xServicePara.pcService = AWS_KVS_SERVICE;
-		pKvs->xServicePara.pcAccessKey = AWS_ACCESS_KEY;
-		pKvs->xServicePara.pcSecretKey = AWS_SECRET_KEY;
+		pKvs->xServicePara.pcHost = (char *)AWS_KVS_HOST;
+		pKvs->xServicePara.pcRegion = (char *)AWS_KVS_REGION;
+		pKvs->xServicePara.pcService = (char *)AWS_KVS_SERVICE;
+		pKvs->xServicePara.pcAccessKey = (char *)AWS_ACCESS_KEY;
+		pKvs->xServicePara.pcSecretKey = (char *)AWS_SECRET_KEY;
 
 		pKvs->xDescPara.pcStreamName = pcStreamName;
 
@@ -179,6 +141,7 @@ static int kvsInitialize(Kvs_t *pKvs)
 		pKvs->xIotCredentialReq.pCertificate = CERTIFICATE;
 		pKvs->xIotCredentialReq.pPrivateKey = PRIVATE_KEY;
 #endif
+		pKvs->inited = true;
 	}
 	return res;
 }
@@ -191,6 +154,7 @@ static void kvsTerminate(Kvs_t *pKvs)
 			pKvs->xServicePara.pcPutMediaEndpoint = NULL;
 		}
 	}
+	pKvs->inited = false;
 }
 
 static int setupDataEndpoint(Kvs_t *pKvs)
@@ -266,11 +230,48 @@ static void kvsStreamFlushToNextCluster(StreamHandle xStreamHandle)
 	}
 }
 
-static void kvsProducerModule_flag_deinit(void)
+static void kvsStreamFlushHeadUntilMem(StreamHandle xStreamHandle, size_t uMemLimit)
 {
-	kvsProducerModule_video_started = 0;
-	kvsProducerModule_video_inited = 0;
-	kvsProducerModule_audio_inited = 0;
+	DataFrameHandle xDataFrameHandle = NULL;
+	DataFrameIn_t *pDataFrameIn = NULL;
+	size_t uMemTotal = 0;
+
+	while (Kvs_streamMemStatTotal(xStreamHandle, &uMemTotal) == 0 && uMemTotal > uMemLimit && (xDataFrameHandle = Kvs_streamPop(xStreamHandle)) != NULL) {
+		pDataFrameIn = (DataFrameIn_t *)xDataFrameHandle;
+		free(pDataFrameIn->pData);
+		Kvs_dataFrameTerminate(xDataFrameHandle);
+	}
+}
+
+static void kvsAddMediaFrame(Kvs_t *pKvs, uint8_t *pData, size_t uDataLen, size_t uDataSize, TrackType_t xTrackType)
+{
+	int res = ERRNO_NONE;
+	DataFrameIn_t xDataFrameIn = {0};
+	size_t uMemTotal = 0;
+
+	if (pKvs == NULL || pData == NULL || uDataLen == 0) {
+		res = ERRNO_FAIL;
+	} else {
+		if (pKvs->xStreamHandle != NULL) {
+			if (xTrackType == TRACK_VIDEO && NALU_isAnnexBFrame(pData, uDataLen) &&
+				(res = NALU_convertAnnexBToAvccInPlace(pData, uDataLen, uDataSize, (uint32_t *)&uDataLen)) != ERRNO_NONE) {
+				printf("Failed to convert Annex-B to AVCC\r\n");
+				res = ERRNO_FAIL;
+			} else if (Kvs_streamMemStatTotal(pKvs->xStreamHandle, &uMemTotal) != ERRNO_NONE) {
+				printf("Failed to get stream mem state\r\n");
+			} else {
+				xDataFrameIn.pData = (char *)pData;
+				xDataFrameIn.uDataLen = uDataLen;
+				xDataFrameIn.bIsKeyFrame = (xTrackType == TRACK_VIDEO) ? isKeyFrame(pData, uDataLen) : false;
+				xDataFrameIn.uTimestampMs = getEpochTimestampInMs();
+				xDataFrameIn.xTrackType = xTrackType;
+				xDataFrameIn.xClusterType = (xDataFrameIn.bIsKeyFrame) ? MKV_CLUSTER : MKV_SIMPLE_BLOCK;
+
+				kvsStreamFlushHeadUntilMem(pKvs->xStreamHandle, RING_BUFFER_MEM_LIMIT);
+				Kvs_streamAddDataFrame(pKvs->xStreamHandle, &xDataFrameIn);
+			}
+		}
+	}
 }
 
 static void kvsVideoTrackInfoTerminate(VideoTrackInfo_t *pVideoTrackInfo)
@@ -295,7 +296,7 @@ static void kvsAudioTrackInfoTerminate(AudioTrackInfo_t *pAudioTrackInfo)
 	}
 }
 
-static void kvsProducerModule_pause(Kvs_t *pKvs)
+static void kvsProducerModuleStop(Kvs_t *pKvs)
 {
 	if (pKvs->xStreamHandle != NULL) {
 		kvsStreamFlush(pKvs->xStreamHandle);
@@ -310,10 +311,9 @@ static void kvsProducerModule_pause(Kvs_t *pKvs)
 		kvsAudioTrackInfoTerminate(pKvs->pAudioTrackInfo);
 		pKvs->pAudioTrackInfo = NULL;
 	}
-	kvsProducerModule_flag_deinit();
 }
 
-static int putMediaSendData(Kvs_t *pKvs, int *pxSendCnt)
+static int putMediaSendData(Kvs_t *pKvs, int *pxSendCnt, bool bForceSend)
 {
 	int res = 0;
 	DataFrameHandle xDataFrameHandle = NULL;
@@ -324,11 +324,10 @@ static int putMediaSendData(Kvs_t *pKvs, int *pxSendCnt)
 	size_t uMkvHeaderLen = 0;
 	int xSendCnt = 0;
 
-	if (Kvs_streamAvailOnTrack(pKvs->xStreamHandle, TRACK_VIDEO)
-#if ENABLE_AUDIO_TRACK
-		&& Kvs_streamAvailOnTrack(pKvs->xStreamHandle, TRACK_AUDIO)
-#endif
-	   ) {
+	if (pKvs->xStreamHandle != NULL &&
+		Kvs_streamAvailOnTrack(pKvs->xStreamHandle, TRACK_VIDEO) &&
+		(!bForceSend || !pKvs->pAudioTrackInfo || Kvs_streamAvailOnTrack(pKvs->xStreamHandle, TRACK_AUDIO))) {
+
 		if ((xDataFrameHandle = Kvs_streamPop(pKvs->xStreamHandle)) == NULL) {
 			printf("Failed to get data frame\r\n");
 			res = ERRNO_FAIL;
@@ -356,13 +355,76 @@ static int putMediaSendData(Kvs_t *pKvs, int *pxSendCnt)
 	return res;
 }
 
+static int kvsPutMediaDoWorkDefault(Kvs_t *pKvs)
+{
+	int res = ERRNO_NONE;
+	int xSendCnt = 0;
+
+	do {
+		if (Kvs_putMediaDoWork(pKvs->xPutMediaHandle) != ERRNO_NONE) {
+			res = ERRNO_FAIL;
+			break;
+		}
+
+		if (putMediaSendData(pKvs, &xSendCnt, false) != ERRNO_NONE) {
+			res = ERRNO_FAIL;
+			break;
+		}
+	} while (false);
+
+	if (xSendCnt == 0) {
+		sleepInMs(50);
+	}
+
+	return res;
+}
+
+static int kvsPutMediaDoWorkSendEndOfFrames(Kvs_t *pKvs)
+{
+	int res = ERRNO_NONE;
+	int xSendCnt = 0;
+
+	do {
+		if (Kvs_putMediaDoWork(pKvs->xPutMediaHandle) != ERRNO_NONE) {
+			res = ERRNO_FAIL;
+			break;
+		}
+
+		if (putMediaSendData(pKvs, &xSendCnt, true) != ERRNO_NONE) {
+			res = ERRNO_FAIL;
+			break;
+		}
+	} while (xSendCnt > 0);
+
+	return res;
+}
+
+static int kvsDoWorkEx(Kvs_t *pKvs, doWorkExParamter_t *pPara)
+{
+	int res = ERRNO_NONE;
+
+	if (pKvs == NULL) {
+		res = ERRNO_FAIL;
+	} else {
+		if (pPara == NULL || pPara->eType == DO_WORK_DEFAULT) {
+			res = kvsPutMediaDoWorkDefault(pKvs);
+		} else if (pPara->eType == DO_WORK_SEND_END_OF_FRAMES) {
+			res = kvsPutMediaDoWorkSendEndOfFrames(pKvs);
+		} else {
+			res = ERRNO_FAIL;
+		}
+	}
+
+	return res;
+}
+
 static int putMedia(Kvs_t *pKvs)
 {
 	int res = 0;
 	unsigned int uHttpStatusCode = 0;
 	uint8_t *pEbmlSeg = NULL;
 	size_t uEbmlSegLen = 0;
-	int xSendCnt = 0;
+	doWorkExParamter_t xDoWorkExParamter = { .eType = DO_WORK_DEFAULT };
 
 	printf("Try to put media\r\n");
 	if (pKvs == NULL) {
@@ -381,21 +443,23 @@ static int putMedia(Kvs_t *pKvs)
 		kvsStreamFlushToNextCluster(pKvs->xStreamHandle);
 
 		while (1) {
-			if (putMediaSendData(pKvs, &xSendCnt) != ERRNO_NONE) {
+			if (gProducerStop == 1) {
 				break;
 			}
-			if (Kvs_putMediaDoWork(pKvs->xPutMediaHandle) != ERRNO_NONE) {
-				break;
-			}
-			if (xSendCnt == 0) {
-				sleepInMs(50);
-			}
-			if (kvsProducerModule_paused == 1) {
-				kvsProducerModule_pause(pKvs);
+			if (kvsDoWorkEx(pKvs, &xDoWorkExParamter) != ERRNO_NONE) {
 				break;
 			}
 		}
 	}
+
+#if EN_SEND_END_OF_FRAMES
+	if (gProducerStop == 1) {
+		printf("--> Sending out the end of frames in stream buffer \r\n");
+		xDoWorkExParamter.eType = DO_WORK_SEND_END_OF_FRAMES;
+		kvsDoWorkEx(pKvs, &xDoWorkExParamter);
+		printf("--> Sending end of frames done! \r\n");
+	}
+#endif
 
 	printf("Leaving put media\r\n");
 	Kvs_putMediaFinish(pKvs->xPutMediaHandle);
@@ -407,8 +471,6 @@ static int putMedia(Kvs_t *pKvs)
 static int initVideo(Kvs_t *pKvs)
 {
 	int res = ERRNO_NONE;
-
-	kvsProducerModule_video_inited = 1;
 
 	while (pKvs->pVideoTrackInfo == NULL) {
 		sleepInMs(50);
@@ -427,39 +489,36 @@ static int initAudio(Kvs_t *pKvs)
 		sleepInMs(50);
 	}
 
-	kvsProducerModule_audio_inited = 1;
-
 	return res;
 }
-#endif /* ENABLE_AUDIO_TRACK */
+#endif
 
-void Kvs_run(Kvs_t *pKvs)
+static void Kvs_run(Kvs_t *pKvs)
 {
 	int res = ERRNO_NONE;
-	unsigned int uHttpStatusCode = 0;
 
 #if ENABLE_IOT_CREDENTIAL
 	IotCredentialToken_t *pToken = NULL;
-#endif /* ENABLE_IOT_CREDENTIAL */
+#endif
 	if (kvsInitialize(pKvs) != ERRNO_NONE) {
 		printf("Failed to initialize KVS\r\n");
 		res = ERRNO_FAIL;
 	} else {
 		while (1) {
-			if (kvsProducerModule_video_inited == 0) {
+			if (pKvs->pVideoTrackInfo == NULL) {
 				if (initVideo(pKvs) != ERRNO_NONE) {
 					printf("Failed to init camera\r\n");
 					res = ERRNO_FAIL;
 				}
 			}
 #if ENABLE_AUDIO_TRACK
-			if (kvsProducerModule_audio_inited == 0) {
+			if (pKvs->pAudioTrackInfo == NULL) {
 				if (initAudio(pKvs) != ERRNO_NONE) {
 					printf("Failed to init audio\r\n");
 					res = ERRNO_FAIL;
 				}
 			}
-#endif /* ENABLE_AUDIO_TRACK */
+#endif
 			if (pKvs->xStreamHandle == NULL) {
 				if ((pKvs->xStreamHandle = Kvs_streamCreate(pKvs->pVideoTrackInfo, pKvs->pAudioTrackInfo)) == NULL) {
 					printf("Failed to create stream\r\n");
@@ -485,8 +544,12 @@ void Kvs_run(Kvs_t *pKvs)
 				break;
 			}
 
-			while (kvsProducerModule_video_started == 0 && kvsProducerModule_paused == 1) {
-				printf("Producer is paused...\r\n");
+			if (gProducerStop == 1) {
+				kvsProducerModuleStop(pKvs);
+			}
+
+			while (gProducerStop == 1) {
+				printf("Producer is paused/stopped...\r\n");
 				sleepInMs(500);
 			}
 
@@ -501,11 +564,6 @@ static void ameba_platform_init(void)
 	mbedtls_platform_set_calloc_free(calloc, free);
 #endif
 
-	while (wifi_is_running(WLAN0_IDX) != 1) {
-		vTaskDelay(200 / portTICK_PERIOD_MS);
-	}
-	printf("wifi connected\r\n");
-
 	sntp_init();
 	while (getEpochTimestampInMs() < 100000000ULL) {
 		vTaskDelay(200 / portTICK_PERIOD_MS);
@@ -515,7 +573,7 @@ static void ameba_platform_init(void)
 
 static void kvs_producer_thread(void *param)
 {
-	vTaskDelay(1000 / portTICK_PERIOD_MS);
+	Kvs_t *pKvs = (Kvs_t *)param;
 
 	// Ameba platform init
 	ameba_platform_init();
@@ -523,114 +581,87 @@ static void kvs_producer_thread(void *param)
 	// kvs produccer init
 	platformInit();
 
-	Kvs_run(&xKvs);
+	Kvs_run(pKvs);
 
 	vTaskDelete(NULL);
 }
 
-int kvs_producer_handle(void *p, void *input, void *output)
+static int kvs_producer_handle(void *p, void *input, void *output)
 {
 	kvs_producer_ctx_t *ctx = (kvs_producer_ctx_t *)p;
 	mm_queue_item_t *input_item = (mm_queue_item_t *)input;
 
-	producer_video_buf_t video_buf;
-	Kvs_t *pKvs = &xKvs;
+	Kvs_t *pKvs = ctx->xKvs;
+	TrackType_t track_type;
+
+	size_t uDataLen = input_item->size;
+	uint8_t *pData = (uint8_t *)malloc(uDataLen);
+	if (pData == NULL) {
+		printf("Fail to allocate memory for producer media frame\r\n");
+		return 0;
+	}
+	memcpy(pData, (uint8_t *)input_item->data_addr, uDataLen);
 
 	if (input_item->type == AV_CODEC_ID_H264) {
-		if (kvsProducerModule_video_inited) {
-			video_buf.output_size = input_item->size;
-			video_buf.output_buffer_size = video_buf.output_size;
-			video_buf.output_buffer = malloc(video_buf.output_size);
-			if (video_buf.output_buffer == NULL) {
-				printf("Fail to allocate memory for producer video frame\r\n");
-				return 0;
-			}
-			memcpy(video_buf.output_buffer, (uint8_t *)input_item->data_addr, video_buf.output_size);
-
-			if (kvsProducerModule_video_started) {
-				sendVideoFrame(&video_buf, pKvs);
-			} else {
-				if (isKeyFrame(video_buf.output_buffer, video_buf.output_size)) {
-					kvsProducerModule_video_started = 1;
-					if (pKvs->pVideoTrackInfo == NULL) {
-						kvsVideoInitTrackInfo(&video_buf, pKvs);
-					}
-					sendVideoFrame(&video_buf, pKvs);
-				} else {
-					if (video_buf.output_buffer != NULL) {
-						free(video_buf.output_buffer);
-					}
-				}
-			}
+		if (pKvs->pVideoTrackInfo == NULL && pKvs->inited && isKeyFrame(pData, uDataLen)) {
+			kvsVideoInitTrackInfo(pKvs, pData, uDataLen);
 		}
+		track_type = TRACK_VIDEO;
+	} else if (input_item->type == AV_CODEC_ID_MP4A_LATM || input_item->type == AV_CODEC_ID_PCMU || input_item->type == AV_CODEC_ID_PCMA) {
+		track_type = TRACK_AUDIO;
 	}
+
+	if (pKvs->pVideoTrackInfo
 #if ENABLE_AUDIO_TRACK
-	else if (input_item->type == AV_CODEC_ID_MP4A_LATM || input_item->type == AV_CODEC_ID_PCMU || input_item->type == AV_CODEC_ID_PCMA) {
-		if (kvsProducerModule_audio_inited) {
-			uint8_t *pAudioFrame = NULL;
-			pAudioFrame = (uint8_t *)malloc(input_item->size);
-			if (pAudioFrame == NULL) {
-				printf("Fail to allocate memory for producer audio frame\r\n");
-				return 0;
-			}
-			memcpy(pAudioFrame, (uint8_t *)input_item->data_addr, input_item->size);
-
-			DataFrameIn_t xDataFrameIn = {0};
-			memset(&xDataFrameIn, 0, sizeof(DataFrameIn_t));
-			xDataFrameIn.bIsKeyFrame = false;
-			xDataFrameIn.uTimestampMs = getEpochTimestampInMs();
-			xDataFrameIn.xTrackType = TRACK_AUDIO;
-
-			xDataFrameIn.xClusterType = MKV_SIMPLE_BLOCK;
-
-			xDataFrameIn.pData = (char *)pAudioFrame;
-			xDataFrameIn.uDataLen = input_item->size;
-
-			size_t uMemTotal = 0;
-			if (Kvs_streamMemStatTotal(pKvs->xStreamHandle, &uMemTotal) != 0) {
-				printf("Failed to get stream mem state\r\n");
-			} else if ((pKvs->xStreamHandle != NULL) && (uMemTotal < STREAM_MAX_BUFFERING_SIZE)) {
-				Kvs_streamAddDataFrame(pKvs->xStreamHandle, &xDataFrameIn);
-			} else {
-				free(xDataFrameIn.pData);
-			}
-		}
-	}
+		&& pKvs->pAudioTrackInfo
 #endif
+	   ) {
+		kvsAddMediaFrame(pKvs, pData, uDataLen, uDataLen, track_type);
+	} else {
+		free(pData);
+	}
 
 	return 0;
 }
 
-int kvs_producer_control(void *p, int cmd, int arg)
+static int kvs_producer_control(void *p, int cmd, int arg)
 {
 	kvs_producer_ctx_t *ctx = (kvs_producer_ctx_t *)p;
+	Kvs_t *pKvs = ctx->xKvs;
 
 	switch (cmd) {
 
 	case CMD_KVS_PRODUCER_SET_APPLY:
-		if (xTaskCreate(kvs_producer_thread, ((const char *)"kvs_producer_thread"), 4096, NULL, tskIDLE_PRIORITY + 1, &ctx->kvs_producer_module_task) != pdPASS) {
+		if (xTaskCreate(kvs_producer_thread, ((const char *)"kvs_producer_thread"), 4096, (void *)pKvs, tskIDLE_PRIORITY + 1,
+						&ctx->kvs_producer_module_task) != pdPASS) {
 			printf("\n\r%s xTaskCreate(kvs_producer_thread) failed", __FUNCTION__);
 		}
 		break;
+	case CMD_KVS_PRODUCER_STOP:
 	case CMD_KVS_PRODUCER_PAUSE:
-		kvsProducerModule_paused = 1;
+		gProducerStop = 1;
+		while (pKvs->xStreamHandle != NULL) {
+			sleepInMs(50);
+		}
 		break;
 	case CMD_KVS_PRODUCER_RECONNECT:
-		kvsProducerModule_paused = 0;
+		gProducerStop = 0;
 		break;
 	}
 	return 0;
 }
 
-void *kvs_producer_destroy(void *p)
+static void *kvs_producer_destroy(void *p)
 {
 	kvs_producer_ctx_t *ctx = (kvs_producer_ctx_t *)p;
 
-	kvsTerminate(&xKvs);
-	kvsProducerModule_flag_deinit();
+	kvsTerminate(ctx->xKvs);
 
 	if (ctx && ctx->kvs_producer_module_task) {
 		vTaskDelete(ctx->kvs_producer_module_task);
+	}
+	if (ctx && ctx->xKvs) {
+		free(ctx->xKvs);
 	}
 	if (ctx) {
 		free(ctx);
@@ -639,13 +670,20 @@ void *kvs_producer_destroy(void *p)
 	return NULL;
 }
 
-void *kvs_producer_create(void *parent)
+static void *kvs_producer_create(void *parent)
 {
 	kvs_producer_ctx_t *ctx = malloc(sizeof(kvs_producer_ctx_t));
 	if (!ctx) {
 		return NULL;
 	}
 	memset(ctx, 0, sizeof(kvs_producer_ctx_t));
+
+	ctx->xKvs = (Kvs_t *)malloc(sizeof(Kvs_t));
+	if (!ctx->xKvs) {
+		return NULL;
+	}
+	memset(ctx->xKvs, 0, sizeof(Kvs_t));
+
 	ctx->parent = parent;
 
 	printf("kvs_producer_create...\r\n");
@@ -666,5 +704,3 @@ mm_module_t kvs_producer_module = {
 	.module_type = MM_TYPE_VDSP,    // module type is video algorithm
 	.name = "KVS_Producer"
 };
-
-#endif

@@ -13,7 +13,7 @@ static void example_mcast_thread(void *param)
 #if LWIP_IGMP
 	int err = 0;
 	int socket = -1;
-	char *group_ip = "224.0.0.251";
+	const char *group_ip = "224.0.0.251";
 	uint16_t port = 5353;
 
 	// Delay to wait for IP by DHCP

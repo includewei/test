@@ -2,6 +2,10 @@
 #include "vfs.h"
 #include "ff.h"
 #include "time.h"
+#include "fatfs_ext/inc/ff_driver.h"
+#include "fatfs_sdcard_api.h"
+#include "fatfs_ramdisk_api.h"
+#include "fatfs_flash_api.h"
 
 int fatfs_get_interface(int interface)
 {
@@ -57,7 +61,7 @@ int fatfs_read(unsigned char *buf, unsigned int size, unsigned int count, vfs_fi
 {
 	FIL *fil = (FIL *)finfo->file;
 	size_t br;
-	FRESULT res = f_read(fil, buf, size * count, &br);
+	FRESULT res = f_read(fil, buf, size * count, (UINT *)&br);
 	if (res > 0) {
 		return -1;
 	}
@@ -68,7 +72,7 @@ int fatfs_write(unsigned char *buf, unsigned int size, unsigned int count, vfs_f
 {
 	FIL *fil = (FIL *)finfo->file;
 	size_t bw;
-	FRESULT res = f_write(fil, buf, size * count, &bw);
+	FRESULT res = f_write(fil, buf, size * count, (UINT *)&bw);
 	if (res > 0) {
 		return -1;
 	}
@@ -491,7 +495,7 @@ int fatfs_puts(const char *str, vfs_file *finfo)
 	}
 	return res;
 }
-int fatfs_gets(char *str, int num, vfs_file *finfo)
+char *fatfs_gets(char *str, int num, vfs_file *finfo)
 {
 	FIL *fil = (FIL *)finfo->file;
 	char *res = f_gets(str, num, fil);

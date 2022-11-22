@@ -372,7 +372,7 @@ int usb_sd_deinit(void)
 	}
 	return ret;
 }
-int usb_sd_getcapacity(u32 *sector_count)
+int usb_sd_getcapacity(uint32_t *sector_count)
 {
 	SD_RESULT ret;
 	ret = SD_GetCapacity(sector_count);
@@ -381,7 +381,7 @@ int usb_sd_getcapacity(u32 *sector_count)
 	}
 	return 0;
 }
-int usb_sd_readblocks(u32 sector, u8 *data, u32 count)
+int usb_sd_readblocks(uint32_t sector, uint8_t *data, uint32_t count)
 {
 	SD_RESULT ret;
 	ret = SD_ReadBlocks(sector, data, count);
@@ -390,7 +390,7 @@ int usb_sd_readblocks(u32 sector, u8 *data, u32 count)
 	}
 	return 0;
 }
-int usb_sd_writeblocks(u32 sector, const u8 *data, u32 count)
+int usb_sd_writeblocks(uint32_t sector, const uint8_t *data, uint32_t count)
 {
 	SD_RESULT ret;
 	ret = SD_WriteBlocks(sector, data, count);

@@ -23,7 +23,7 @@ static void mp4_demuxer_thread(void *param)
 	unsigned char *audio_buf = NULL;
 	fatfs_sd_params_t *fatfs_params = NULL;
 	char *file_name = NULL;
-	char *mp4_name = "AMEBA_PRO.mp4";
+	const char *mp4_name = "AMEBA_PRO.mp4";
 	int ret = 0;
 
 	mp4_demux *mp4_demuxer_ctx = NULL;
@@ -36,7 +36,7 @@ static void mp4_demuxer_thread(void *param)
 	}
 
 	vfs_init(NULL);
-	char *tag = "sd:/";
+	const char *tag = "sd:/";
 	vfs_user_register("sd", VFS_FATFS, VFS_INF_SD);
 	set_mp4_demuxer_vfs_enable(mp4_demuxer_ctx);
 	file_name = malloc(128);
@@ -116,7 +116,7 @@ static void mp4_demuxer_thread(void *param)
 #else
 	int i = 0;
 	int size = 0;
-	int bw = 0;
+	unsigned int bw = 0;
 	unsigned char key_frame = 0;
 	unsigned int video_timestamp = 0;
 	unsigned int audio_timestamp = 0;
@@ -125,8 +125,9 @@ static void mp4_demuxer_thread(void *param)
 	unsigned char *video_buf = NULL;
 	unsigned char *audio_buf = NULL;
 	char *file_name = NULL;
-	char *mp4_name = "AMEBA_PRO.mp4";
+	const char *mp4_name = "AMEBA_PRO.mp4";
 	int ret = 0;
+	fatfs_sd_params_t *fatfs_params = NULL;
 
 	mp4_demux *mp4_demuxer_ctx = NULL;
 	mp4_demuxer_ctx = (mp4_demux *)malloc(sizeof(mp4_demux));
@@ -137,12 +138,13 @@ static void mp4_demuxer_thread(void *param)
 		memset(mp4_demuxer_ctx, 0, sizeof(mp4_demux));
 	}
 
-	fatfs_sd_params_t *fatfs_params = NULL;
+
 	fatfs_params = malloc(sizeof(fatfs_sd_params_t));
 	if (fatfs_params == NULL) {
 		printf("It can't be allocated the buffer\r\n");
 		goto mp4_create_fail;
 	}
+	memset(fatfs_params, 0x00, sizeof(fatfs_sd_params_t));
 	if (fatfs_sd_init() < 0) {
 		goto mp4_create_fail;
 	}
@@ -176,7 +178,7 @@ static void mp4_demuxer_thread(void *param)
 	}
 	for (i = 0; i < mp4_demuxer_ctx->video_len; i++) {
 		size = get_video_frame(mp4_demuxer_ctx, video_buf, i, &key_frame, &video_duration, &video_timestamp);
-		f_write(&w_file, video_buf, size, &bw);
+		f_write(&w_file, video_buf, size, (UINT *)&bw);
 		//printf("Write video data = %d key = %d video_timestamp = %d\r\n",size,key_frame,video_timestamp);
 	}
 	printf("Write video done\r\n");
@@ -195,7 +197,7 @@ static void mp4_demuxer_thread(void *param)
 	}
 	for (i = 0; i < mp4_demuxer_ctx->audio_len; i++) {
 		size = get_audio_frame(mp4_demuxer_ctx, audio_buf, i, &audio_duration, &audio_timestamp);
-		f_write(&w_file, audio_buf, size, &bw);
+		f_write(&w_file, audio_buf, size, (UINT *)&bw);
 		//printf("Write audio data %d timestamp = %d\r\n",size,audio_timestamp);
 	}
 	printf("Write audio done\r\n");
@@ -209,9 +211,8 @@ static void mp4_demuxer_thread(void *param)
 	printf("mp4_demuxer_close\r\n");
 	mp4_demuxer_close(mp4_demuxer_ctx);
 #endif
-EXIT:
 mp4_create_fail:
-	if (fatfs_params) {
+	if (fatfs_params != NULL) {
 		free(fatfs_params);
 	}
 	if (video_buf) {

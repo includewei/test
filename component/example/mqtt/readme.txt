@@ -21,31 +21,18 @@ Description
 	
 Setup Guide
 ~~~~~~~~~~~
-	To execute this example automatically when booting, configuration should be set as below.
-	1) The CONFIG_EXAMPLE_MQTT in platform_opts.h must be enabled as follows.
-	    /* platform_opts.h *./
-	    #define CONFIG_EXAMPLE_MQTT 1
-	For AmebaD2 :Amebad2 Changes how example is compiled, and Removed macro controls (CONFIG_EXAMPLE_XXX)in platform_opts.h
-		1.GCC:use CMD "make xip EXAMPLE=mqtt" to compile mqtt example
-
-	   To manage connection exception, LWIP_TCP_KEEPALIVE and LWIP_UART_ADAPTER in 
+1.To manage connection exception, LWIP_TCP_KEEPALIVE and LWIP_UART_ADAPTER in 
 	   lwipopts.h must be enabled as follows.
-	    /* lwipopts.h */
+[lwipopts.h]
 	    #define LWIP_TCP_KEEPALIVE 1
 	    #define LWIP_UART_ADAPTER 1
-	2) Add example_mqtt() to Example_entry.c.
-	    #if CONFIG_EXAMPLE_MQTT
-	    #include <mqtt/example_mqtt.h>
-	    #endif
-	    void example_entry(void)
-	    {
-	        #if CONFIG_EXAMPLE_MQTT
-	        example_mqtt();
-	        #endif
-	    }
-	3) under gcc: make sure that the mqtt example source file has been added to the project
-	   under IAR: lm4_application->application->mqtt->options, don't choose 
+
+2.under gcc: make sure that the mqtt example source file has been added to the project
+under IAR: lm4_application->application->mqtt->options, don't choose 
 	      "exclude from build"
+	      
+3.GCC:use CMD "make all EXAMPLE=mqtt" to compile mqtt example
+
 	
 Result description
 ~~~~~~~~~~~~~~~~~~
@@ -60,6 +47,7 @@ Result description
 	    7) If mqtt status is set to MQTT_START, the client will close the TCP/IP socket connection, and
 	       restart the session by opening a new socket to the server and issuing a CONNECT message.
 	       The client will subscribe to the topic again.
+
         Some strategies are used to manage connection exception
 	    1) Lwip_select is used to check data arrival and connection exception. Message is read only if
 	       tcp data has arrived. If exception fd is set, MQTT will restart.
@@ -76,4 +64,4 @@ Supported List
 ~~~~~~~~~~~~~~
 [Supported List]
         Supported :
-          Ameba-1, Ameba-z, Ameba-pro, Ameba-z2, Ameba-D, Ameba-D2
+          RTL8730A, RTL872XE

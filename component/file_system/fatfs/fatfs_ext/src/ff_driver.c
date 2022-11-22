@@ -43,7 +43,7 @@ int FATFS_UnRegisterDiskDriver(unsigned char drv_num)
   * @param  None
   * @retval Number of attached drivers.
   */
-int FATFS_getDrivernum(unsigned char *TAG)
+int FATFS_getDrivernum(const char *TAG)
 {
 	ll_diskio_drv *drv;
 	unsigned int index;

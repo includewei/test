@@ -44,11 +44,17 @@ static int (__cmse_nonsecure_call *ns_flash_write)(uint32_t, uint32_t, uint8_t *
 static void (__cmse_nonsecure_call *ns_device_lock)(uint32_t) = NULL;
 static void (__cmse_nonsecure_call *ns_device_unlock)(uint32_t) = NULL;
 #else
-static void __attribute__((cmse_nonsecure_call))(*ns_flash_erase)(uint32_t) = NULL;
-static int __attribute__((cmse_nonsecure_call))(*ns_flash_read)(uint32_t, uint32_t, uint8_t *) = NULL;
-static int __attribute__((cmse_nonsecure_call))(*ns_flash_write)(uint32_t, uint32_t, uint8_t *) = NULL;
-static void __attribute__((cmse_nonsecure_call))(*ns_device_lock)(uint32_t) = NULL;
-static void __attribute__((cmse_nonsecure_call))(*ns_device_unlock)(uint32_t) = NULL;
+typedef void __attribute__((cmse_nonsecure_call))(*ns_flash_erase_t)(uint32_t);
+typedef int __attribute__((cmse_nonsecure_call))(*ns_flash_read_t)(uint32_t, uint32_t, uint8_t *);
+typedef int __attribute__((cmse_nonsecure_call))(*ns_flash_write_t)(uint32_t, uint32_t, uint8_t *);
+typedef void __attribute__((cmse_nonsecure_call))(*ns_device_lock_t)(uint32_t);
+typedef void __attribute__((cmse_nonsecure_call))(*ns_device_unlock_t)(uint32_t);
+
+static ns_flash_erase_t ns_flash_erase = NULL;
+static ns_flash_read_t ns_flash_read = NULL;
+static ns_flash_write_t ns_flash_write = NULL;
+static ns_device_lock_t ns_device_lock = NULL;
+static ns_device_unlock_t ns_device_unlock = NULL;
 #endif
 static uint8_t *ns_buf = NULL;
 static uint8_t crypto_inited = 0;
@@ -85,13 +91,12 @@ static int secure_storage_encrypt_data(uint8_t *input, uint32_t input_len, uint8
 
 	ns_device_lock(RT_DEV_LOCK_CRYPTO);
 	ret = crypto_aes_gcm_init(key, 32);
-	ns_device_unlock(RT_DEV_LOCK_CRYPTO);
 	if (ret != 0) {
+		ns_device_unlock(RT_DEV_LOCK_CRYPTO);
 		secure_storage_debug("\n\r ERROR: crypto_aes_gcm_init \n\r");
 		goto exit;
 	}
 
-	ns_device_lock(RT_DEV_LOCK_CRYPTO);
 	ret = crypto_aes_gcm_encrypt(input, input_len, aes_gcm_iv, aes_gcm_aad, sizeof(aes_gcm_aad), output, tag);
 	ns_device_unlock(RT_DEV_LOCK_CRYPTO);
 	if (ret != 0) {
@@ -135,13 +140,12 @@ static int secure_storage_decrypt_data(uint8_t *input, uint32_t input_len, uint8
 
 	ns_device_lock(RT_DEV_LOCK_CRYPTO);
 	ret = crypto_aes_gcm_init(key, 32);
-	ns_device_unlock(RT_DEV_LOCK_CRYPTO);
 	if (ret != 0) {
+		ns_device_unlock(RT_DEV_LOCK_CRYPTO);
 		secure_storage_debug("\n\r ERROR: crypto_aes_gcm_init \n\r");
 		goto exit;
 	}
 
-	ns_device_lock(RT_DEV_LOCK_CRYPTO);
 	ret = crypto_aes_gcm_decrypt(input, input_len, aes_gcm_iv, aes_gcm_aad, sizeof(aes_gcm_aad), output, dec_tag);
 	ns_device_unlock(RT_DEV_LOCK_CRYPTO);
 	if (ret != 0) {
@@ -170,11 +174,11 @@ int NS_ENTRY secure_storage_set_ns_func(ns_func_t *func, uint8_t *buf, uint32_t 
 	ns_device_lock = (void (__cmse_nonsecure_call *)(uint32_t)) func->device_lock;
 	ns_device_unlock = (void (__cmse_nonsecure_call *)(uint32_t)) func->device_unlock;
 #else
-	ns_flash_erase = cmse_nsfptr_create(func->flash_erase);
-	ns_flash_read = cmse_nsfptr_create(func->flash_read);
-	ns_flash_write = cmse_nsfptr_create(func->flash_write);
-	ns_device_lock = cmse_nsfptr_create(func->device_lock);
-	ns_device_unlock = cmse_nsfptr_create(func->device_unlock);
+	ns_flash_erase = (ns_flash_erase_t)cmse_nsfptr_create(func->flash_erase);
+	ns_flash_read = (ns_flash_read_t)cmse_nsfptr_create(func->flash_read);
+	ns_flash_write = (ns_flash_write_t)cmse_nsfptr_create(func->flash_write);
+	ns_device_lock = (ns_device_lock_t)cmse_nsfptr_create(func->device_lock);
+	ns_device_unlock = (ns_device_unlock_t)cmse_nsfptr_create(func->device_unlock);
 #endif
 	ns_buf = buf;
 

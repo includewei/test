@@ -5,7 +5,8 @@
 
 #define STACKSIZE    2048
 #define USE_HTTPS    0
-#define SERVER_HOST  "httpbin.org"
+
+static const char *server_host = "httpbin.org";
 
 #if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1) && defined(CONFIG_SSL_CLIENT_PRIVATE_IN_TZ) && (CONFIG_SSL_CLIENT_PRIVATE_IN_TZ == 1)
 #include "device_lock.h"
@@ -39,15 +40,15 @@ static void example_httpc_thread(void *param)
 #endif
 	if (conn) {
 #if USE_HTTPS
-		if (httpc_conn_connect(conn, SERVER_HOST, 443, 0) == 0) {
+		if (httpc_conn_connect(conn, (char *)server_host, 443, 0) == 0) {
 #else
-		if (httpc_conn_connect(conn, SERVER_HOST, 80, 0) == 0) {
+		if (httpc_conn_connect(conn, (char *)server_host, 80, 0) == 0) {
 #endif
 			/* HTTP GET request */
 			// start a header and add Host (added automatically), Content-Type and Content-Length (added by input param)
-			httpc_request_write_header_start(conn, "GET", "/get?param1=test_data1&param2=test_data2", NULL, 0);
+			httpc_request_write_header_start(conn, (char *)"GET", (char *)"/get?param1=test_data1&param2=test_data2", NULL, 0);
 			// add other required header fields if necessary
-			httpc_request_write_header(conn, "Connection", "close");
+			httpc_request_write_header(conn, (char *)"Connection", (char *)"close");
 			// finish and send header
 			httpc_request_write_header_finish(conn);
 
@@ -56,7 +57,7 @@ static void example_httpc_thread(void *param)
 				httpc_conn_dump_header(conn);
 
 				// receive response body
-				if (httpc_response_is_status(conn, "200 OK")) {
+				if (httpc_response_is_status(conn, (char *)"200 OK")) {
 					uint8_t buf[1024];
 					int read_size = 0;
 					uint32_t total_size = 0;
@@ -94,16 +95,16 @@ static void example_httpc_thread(void *param)
 #endif
 	if (conn) {
 #if USE_HTTPS
-		if (httpc_conn_connect(conn, SERVER_HOST, 443, 0) == 0) {
+		if (httpc_conn_connect(conn, (char *)server_host, 443, 0) == 0) {
 #else
-		if (httpc_conn_connect(conn, SERVER_HOST, 80, 0) == 0) {
+		if (httpc_conn_connect(conn, (char *)server_host, 80, 0) == 0) {
 #endif
 			/* HTTP POST request */
-			char *post_data = "param1=test_data1&param2=test_data2";
+			const char *post_data = "param1=test_data1&param2=test_data2";
 			// start a header and add Host (added automatically), Content-Type and Content-Length (added by input param)
-			httpc_request_write_header_start(conn, "POST", "/post", NULL, strlen(post_data));
+			httpc_request_write_header_start(conn, (char *)"POST", (char *)"/post", NULL, strlen(post_data));
 			// add other header fields if necessary
-			httpc_request_write_header(conn, "Connection", "close");
+			httpc_request_write_header(conn, (char *)"Connection", (char *)"close");
 			// finish and send header
 			httpc_request_write_header_finish(conn);
 			// send http body
@@ -114,7 +115,7 @@ static void example_httpc_thread(void *param)
 				httpc_conn_dump_header(conn);
 
 				// receive response body
-				if (httpc_response_is_status(conn, "200 OK")) {
+				if (httpc_response_is_status(conn, (char *)"200 OK")) {
 					uint8_t buf[1024];
 					int read_size = 0;
 					uint32_t total_size = 0;

@@ -11,10 +11,6 @@
 #include <disk_if/inc/flash_fatfs.h>
 #include "device_lock.h"
 #include "platform_opts.h"
-#if defined(CONFIG_PLATFORM_8195BHP) || defined(CONFIG_PLATFORM_8735B)
-#include "timer_api.h"
-#include "task.h"
-#endif
 
 #if defined(FATFS_DISK_FLASH) && (FATFS_DISK_FLASH == 1U)
 
@@ -24,12 +20,9 @@
 #define FLASH_SECTOR_COUNT	256//128
 #define SECTOR_SIZE_FLASH	4096
 
-#if defined(CONFIG_PLATFORM_8195BHP) || defined(CONFIG_PLATFORM_8735B)
-#define FLASH_APP_BASE  0x440000
-#else
+
 #ifndef FLASH_APP_BASE
 #define FLASH_APP_BASE  0x180000
-#endif
 #endif
 
 
@@ -70,12 +63,36 @@ DSTATUS FLASH_disk_deinitialize(void)
 	res = RES_OK;
 	return res;
 }
-
+#if defined(SUPPORT_USB_FLASH_MASSSTORAGE)
+#include "ftl_common_api.h"
+#ifdef FLASH_SECTOR_COUNT
+#undef FLASH_SECTOR_COUNT
+#define FLASH_SECTOR_COUNT 2048 //512*2048
+#endif
+#ifdef SECTOR_SIZE_FLASH
+#undef SECTOR_SIZE_FLASH
+#define SECTOR_SIZE_FLASH 512 //The usb mass storage need to setup 512 byte.(TODO support other sector size)
+#endif
+/* Read sector(s) --------------------------------------------*/
+DRESULT FLASH_disk_read(BYTE *buff, DWORD sector, UINT count)
+{
+	DRESULT res = 0;
+	ftl_common_read(FLASH_APP_BASE + sector * SECTOR_SIZE_FLASH, buff, count * SECTOR_SIZE_FLASH);
+	return res;
+}
+/* Write sector(s) --------------------------------------------*/
+DRESULT FLASH_disk_write(const BYTE *buff, DWORD sector, UINT count)
+{
+	DRESULT res = 0;
+	ftl_common_write(FLASH_APP_BASE + sector * SECTOR_SIZE_FLASH, buff, count * SECTOR_SIZE_FLASH);
+	return res;
+}
+#else
 /* Read sector(s) --------------------------------------------*/
 DRESULT FLASH_disk_read(BYTE *buff, DWORD sector, UINT count)
 {
 	DRESULT res;
-	char retry_cnt = 0, i = 0;
+	char retry_cnt = 0;
 	device_mutex_lock(RT_DEV_LOCK_FLASH);
 	do {
 		res = interpret_flash_result(flash_stream_read(&flash, FLASH_APP_BASE + sector * SECTOR_SIZE_FLASH, count * SECTOR_SIZE_FLASH, (uint8_t *) buff));
@@ -89,7 +106,7 @@ DRESULT FLASH_disk_read(BYTE *buff, DWORD sector, UINT count)
 
 /* Write sector(s) --------------------------------------------*/
 #if _USE_WRITE == 1
-DRESULT FLASH_disk_write(BYTE const *buff, DWORD sector, UINT count)
+DRESULT FLASH_disk_write(const BYTE *buff, DWORD sector, UINT count)
 {
 	DRESULT res;
 	char retry_cnt = 0, i = 0;
@@ -113,14 +130,13 @@ DRESULT FLASH_disk_write(BYTE const *buff, DWORD sector, UINT count)
 	return res;
 }
 #endif
-
+#endif
 /* IOCTL sector(s) --------------------------------------------*/
 #if _USE_IOCTL == 1
 DRESULT FLASH_disk_ioctl(BYTE cmd, void *buff)
 {
 	DRESULT res = RES_ERROR;
 	// FLASH_RESULT result;
-	DWORD last_blk_addr, block_size;
 
 	switch (cmd) {
 	/* Generic command (used by FatFs) */
@@ -184,6 +200,6 @@ ll_diskio_drv FLASH_disk_Driver = {
 #if _USE_IOCTL == 1
 	.disk_ioctl = FLASH_disk_ioctl,
 #endif
-	.TAG	= "FLASH"
+	.TAG	= (unsigned char *)"FLASH"
 };
 #endif

@@ -211,6 +211,7 @@ typedef enum {
 	VCENC_RESERVED = -255,
 	VCENC_INTRA_FRAME = 0,
 	VCENC_PREDICTED_FRAME = 1,
+//	VCENC_PREDICTED_FRAME_META = 2,		// ToDo
 	VCENC_BIDIR_PREDICTED_FRAME = 2,
 	VCENC_NOTCODED_FRAME  /* Used just as a return value */
 } VCEncPictureCodingType;
@@ -236,9 +237,6 @@ typedef struct {
 
 /* Structure for command line options */
 typedef struct {
-
-//	char input[MAX_PATH];
-//	char output[MAX_PATH];
 
 	i32 CodecType;
 
@@ -323,10 +321,8 @@ typedef struct {
 	i32 crf; /*CRF constant*/
 
 	i32 bitVarRangeI;
-
 	i32 bitVarRangeP;
 
-//	i32 bitVarRangeB;
 	u32 u32StaticSceneIbitPercent;
 
 	i32 tolMovingBitRate;/*tolerance of max Moving bit rate */
@@ -390,7 +386,8 @@ typedef struct {
 	i32 fieldOrder;
 	i32 videoRange;
 	i32 sei;
-	char *userData;
+
+	u32 userData;
 	u32 gopSize;
 	char *gopCfg;
 	u32 gopLowdelay;
@@ -495,7 +492,7 @@ typedef struct {
 
 	/* AmebaPro VOE/buffer control */
 	i32 osd;
-//	i32 obj;
+	//	i32 obj;
 
 	u32 lumaSize;
 	i32	enc_cnt;
@@ -541,9 +538,17 @@ typedef struct {
 
 	u32 init_daynight_mode;  // 0-day, 1-night
 
+	u32 gray_mode;
+
+	u32 all_init_iq_set_flag;
+
+	u32 fast_osd_en;
+	u32 *osd_buf;
+
+	u32 rsvd[56];
+
 } __attribute__((aligned(32))) commandLine_s;
 
 /** @} */ /* End of group hal_enc */
-
 #endif  // end of "#define _HAL_VIDEO_COMMON_H_"
 

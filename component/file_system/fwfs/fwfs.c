@@ -92,10 +92,10 @@ enum tlv_id {
 	ID_IE_RESV
 };
 
-static char *manifest_valid_label = "RTL8735B";
+static const char *manifest_valid_label = "RTL8735B";
 #define FWFS_MANIFEST_SIZE	4096
 
-#define MAX_BLK_IN_FW_AREA	(16*1024/128)			// 16MB max
+#define MAX_BLK_IN_FW_AREA	(16*1024/128)			// 32MB max
 
 #define PTABLE_PAGE_NUM	4
 
@@ -139,8 +139,7 @@ int tlv_get_value(uint8_t *tlv, uint8_t *tlv_end, int id, uint8_t *value)
 	}
 	return found;
 }
-
-
+/*
 typedef struct nand_fci_s {
 	uint32_t blk_cnt;
 	uint32_t page_per_blk;
@@ -148,18 +147,35 @@ typedef struct nand_fci_s {
 	uint32_t spare_size;
 	uint8_t  resv1[0x10];
 	uint32_t part_tbl_start;
-	uint32_t part_tbl_dup_cnt;
+	uint32_t part_tbl_range_size;
 	uint32_t vrf_alg;
 	uint8_t  resv2[0x2];
 	uint32_t bbt_start;
-	uint32_t bbt_dup_cnt;
+	uint32_t bbt_range_size;
+} nand_fci_t;
+*/
+
+typedef struct nand_fci_s {
+	uint32_t blk_cnt;
+	uint32_t page_per_blk;
+	uint32_t page_size;
+	uint32_t spare_size;
+	uint8_t  resv1[0x8];
+	uint32_t bbt_start;
+	uint32_t bbt_range_size;
+	uint32_t part_tbl_start;
+	uint32_t part_tbl_range_size;
+	uint16_t vrf_alg;
+	uint8_t  resv2[0x6];
+	uint32_t magic_num;		// 0xff35ff876
 } nand_fci_t;
 
 typedef struct nand_part_rec_s {
 	uint32_t magic_num;
 	uint16_t type_id;
 	uint16_t blk_cnt;
-	uint8_t  resv[0x18];
+	uint16_t serial_num;
+	uint8_t  resv[0x16];
 	uint16_t vmap[48];
 } nand_part_rec_t;
 
@@ -324,7 +340,7 @@ void nand_pfw_init(void)
 	memcpy(&g_partition.fci, fci, sizeof(nand_fci_t));
 	//pfw_dump_mem(&g_partition.fci, sizeof(nand_fci_t));
 	dprintf(LOG_INF, "fci part tbl start   %lx\n\r", fci->part_tbl_start);
-	dprintf(LOG_INF, "fci part tbl dup cnt %lx\n\r", fci->part_tbl_dup_cnt);
+	dprintf(LOG_INF, "fci part tbl dup cnt %lx\n\r", fci->part_tbl_range_size);
 
 	snand_blksize = fci->page_per_blk * fci->page_size;
 	snand_pgsize = fci->page_size;
@@ -333,7 +349,34 @@ void nand_pfw_init(void)
 	dprintf(LOG_INF, "update page size %d  page per block %d\n\r", snand_pgsize, snand_ppb);
 	// read partition table
 
-	for (int i = fci->part_tbl_start; i < fci->part_tbl_start + fci->part_tbl_dup_cnt; i++) {
+
+	if (IS_CUT_B(hal_sys_get_rom_ver())) {  //B-cut partition table block 20-23
+		uint8_t *buf = (uint8_t *)malloc(snand_pgsize + 32);
+		if (!buf) {
+			dprintf(LOG_ERR, "out of resource\n\r");
+			goto pfw_init_fail;
+		}
+		for (int i = 0; i < 4 ; i++) { //Check the 20-23 block for partition table
+			snand_page_read(&flash, (fci->part_tbl_start + 4 + i) * snand_ppb, snand_pgsize + 32, buf);
+			nand_spare_t *spare = (nand_spare_t *)&buf[snand_pgsize];
+			if (spare->bad_blk_tag == 0xff && nand_pfw_get_typeid(spare) == PARTAB_TYPE_ID) {
+				fci->part_tbl_start += 4;
+				fci->part_tbl_range_size -= 4;
+				dprintf(LOG_INF, "It is new partition version %d\n\r", fci->part_tbl_start);
+				break;
+			} else if (spare->bad_blk_tag == 0xff) {
+				dprintf(LOG_INF, "It is old partition version %d\n\r", fci->part_tbl_start);
+				break;
+			} else {
+				dprintf(LOG_ERR, "Find next block %d\n\r", fci->part_tbl_start + 4 + i);
+			}
+		}
+		if (buf) {
+			free(buf);
+		}
+	}
+
+	for (int i = fci->part_tbl_start; i < fci->part_tbl_start + fci->part_tbl_range_size; i++) {
 		snand_page_read(&flash, i * snand_ppb, snand_pgsize + 32, tmp);
 		nand_spare_t *spare = (nand_spare_t *)&tmp[snand_pgsize];
 		//pfw_dump_mem(tmp, 2048);
@@ -433,7 +476,7 @@ unsigned long crc16(unsigned char *p, unsigned long len)
 
 typedef struct part_id_map_s {
 	uint16_t type_id;
-	char *name;
+	const char *name;
 } part_id_map_t;
 
 static part_id_map_t id_map[] = {
@@ -454,12 +497,14 @@ static part_id_map_t id_map[] = {
 	{0x89CE, "ISP_IQ"},
 	{0x81CF, "NN_MDL"},
 	{0x79D0, "NAND_CTRL"},
+	{0x71D1, "NAND_BBT"},
+	{0x69D2, "FCSDATA"},
 	//-------------------------------- defined by sw
 	{0x78D1, "UDATA"},
 	{0xBADB, "BAD_BLOCK"}
 };
 
-char *__get_pt_name(uint16_t type_id)
+const char *__get_pt_name(uint16_t type_id)
 {
 	for (int i = 1; i < sizeof(id_map) / sizeof(id_map[0]); i++) {
 		if (id_map[i].type_id == type_id) {
@@ -469,7 +514,7 @@ char *__get_pt_name(uint16_t type_id)
 	return id_map[0].name;
 }
 
-uint16_t __get_pt_type_id(char *name)
+uint16_t __get_pt_type_id(const char *name)
 {
 	for (int i = 1; i < sizeof(id_map) / sizeof(id_map[0]); i++) {
 		if (strcmp(id_map[i].name, name) == 0) {
@@ -567,6 +612,7 @@ void nand_pfw_add_badblock(int bad_idx)
 		bad_rec->magic_num = 0xff35ff87;
 		bad_rec->type_id = 0xBADB;
 		bad_rec->blk_cnt = 0;
+		bad_rec->serial_num = 0;
 	}
 
 	// should i need to check is in list? seem trivial check
@@ -619,6 +665,8 @@ void nand_pfw_scan_badblock(int max_block_idx)
 			nand_pfw_add_badblock(i);
 		}
 	}
+
+	free(tmp);
 }
 
 void nand_pfw_badblock_sim_op(int op, int blk_idx)
@@ -645,9 +693,11 @@ void nand_pfw_badblock_sim_op(int op, int blk_idx)
 	}
 }
 
-void pfw_list2(void)
+void pfw_list2(int mode)
 {
 	nand_part_rec_t *rec = g_partition.part_rec;
+
+	(void)mode;
 
 	if (g_pfw_inited == 0) {
 		return;
@@ -669,7 +719,7 @@ void pfw_list2(void)
 	}
 }
 
-void nand_pfw_list(void)
+void nand_pfw_list(int mode)
 {
 	nand_part_rec_t *rec = g_partition.part_rec;
 	nand_part_rec_t *base = g_partition.part_rec;
@@ -679,7 +729,11 @@ void nand_pfw_list(void)
 		return;
 	}
 	// dump partition items
-	dprintf(LOG_INF, "%4s%8s%8s\t%s\n\r", "rec", "type_id", "blk_cnt", "name");
+	if (mode == 1) {
+		printf("%4s%8s%8s\t%8s\t%8s\n\r", "rec", "type_id", "blk_cnt", "name", "vmap");
+	} else {
+		printf("%4s%8s%8s\t%8s\n\r", "rec", "type_id", "blk_cnt", "name");
+	}
 
 	while (rec != NULL) {
 		next = NULL;
@@ -689,14 +743,24 @@ void nand_pfw_list(void)
 		if (rec->blk_cnt == 48) {
 			do {
 				nand_part_rec_t *next = pfw_search_next_type_id(rec, type_id);
-				blk_cnt += next->blk_cnt;
+				if (next->serial_num == rec->serial_num + 1) {
+					blk_cnt += next->blk_cnt;
+				}
 				if (next) {
 					rec = next;
 				}
 			} while (next != NULL && (next->blk_cnt == 48));
 		}
 
-		dprintf(LOG_INF, "%4d%8x%8d\t%s\n\r", (rec - base) / sizeof(nand_part_rec_t), type_id, blk_cnt, __get_pt_name(type_id));
+		printf("%4d%8x%8d\t%8s\t", (rec - base) / sizeof(nand_part_rec_t), type_id, blk_cnt, __get_pt_name(type_id));
+
+		if (mode == 1) {
+			for (int i = 0; i < rec->blk_cnt; i++) {
+				printf("%03d ", rec->vmap[i]);
+			}
+		}
+		printf("\n\r");
+
 		rec = pfw_search_next(rec);
 	}
 }
@@ -750,21 +814,28 @@ void *nand_pfw_open_by_typeid(uint16_t type_id, int mode)
 	fr->type_id = type_id;
 
 	nand_part_rec_t *tmp_rec = pfw_search_type_id(type_id);
+	nand_part_rec_t *next_rec = NULL;
 	if (tmp_rec != NULL) {
 		do {
 			fr->part_recs[fr->part_recs_cnt] = tmp_rec;
 			fr->part_recs_cnt ++;
-			tmp_rec = pfw_search_next_type_id(tmp_rec, type_id);
+			do {
+				next_rec = pfw_search_next_type_id(tmp_rec, type_id);
+			} while ((next_rec != NULL) && (next_rec->serial_num != tmp_rec->serial_num + 1));
+
+			tmp_rec = next_rec;
 		} while (tmp_rec != NULL);
 	} else {
-		if (mode & M_CREATE && type_id == 0x78D1) {
+		if (((mode & M_CREATE) && (type_id == 0x78D1)) ||
+			((mode & (M_CREATE | M_RAW)) && (type_id != 0x78D1))) {
 			dprintf(LOG_INF, "create new user parition\n\r");
 			// only support create user type format
-			nand_part_rec_t *usr_rec = nand_pfw_get_free_rec();
-			usr_rec->magic_num = 0xff35ff87;
-			usr_rec->type_id = 0x78D1;
-			usr_rec->blk_cnt = 0;
-			fr->part_recs[0] = usr_rec;
+			nand_part_rec_t *new_rec = nand_pfw_get_free_rec();
+			new_rec->magic_num = 0xff35ff87;
+			new_rec->type_id = type_id;
+			new_rec->blk_cnt = 0;
+			new_rec->serial_num = 0;
+			fr->part_recs[0] = new_rec;
 			fr->part_recs_cnt = 1;
 		} else {
 			dprintf(LOG_ERR, "cannot open file\n\r");
@@ -841,7 +912,7 @@ typedef struct fwfs_folder_s {
 	fwfs_file_t files[32];
 } fwfs_folder_t;
 
-void *nand_pfw_open(char *name, int mode)
+void *nand_pfw_open(const char *name, int mode)
 {
 	char name_dup[strlen(name) + 2];
 	strcpy(name_dup, name);
@@ -881,6 +952,7 @@ void *nand_pfw_open(char *name, int mode)
 			}
 		}
 
+		free(tmp);
 	}
 	return fr;
 }
@@ -1032,6 +1104,7 @@ int nand_pfw_update_ptable(void)
 	// erase partition table
 
 	if (g_partition.dirty == 0) {
+		free(tmp);
 		return 0;
 	}
 
@@ -1077,7 +1150,7 @@ int nand_pfw_update_ptable(void)
 	} while (cmp_status != 0);
 #else	// seem not support
 	int part_start_idx = g_partition.fci.part_tbl_start;
-	int part_dup_cnt = g_partition.fci.part_tbl_dup_cnt;
+	int part_dup_cnt = g_partition.fci.part_tbl_range_size;
 	int part_new_idx;
 	do {
 		// search new partition table block
@@ -1116,46 +1189,65 @@ int nand_pfw_update_ptable(void)
 	return 0;
 }
 
+static uint8_t nand_blk_static[MAX_BLK_IN_FW_AREA];
 int nand_pfw_find_free_block(int orig_idx)
 {
 	// current vmap to generate usage log and get max block index
 	// only use max rec block index + 1 until MAX_BLK_IN_FW_AREA reached
-	int max_used_blk_idx = 0;
+	int max_used_blk_idx = MAX_BLK_IN_FW_AREA;
 	int new_blk_idx = orig_idx;
 	nand_part_rec_t *rec = g_partition.part_rec;
 	//nand_part_rec_t *next = NULL;
 
 	// search after partition table, NOTE: partition table area bad block also store in badblock record
-	int valid_start_idx = g_partition.fci.part_tbl_start + g_partition.fci.part_tbl_dup_cnt;
-	int valid_min_blk_idx = valid_start_idx;
+	int valid_start_idx = g_partition.fci.part_tbl_start + g_partition.fci.part_tbl_range_size;
+	int valid_min_blk_idx = MAX_BLK_IN_FW_AREA;
 
+	memset(nand_blk_static, 0, MAX_BLK_IN_FW_AREA);
 	while (rec != NULL) {
 		for (int i = 0; i < rec->blk_cnt; i++) {
-			if (rec->vmap[i] > max_used_blk_idx) {
-				max_used_blk_idx = rec->vmap[i];
-			}
-			if (valid_min_blk_idx == rec->vmap[i]) {
-				valid_min_blk_idx++;
-				while (nand_pfw_check_badblock(valid_min_blk_idx)) {
-					valid_min_blk_idx++;
-				}
-			}
+			nand_blk_static[rec->vmap[i]] = 1;
 		}
 		rec = pfw_search_next(rec);
 	}
+
+	for (int i = 0; i < MAX_BLK_IN_FW_AREA; i += 16) {
+		for (int x = 0; x < 16; x++) {
+			dprintf(LOG_MSG,  "%d ", nand_blk_static[i + x]);
+		}
+		dprintf(LOG_MSG, "\n\r");
+	}
+
+	for (int i = valid_start_idx; i < MAX_BLK_IN_FW_AREA - 1; i++) {
+		if (nand_blk_static[i] == 0) {
+			valid_min_blk_idx = i;
+			break;
+		}
+	}
+	dprintf(LOG_MSG, "valid min %d\n\r", valid_min_blk_idx);
+
+	for (int i = MAX_BLK_IN_FW_AREA - 1; i >= valid_start_idx; i--) {
+		if (nand_blk_static[i] == 1) {
+			max_used_blk_idx = i;
+			break;
+		}
+	}
+
+	dprintf(LOG_MSG, "used max %d\n\r", max_used_blk_idx);
 
 	new_blk_idx = max_used_blk_idx + 1;
 	while (nand_pfw_check_badblock(new_blk_idx)) {
 		new_blk_idx++;
 	}
 
-	if (max_used_blk_idx >= MAX_BLK_IN_FW_AREA) {
+	if (max_used_blk_idx >= (MAX_BLK_IN_FW_AREA - 1)) {
 		new_blk_idx = valid_min_blk_idx;
 	}
 
 	dprintf(LOG_INF, "orig blk %d, new blk %d\n\r", orig_idx, new_blk_idx);
 
-	if (new_blk_idx > MAX_BLK_IN_FW_AREA) {
+	if (new_blk_idx > (MAX_BLK_IN_FW_AREA - 1)) {
+		dprintf(LOG_ERR, "out of firmware space\n\r");
 		new_blk_idx = -1;
 	}
 	// max 16MB --> 16*8block = 128block is max
@@ -1202,7 +1294,9 @@ static int snand_block_write(snand_t *obj, uint32_t *address, uint32_t Length, u
 			// find new block
 			op_block = nand_pfw_find_free_block(op_block);
 			if (op_block < 0) {
-				break;
+				dprintf(LOG_ERR, "fatal, out of resource\n\r");
+				free(tmp);
+				return -1;
 			}
 			*address = op_block * snand_ppb;
 		}
@@ -1214,7 +1308,7 @@ static int snand_block_write(snand_t *obj, uint32_t *address, uint32_t Length, u
 	}
 
 	free(tmp);
-	dprintf(LOG_INF, "update parition table success\n\r");
+	dprintf(LOG_INF, "nand block write success\n\r");
 	return 0;
 }
 
@@ -1224,6 +1318,11 @@ int nand_pfw_flush_cache(void *fr, int update_ptbl)
 	int new_blk;
 
 	if (r->cache.blk_inuse != 0) {
+		// cache is new block
+		if (r->cache.blk_real == 0xffff) {
+			r->part_rec->blk_cnt++;
+			r->content_len += snand_blksize;
+		}
 		// flush current cache
 		dprintf(LOG_INF, "start flush cache\n\r");
 		int status;
@@ -1251,6 +1350,11 @@ int nand_pfw_flush_cache(void *fr, int update_ptbl)
 			part_rec->vmap[r->cache.blk_virt % 48] = new_blk;
 			g_partition.dirty = 1;
 
+			/*
+			for(int i=0;i<part_rec->blk_cnt;i++)
+				printf("%03d ", part_rec->vmap[i]);
+			printf("\n\r");
+			*/
 			// write parition table
 			if (update_ptbl) {
 				nand_pfw_update_ptable();
@@ -1306,14 +1410,25 @@ int nand_pfw_update_flash(void *fr, void *data, int size)
 		int page_idx = blkk_res / pgsize;
 		int byte_idx = blkk_res - page_idx * pgsize;
 		int real_blk_idx = 0;
+
+		dprintf(LOG_INF, "blkk_idx %d, page_idx %d, byte_idx %d\n\r", blkk_idx, page_idx, byte_idx);
+
 		r->part_rec = r->part_recs[blkk_idx / 48];
 		if (r->part_rec) {	// existing block
-			real_blk_idx = r->part_rec->vmap[blkk_idx % 48];
+			int vmap_idx = blkk_idx % 48;
+			dprintf(LOG_INF, "vmap_idx %d, rec blk count %d\n\r", vmap_idx, r->part_rec->blk_cnt);
+			if (vmap_idx <= (r->part_rec->blk_cnt - 1)) {
+				real_blk_idx = r->part_rec->vmap[vmap_idx];
+			} else {
+				real_blk_idx = 0xffff;    // don't care vmap value
+			}
+			/*
 			if (real_blk_idx == 0xffff) {	// new allocated block
 				// will not exceed 48
 				r->part_rec->blk_cnt++;
 				r->content_len += blksize;
 			}
+			*/
 		} else {
 			// find new block and add to partition table
 			// only support create user type format
@@ -1321,15 +1436,17 @@ int nand_pfw_update_flash(void *fr, void *data, int size)
 			r->part_recs[blkk_idx / 48] = nand_pfw_get_free_rec();
 			r->part_rec = r->part_recs[blkk_idx / 48];
 
+			r->part_rec->serial_num = blkk_idx / 48;
 			r->part_rec->magic_num = 0xff35ff87;
 			r->part_rec->type_id = r->part_recs[0]->type_id;
-			r->part_rec->blk_cnt = 1;
+			r->part_rec->blk_cnt = 0;
 			r->part_recs_cnt++;
-			r->content_len += blksize;
+			r->content_len = 0;
+			real_blk_idx = 0xffff;
 		}
 
-		dprintf(LOG_INF, "data blk idx %d\n\r", real_blk_idx);
-		if (r->cache.blk_real != real_blk_idx) {
+		dprintf(LOG_INF, "data blk idx %d, virt blk %d, cache blk idx %d, cache virt blk %d\n\r", real_blk_idx, blkk_idx, r->cache.blk_real, r->cache.blk_virt);
+		if ((r->cache.blk_real != real_blk_idx) || (r->cache.blk_virt != blkk_idx)) {
 			// flush current cache
 			dprintf(LOG_INF, ">>> cache flush to nand\n\r");
 			if (nand_pfw_flush_cache(fr, 0) < 0) {
@@ -1369,11 +1486,12 @@ int nand_pfw_update_flash(void *fr, void *data, int size)
 		data8 += op_size;
 		size -= op_size;
 		r->curr_pos += op_size;
+
 	}
 	dprintf(LOG_INF, "D3 : cached blk real %d, virt %d\n\r", r->cache.blk_real, r->cache.blk_virt);
-	if (nand_pfw_flush_cache(fr, 0) < 0) {
-		return -1;
-	}
+	//if (nand_pfw_flush_cache(fr, 0) < 0) {
+	//	return -1;
+	//}
 
 	return 0;
 }
@@ -1529,7 +1647,10 @@ typedef struct nor_part_hdr_s {
 	uint8_t iq_idx;
 	uint8_t nn_m_idx;
 	uint8_t mp_idx;
-	uint8_t resv1[8];
+	uint8_t keycert1_idx;	// reserved
+	uint8_t keycert2_idx;	// reserved
+	uint8_t fcs_idx;
+	uint8_t resv1[5];
 	uint16_t ota_trap;
 	uint16_t mp_trap;
 	uint32_t udl;
@@ -1569,7 +1690,10 @@ void nor_pfw_init(void)
 	}
 	// find partition record from NOR flash, fix position 0x2000
 	// copy to ram for write purpose
-	memcpy(g_ptable, (void *)NOR_ADDR(0x2000), 4096);
+	//memcpy(g_ptable, (void *)NOR_ADDR(0x2000), 4096);
+
+	flash_stream_read(&nor_flash, (uint32_t)0x2000, 4096, g_ptable);
+
 	g_nor_part_hdr = (nor_part_hdr_t *)g_ptable;
 	g_nor_part_rec = (nor_part_rec_t *)&g_ptable[sizeof(nor_part_hdr_t)];
 	//g_nor_part_hdr = (nor_part_hdr_t *)NOR_ADDR(0x2000);
@@ -1587,9 +1711,10 @@ void nor_pfw_deinit(void)
 	g_pfw_inited = 0;
 }
 
-void nor_pfw_list(void)
+void nor_pfw_list(int mode)
 {
 	nor_part_rec_t *rec = g_nor_part_rec;
+	(void)mode;
 
 	if (g_pfw_inited == 0) {
 		return;
@@ -1604,7 +1729,7 @@ void nor_pfw_list(void)
 	}
 }
 
-unsigned int nor_pfw_get_address(char *name)
+unsigned int nor_pfw_get_address(const char *name)
 {
 	uint16_t type_id = __get_pt_type_id(name);
 
@@ -1720,9 +1845,11 @@ void nor_pfw_update_ptable(void)
 
 	dcache_clean_by_addr((uint32_t *)g_ptable, 4096);
 	// erase sector
-	flash_erase_sector(&nor_flash, (uint32_t)NOR_ADDR(0x2000));
+	//flash_erase_sector(&nor_flash, (uint32_t)NOR_ADDR(0x2000));
+	flash_erase_sector(&nor_flash, (uint32_t)0x2000);
 	// write sector
-	flash_stream_write(&nor_flash, (uint32_t)NOR_ADDR(0x2000), 4096, g_ptable);
+	//flash_stream_write(&nor_flash, (uint32_t)NOR_ADDR(0x2000), 4096, g_ptable);
+	flash_stream_write(&nor_flash, (uint32_t)0x2000, 4096, g_ptable);
 }
 
 void *nor_pfw_open_by_typeid(uint16_t type_id, int mode)
@@ -1770,23 +1897,33 @@ void *nor_pfw_open_by_typeid(uint16_t type_id, int mode)
 	}
 
 
-	manifest_t *mani = (manifest_t *)NOR_ADDR(fr->part_rec->start_addr);
+	//manifest_t *mani = (manifest_t *)NOR_ADDR(fr->part_rec->start_addr);
+	manifest_t *mani = (manifest_t *)malloc(sizeof(manifest_t));
+	if (!mani) {
+		free(fr);
+		return NULL;
+	}
+	flash_stream_read(&nor_flash, (uint32_t)(fr->part_rec->start_addr), sizeof(manifest_t), (uint8_t *)mani);
+
 	if (mode == M_NORMAL && memcmp(mani->lbl, manifest_valid_label, 8) == 0) {
-		img_hdr_t *imghdr = (img_hdr_t *)NOR_ADDR(fr->part_rec->start_addr + 4096);
+		img_hdr_t imghdr;
+		flash_stream_read(&nor_flash, fr->part_rec->start_addr + 4096, sizeof(img_hdr_t), (uint8_t *)&imghdr);
+		//img_hdr_t *imghdr = (img_hdr_t *)NOR_ADDR(fr->part_rec->start_addr + 4096);
 		fr->manifest_valid = 1;
 		//fr->content_len = tlv_get_value(mani->tlv_start, mani->tlv_end, ID_IMGSZ, &fr->content_len);
-		fr->content_len = imghdr->imglen;
+		fr->content_len = imghdr.imglen;//imghdr->imglen;
 		fr->raw_offset = 4096 + sizeof(img_hdr_t);
 	} else {
 		fr->manifest_valid = 0;
 		fr->content_len = fr->part_rec->length;
 		fr->raw_offset = 0;
 	}
+	free(mani);
 
 	return fr;
 }
 
-void *nor_pfw_open(char *name, int mode)
+void *nor_pfw_open(const char *name, int mode)
 {
 	char name_dup[strlen(name) + 2];
 	strcpy(name_dup, name);
@@ -1830,6 +1967,7 @@ void *nor_pfw_open(char *name, int mode)
 				}
 			}
 		}
+		free(tmp);
 	}
 
 	return fr;
@@ -1868,7 +2006,7 @@ int nor_pfw_read_normal(void *fr, void *data, int size)
 	//uint32_t max_length = r->part_rec->length;
 	// copy to data
 
-	uint8_t *curr_addr = (uint8_t *)NOR_ADDR(r->part_rec->start_addr + r->curr_pos + r->raw_offset);
+	//uint8_t *curr_addr = (uint8_t *)NOR_ADDR(r->part_rec->start_addr + r->curr_pos + r->raw_offset);
 
 	int rest_size = r->content_len - r->curr_pos;
 
@@ -1881,7 +2019,9 @@ int nor_pfw_read_normal(void *fr, void *data, int size)
 	}
 
 	//dprintf(LOG_INF, "dst %x src %x size %d\n\r", data, curr_addr, size);
-	memcpy(data, curr_addr, size);
+	//memcpy(data, curr_addr, size);
+
+	flash_stream_read(&nor_flash, (uint32_t)r->part_rec->start_addr + r->curr_pos + r->raw_offset, size, data);
 
 	r->curr_pos += size;
 
@@ -1911,9 +2051,10 @@ int nor_pfw_update_flash(uint8_t *nor_addr, uint8_t *data, int size)
 	addr_cpy = addr_a;
 	// backup section abort
 	if (size_a) {
-		int cpy_size = 4096 - size_a > size ? 4096 - size : size;
-
-		memcpy(tmp_buf, addr_cpy, 4096);
+		//int cpy_size = 4096 - size_a > size ? 4096 - size : size;
+		int cpy_size = 4096 - size_a > size ? size : 4096 - size_a;
+		//memcpy(tmp_buf, addr_cpy, 4096);
+		flash_stream_read(&nor_flash, (uint32_t)addr_cpy, 4096, tmp_buf);
 		memcpy(&tmp_buf[size_a], data8, cpy_size);
 
 		dcache_clean_invalidate_by_addr((uint32_t *)tmp_buf, 4096);
@@ -1943,7 +2084,8 @@ int nor_pfw_update_flash(uint8_t *nor_addr, uint8_t *data, int size)
 	}
 
 	if (size > 0) {
-		memcpy(tmp_buf, addr_cpy, 4096);
+		//memcpy(tmp_buf, addr_cpy, 4096);
+		flash_stream_read(&nor_flash, (uint32_t)addr_cpy, 4096, tmp_buf);
 		memcpy(tmp_buf, data8, size);
 
 		dcache_clean_invalidate_by_addr((uint32_t *)tmp_buf, 4096);
@@ -1952,8 +2094,10 @@ int nor_pfw_update_flash(uint8_t *nor_addr, uint8_t *data, int size)
 		// write sector
 		flash_stream_write(&nor_flash, (uint32_t)addr_cpy, 4096, tmp_buf);
 
-		size -= size;
 		data8 += size;
+
+		size -= size;
+		//data8 += size;
 		addr_cpy += size;
 	}
 
@@ -1983,7 +2127,8 @@ int nor_pfw_write_normal(void *fr, void *data, int size)
 	//uint32_t max_length = r->part_rec->length;
 	// copy to data
 
-	uint8_t *curr_addr = (uint8_t *)NOR_ADDR(r->part_rec->start_addr + r->curr_pos + r->raw_offset);
+	//uint8_t *curr_addr = (uint8_t *)NOR_ADDR(r->part_rec->start_addr + r->curr_pos + r->raw_offset);
+	uint8_t *curr_addr = (uint8_t *)(r->part_rec->start_addr + r->curr_pos + r->raw_offset);
 
 
 	int ret_size = nor_pfw_update_flash(curr_addr, (uint8_t *)data, size);
@@ -1996,16 +2141,19 @@ int nor_pfw_write_normal(void *fr, void *data, int size)
 int nor_pfw_read_mani(void *fr, void *mani)
 {
 	nor_fw_rec_t *r = (nor_fw_rec_t *)fr;
-	uint8_t *mani_nor = (uint8_t *)NOR_ADDR(r->part_rec->start_addr);
+	//uint8_t *mani_nor = (uint8_t *)NOR_ADDR(r->part_rec->start_addr);
 
-	memcpy(mani, mani_nor, 4096);
+	//memcpy(mani, mani_nor, 4096);
+	flash_stream_read(&nor_flash, (uint32_t)r->part_rec->start_addr, 4096, mani);
+
 	return 0;
 }
 
 int nor_pfw_write_mani(void *fr, void *mani)
 {
 	nor_fw_rec_t *r = (nor_fw_rec_t *)fr;
-	uint8_t *mani_nor = (uint8_t *)NOR_ADDR(r->part_rec->start_addr);
+	//uint8_t *mani_nor = (uint8_t *)NOR_ADDR(r->part_rec->start_addr);
+	uint8_t *mani_nor = (uint8_t *)(r->part_rec->start_addr);
 
 	// erase sector
 	flash_erase_sector(&nor_flash, (uint32_t)mani_nor);
@@ -2018,22 +2166,24 @@ int nor_pfw_write_mani(void *fr, void *mani)
 int nor_pfw_read_mani_unpt(void *fr, void *data, int size)
 {
 	nor_fw_rec_t *r = (nor_fw_rec_t *)fr;
-	uint8_t *mani_nor = (uint8_t *)NOR_ADDR(r->part_rec->start_addr);
+	//uint8_t *mani_nor = (uint8_t *)NOR_ADDR(r->part_rec->start_addr);
 
 	if (size > 0x800)	{
 		size = 0x800;
 	}
 
-	dcache_invalidate_by_addr((uint32_t *)mani_nor, 4096);
+	//dcache_invalidate_by_addr((uint32_t *)mani_nor, 4096);
 
-	memcpy(data, &mani_nor[0x800], size);
+	//memcpy(data, &mani_nor[0x800], size);
+	flash_stream_read(&nor_flash, (uint32_t)r->part_rec->start_addr + 0x800, size, data);
 	return size;
 }
 
 int nor_pfw_write_mani_unpt(void *fr, void *data, int size)
 {
 	nor_fw_rec_t *r = (nor_fw_rec_t *)fr;
-	uint8_t *mani_nor = (uint8_t *)NOR_ADDR(r->part_rec->start_addr);
+	//uint8_t *mani_nor = (uint8_t *)NOR_ADDR(r->part_rec->start_addr);
+	uint8_t *mani_nor = (uint8_t *)(r->part_rec->start_addr);
 
 	uint8_t *tmp = malloc(4096);
 	if (!tmp)	{
@@ -2046,7 +2196,8 @@ int nor_pfw_write_mani_unpt(void *fr, void *data, int size)
 
 	//pfw_dump_mem(data, size);
 
-	memcpy(tmp, mani_nor, 0x1000);
+	//memcpy(tmp, mani_nor, 0x1000);
+	flash_stream_read(&nor_flash, (uint32_t)mani_nor, 0x1000, tmp);
 	memcpy(&tmp[0x800], data, size);
 
 	//pfw_dump_mem(tmp, 32);
@@ -2078,17 +2229,16 @@ int nor_pfw_read_raw(void *fr, void *data, int size)
 	uint32_t max_length = r->part_rec->length;
 	// copy to data
 
-	uint8_t *raw_addr = (uint8_t *)NOR_ADDR(r->part_rec->start_addr + r->curr_pos);
-
-	uint8_t *raw_4k = (uint8_t *)((uint32_t)raw_addr & (~4095));
+	//uint8_t *raw_addr = (uint8_t *)NOR_ADDR(r->part_rec->start_addr + r->curr_pos);
+	//uint8_t *raw_4k = (uint8_t *)((uint32_t)raw_addr & (~4095));
 
 	if (size > max_length) {
 		size = max_length;
 	}
 
-	dcache_invalidate_by_addr((uint32_t *)raw_4k, (size + 4059) & (~4095));
-
-	memcpy(data, raw_addr, size);
+	//dcache_invalidate_by_addr((uint32_t *)raw_4k, (size + 4059) & (~4095));
+	//memcpy(data, raw_addr, size);
+	flash_stream_read(&nor_flash, (uint32_t)(r->part_rec->start_addr + r->curr_pos), size, data);
 
 	r->curr_pos += size;
 
@@ -2110,7 +2260,7 @@ int nor_pfw_write_raw(void *fr, void *data, int size)
 	uint32_t max_length = r->part_rec->length;
 	// copy to data
 
-	uint8_t *raw_addr = (uint8_t *)NOR_ADDR(r->part_rec->start_addr + r->curr_pos);
+	uint8_t *raw_addr = (uint8_t *)(r->part_rec->start_addr + r->curr_pos);
 
 	if (r->curr_pos + size > max_length) {
 		size = max_length - r->curr_pos;
@@ -2196,9 +2346,9 @@ int nor_pfw_seek(void *fr, int offset, int pos)
 typedef struct fwfs_interface_s {
 	void (*init)(void);
 	void (*deinit)(void);
-	void (*list)(void);
+	void (*list)(int mode);
 	void *(*open_by_typeid)(uint16_t, int);
-	void *(*open)(char *, int);
+	void *(*open)(const char *, int);
 	void (*close)(void *);
 	int (*tell)(void *);
 	int (*read)(void *, void *, int);
@@ -2263,8 +2413,6 @@ void pfw_init(void)
 	if (curr && curr->init) {
 		curr->init();
 	}
-
-	//atcmd_pfw_init();
 }
 
 void pfw_deinit(void)
@@ -2274,10 +2422,10 @@ void pfw_deinit(void)
 	}
 }
 
-void pfw_list(void)
+void pfw_list(int mode)
 {
 	if (curr && curr->list) {
-		curr->list();
+		curr->list(mode);
 	}
 }
 
@@ -2289,7 +2437,7 @@ void *pfw_open_by_typeid(uint16_t type_id, int mode)
 	return NULL;
 }
 
-void *pfw_open(char *name, int mode)
+void *pfw_open(const char *name, int mode)
 {
 	pfw_init();
 	if (curr && curr->open) {
@@ -2359,9 +2507,18 @@ int pfw_write_unpt(void *fr, void *data, int size)
 
 void fLSFW(void *arg)
 {
+	int argc = 0;
+	char *argv[MAX_ARGC] = {0};
+	argc = parse_param(arg, argv);
+
+	int mode = 0;
+	if (argc == 2) {
+		mode = strtol(argv[1], NULL, 10);
+	}
+
 	pfw_init();
 	//pfw_list();
-	pfw_list();
+	pfw_list(mode);
 }
 
 void fDUMP(void *arg)
@@ -2386,7 +2543,7 @@ void fFWRD(void *arg)
 	(void)argc;	// may use this
 
 	pfw_init();
-	void *fp = pfw_open(argv[1], 0);
+	void *fp = pfw_open(argv[1], M_RAW);
 	if (!fp) {
 		printf("cannot open file %s\n\r", argv[1]);
 		return;

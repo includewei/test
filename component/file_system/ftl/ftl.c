@@ -14,6 +14,10 @@
 #include "ftl_int.h"
 #include "ftl.h"
 
+#if defined(CONFIG_FTL_EN) && CONFIG_FTL_EN
+#include "ftl_common_api.h"
+#endif
+
 #include "flash_api.h"
 
 //////////////////////////////////////////////////
@@ -120,7 +124,7 @@ uint8_t ftl_flash_read(uint32_t start_addr, uint32_t len, uint32_t *data)
 	uint8_t ret = 0;
 
 #if defined(CONFIG_FTL_EN) && CONFIG_FTL_EN
-	if (!ftl_common_read(start_addr, data, len)) {
+	if (!ftl_common_read(start_addr, (unsigned char *)data, len)) {
 		ret = 1;
 	}
 #else
@@ -138,7 +142,7 @@ uint8_t ftl_flash_read(uint32_t start_addr, uint32_t len, uint32_t *data)
 void ftl_flash_write(uint32_t start_addr, uint32_t len, uint32_t data)
 {
 #if defined(CONFIG_FTL_EN) && CONFIG_FTL_EN
-	ftl_common_write(start_addr, &data, len);
+	ftl_common_write(start_addr, (unsigned char *)&data, len);
 #else
 	(void)len;
 	flash_t flash;
@@ -982,7 +986,9 @@ uint32_t ftl_save_to_storage_i(void *pdata_tmp, uint16_t offset, uint16_t size)
 __WEAK uint32_t ftl_save_to_storage(void *pdata_tmp, uint16_t offset, uint16_t size)
 {
 	u32 ret;
-	if (rtw_mutex_get_timeout(&ftl_mutex_lock, 100) != 0) {
+	if (ftl_mutex_lock == NULL) {
+		return FTL_WRITE_ERROR_NOT_INIT;
+	} else if (rtw_mutex_get_timeout(&ftl_mutex_lock, 100) != 0) {
 		return ERROR_MUTEX_GET_TIMEOUT;
 	}
 
@@ -1141,7 +1147,9 @@ L_retry:
 __WEAK uint32_t ftl_load_from_storage(void *pdata_tmp, uint16_t offset, uint16_t size)
 {
 	u32 ret;
-	if (rtw_mutex_get_timeout(&ftl_mutex_lock, 100) != 0) {
+	if (ftl_mutex_lock == NULL) {
+		return FTL_READ_ERROR_NOT_INIT;
+	} else if (rtw_mutex_get_timeout(&ftl_mutex_lock, 100) != 0) {
 		return ERROR_MUTEX_GET_TIMEOUT;
 	}
 

@@ -100,7 +100,16 @@ list(
 	ARM_MATH_ARMV8MML
 )
 
+if(BUILD_TZ)
+list(
+	APPEND aws_freertos_lts_flags
+	CONFIG_BUILD_NONSECURE=1
+	ENABLE_SECCALL_PATCH
+)
+endif()
+
 target_compile_definitions(${aws_freertos_lts} PRIVATE ${aws_freertos_lts_flags} )
+target_compile_options(${aws_freertos_lts} PRIVATE ${LIBS_WARN_ERR_FLAGS} )
 
 include(../includepath.cmake)
 target_include_directories(

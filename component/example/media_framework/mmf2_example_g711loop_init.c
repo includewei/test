@@ -17,6 +17,7 @@ static mm_siso_t *siso_audio_g711e          = NULL;
 static mm_siso_t *siso_g711_e2d			  = NULL;
 static mm_siso_t *siso_g711d_audio     	  = NULL;
 
+#if !USE_DEFAULT_AUDIO_SET
 static audio_params_t audio_params = {
 #if defined(CONFIG_PLATFORM_8721D)
 	.sample_rate = SR_8K,
@@ -36,6 +37,7 @@ static audio_params_t audio_params = {
 	.mix_mode = 0,
 	.enable_aec  = 0
 };
+#endif
 
 static g711_params_t g711e_params = {
 	.codec_id = AV_CODEC_ID_PCMU,
@@ -53,7 +55,9 @@ void mmf2_example_g711loop_init(void)
 {
 	audio_ctx = mm_module_open(&audio_module);
 	if (audio_ctx) {
+#if !USE_DEFAULT_AUDIO_SET
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_PARAMS, (int)&audio_params);
+#endif
 		mm_module_ctrl(audio_ctx, MM_CMD_SET_QUEUE_LEN, 6);
 		mm_module_ctrl(audio_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_APPLY, 0);

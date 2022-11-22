@@ -36,7 +36,7 @@
 #include "stdio.h"
 #include "string.h"
 #include "task.h"
-
+#include "section_config.h"
 #ifndef MTIME_COMPARE_REG_OFFSET
 #define MTIME_COMPARE_REG_OFFSET (0x08 + (0x100 * __hart_ID()))
 #endif
@@ -892,6 +892,7 @@ vPortMExceptionHanler(portUBASE_TYPE mcause, portUBASE_TYPE mepc,
 /*-----------------------------------------------------------*/
 
 #if( configENABLE_FPU == 1 )
+IMAGE2_RAM_TEXT_SECTION
 void prvSetupFPU(void)   /* PRIVILEGED_FUNCTION */
 {
 	__asm__ __volatile__(

@@ -23,7 +23,7 @@
 #include "static_credential_provider.h"
 
 #include "../sample_config_webrtc.h"
-#include "fatfs_wrap.h"
+#include "vfs.h"
 
 /******************************************************************************
  * FUNCTIONS

@@ -65,7 +65,7 @@ static void example_ssl_server_thread(void *param)
 
 	// Delay to wait for IP by DHCP
 	vTaskDelay(10000);
-	printf("\nExample: SSL server\n");
+	printf("\nExample: SSL server for DTLS\n");
 
 	mbedtls_platform_set_calloc_free(my_calloc, vPortFree);
 

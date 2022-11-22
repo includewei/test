@@ -7,13 +7,11 @@
 #include <platform_stdlib.h>
 
 #define THREAD_STACK_SIZE 1024
-#define HOST_NAME "www.google.com.tw"
-#define HOST_PORT 80
+static const char *host = "www.google.com.tw";
+static const int port = 80;
 
 void http_client(void)
 {
-	int port = HOST_PORT;
-	char *host = HOST_NAME;
 	//char *message_fmt = "POST / HTTP/1.0\r\n\r\n";
 	struct hostent *server;
 	struct sockaddr_in serv_addr;
@@ -41,7 +39,7 @@ void http_client(void)
 	}
 
 	//send request
-	sprintf(message, "%s", http_get_header(HOST_NAME, "/"));
+	sprintf(message, "%s", http_get_header((char *)host, (char *)"/"));
 	printf("\nRequest:\n%s\n", message);
 	bytes = write(sockfd, message, 256);
 	if (bytes < 0) {

@@ -76,18 +76,19 @@
 // VOE CMD  (14 bit)
 
 // VOE normal control flow
-#define VOE_START_CMD                    0x203
-#define VOE_STOP_CMD                     0x204
+
 #define VOE_OPEN_CMD                     0x206
 #define VOE_CLOSE_CMD                    0x207
 #define VOE_RELEASE_ENC_CMD              0x208
 #define VOE_RELEASE_JPG_CMD              0x209
 #define VOE_OUT_CMD                      0x20B
+
 #define VOE_FORCE_I_CMD                  0x20D
 #define VOE_SET_RC_CMD                   0x20E
 
+
 #define VOE_ROI_REGION_CMD               0x211
-//#define VOE_OBJ_REGION_CMD               0x212
+
 
 #define VOE_ENC_OUT_CMD                  0x215
 #define VOE_JPG_OUT_CMD                  0x216
@@ -123,11 +124,15 @@
 
 #define VOE_ISP_GET_3A_STATIS			 0x24D
 
+#define VOE_ISP_GET_REAL_FPS			 0x24E
+
 //OSD
 #define VOE_OSD_QUERY                    0x260
 #define VOE_OSD_UPDATE                   0x261
 #define VOE_OSD_ENABLE                   0x262
 #define VOE_OSD_ENC_EN                   0x263
+#define VOE_OSD_COLOR_TABLE_SET          0x264
+#define VOE_OSD_COLOR_TABLE_GET          0x265
 
 //I2C
 #define VOE_I2C_READ                     0x270

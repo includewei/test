@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #include "time.h"
 #include "vfs.h"
 
@@ -43,7 +45,7 @@ FILE *__wrap_fopen(const char *filename, const char *mode)
 		printf("It can't find the file system\r\n");
 		return NULL;
 	}
-	vfs_file *finfo = __wrap_malloc(sizeof(vfs_file));
+	vfs_file *finfo = (vfs_file *)malloc(sizeof(vfs_file));
 	if (finfo == NULL) {
 		return NULL;
 	}
@@ -73,7 +75,7 @@ int __wrap_fclose(FILE *stream)
 	int ret = 0;
 	vfs_file *finfo = (vfs_file *)stream;
 	ret = vfs.drv[finfo->vfs_id]->close((vfs_file *)stream);
-	__wrap_free(finfo);
+	free(finfo);
 	return ret;
 }
 
@@ -149,7 +151,7 @@ int __wrap_remove(const char *filename)
 	int vfs_id = find_vfs_number(filename, &prefix_len, &user_id);
 	if (vfs_id < 0) {
 		printf("It can't find the file system\r\n");
-		return NULL;
+		return -1;
 	}
 	if (vfs_id == VFS_FATFS) {
 		int drv_id = 0;
@@ -177,7 +179,7 @@ int __wrap_rename(const char *oldname, const char *newname)
 	int vfs_id = find_vfs_number(oldname, &prefix_len, &user_id);
 	if (vfs_id < 0) {
 		printf("It can't find the file system\r\n");
-		return NULL;
+		return -1;
 	}
 	if (vfs_id == VFS_FATFS) {
 		int drv_id = 0;
@@ -247,7 +249,7 @@ int __wrap_fputs(const char *str, FILE *stream)
 
 char *__wrap_fgets(char *str, int num, FILE *stream)
 {
-	int ret = 0;
+	char *ret = NULL;
 	vfs_file *finfo = (vfs_file *)stream;
 	ret = vfs.drv[finfo->vfs_id]->fgets(str, num, (vfs_file *)stream);
 	return ret;
@@ -263,7 +265,7 @@ DIR *__wrap_opendir(const char *name)
 		printf("It can't find the file system\r\n");
 		return NULL;
 	}
-	vfs_file *finfo = __wrap_malloc(sizeof(vfs_file));
+	vfs_file *finfo = (vfs_file *)malloc(sizeof(vfs_file));
 	if (finfo == NULL) {
 		return NULL;
 	}
@@ -297,7 +299,7 @@ int __wrap_closedir(DIR *dirp)
 	int ret = 0;
 	vfs_file *finfo = (vfs_file *)dirp;
 	ret = vfs.drv[finfo->vfs_id]->closedir(((vfs_file *)dirp));
-	__wrap_free(finfo);
+	free(finfo);
 	return ret;
 }
 

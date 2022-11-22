@@ -8,6 +8,7 @@
 #include "lwip_netconf.h"
 #include "wifi_conf.h"
 #include "dhcp/dhcps.h"
+#include "wifi_wps_config.h"
 #include "osdep_service.h"
 #include "example_wlan_scenario.h"
 
@@ -15,12 +16,11 @@
 extern struct netif xnetif[NET_IF_NUM];
 #endif
 
-#define MAC_ARG(x) ((u8*)(x))[0],((u8*)(x))[1],((u8*)(x))[2],((u8*)(x))[3],((u8*)(x))[4],((u8*)(x))[5]
 static rtw_result_t scan_result_handler(unsigned int scanned_AP_num, void *user_data);
 static rtw_result_t scan_result_RSSI_handler(unsigned int scanned_AP_num, void *user_data);
 
-char *ssid = "";
-char *password = "";
+const char *ssid = "";
+const char *password = "";
 
 rtw_join_status_t last_join_status = RTW_JOINSTATUS_UNKNOWN;
 
@@ -143,18 +143,18 @@ static void authentication(void)
 #if 1
 	// By WPS-PBC.
 	char *argv[2];
-	argv[1] = "pbc";
+	argv[1] = (char *)"pbc";
 	cmd_wps(2, argv);
 #elif 0
 	// By WPS-PIN static PIN. With specified PIN code 92402508 as example.
 	char *argv[3];
-	argv[1] = "pin";
-	argv[2] = "92402508";
+	argv[1] = (char *)"pin";
+	argv[2] = (char *)"92402508";
 	cmd_wps(3, argv);
 #elif 0
 	// By WPS-PIN dynamic PIN.
 	char *argv[2];
-	argv[1] = "pin";
+	argv[1] = (char *)"pin";
 	cmd_wps(2, argv);
 #endif
 #else
@@ -166,7 +166,7 @@ static void authentication(void)
 	ssid = "Test_ap";
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.security_type = RTW_SECURITY_OPEN;
 	if (wifi_connect(&connect_param, 1) == RTW_SUCCESS) {
@@ -181,7 +181,7 @@ static void authentication(void)
 
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.key_id = key_id;
 	connect_param.security_type = RTW_SECURITY_WEP_PSK;
@@ -199,7 +199,7 @@ static void authentication(void)
 
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.key_id = key_id;
 	connect_param.security_type = RTW_SECURITY_WEP_PSK;
@@ -215,7 +215,7 @@ static void authentication(void)
 
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.key_id = key_id;
 	connect_param.security_type = RTW_SECURITY_WEP_SHARED;
@@ -231,7 +231,7 @@ static void authentication(void)
 
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.key_id = key_id;
 	connect_param.security_type = RTW_SECURITY_WEP_SHARED;
@@ -245,7 +245,7 @@ static void authentication(void)
 	password = "12345678";
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.security_type = RTW_SECURITY_WPA_TKIP_PSK;
 	if (wifi_connect(&connect_param, 1) == RTW_SUCCESS) {
@@ -257,7 +257,7 @@ static void authentication(void)
 	password = "12345678";
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.security_type = RTW_SECURITY_WPA_AES_PSK;
 	if (wifi_connect(&connect_param, 1) == RTW_SUCCESS) {
@@ -269,7 +269,7 @@ static void authentication(void)
 	password = "12345678";
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.security_type = RTW_SECURITY_WPA2_TKIP_PSK;
 	if (wifi_connect(&connect_param, 1) == RTW_SUCCESS) {
@@ -281,7 +281,7 @@ static void authentication(void)
 	password = "12345678";
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.security_type = RTW_SECURITY_WPA2_AES_PSK;
 	if (wifi_connect(&connect_param, 1) == RTW_SUCCESS) {
@@ -339,12 +339,12 @@ static void mode_switch_1(void)
 	*	3. Start AP
 	*********************************************************************************/
 	printf("\n\r[WLAN_SCENARIO_EXAMPLE] Start AP\n");
-	ssid = "RTL_AP";
-	password = "12345678";
+	ssid = (char *)"RTL_AP";
+	password = (char *)"12345678";
 	rtw_softap_info_t softAP_config = {0};
 	softAP_config.ssid.len = strlen(ssid);
-	rtw_memcpy(softAP_config.ssid.val, ssid, softAP_config.ssid.len);
-	softAP_config.password = password;
+	rtw_memcpy(softAP_config.ssid.val, (char *)ssid, softAP_config.ssid.len);
+	softAP_config.password = (unsigned char *)password;
 	softAP_config.password_len = strlen(password);
 	softAP_config.channel = 6;
 	softAP_config.security_type = RTW_SECURITY_WPA2_AES_PSK;
@@ -362,7 +362,7 @@ static void mode_switch_1(void)
 	while (1) {
 		rtw_wifi_setting_t setting;
 		wifi_get_setting(WLAN0_IDX, &setting);
-		if (strlen(setting.ssid) > 0) {
+		if (strlen((char *)setting.ssid) > 0) {
 			if (strcmp((const char *)setting.ssid, (const char *)ssid) == 0) {
 				printf("\n\r[WLAN_SCENARIO_EXAMPLE] %s started\n", ssid);
 				break;
@@ -425,7 +425,7 @@ static void mode_switch_2(void)
 	password = "12345678";
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.security_type = RTW_SECURITY_WPA2_AES_PSK;
 	if (wifi_connect(&connect_param, 1) == RTW_SUCCESS) {
@@ -550,8 +550,8 @@ static void mode_switch_4(void)
 	password = "12345678";
 	rtw_softap_info_t softAP_config = {0};
 	softAP_config.ssid.len = strlen(ssid);
-	rtw_memcpy(softAP_config.ssid.val, ssid, softAP_config.ssid.len);
-	softAP_config.password = password;
+	rtw_memcpy(softAP_config.ssid.val, (unsigned char *)ssid, softAP_config.ssid.len);
+	softAP_config.password = (unsigned char *)password;
 	softAP_config.password_len = strlen(password);
 	softAP_config.channel = 6;
 	softAP_config.security_type = RTW_SECURITY_WPA2_AES_PSK;
@@ -564,7 +564,7 @@ static void mode_switch_4(void)
 	while (1) {
 		rtw_wifi_setting_t setting;
 		wifi_get_setting(WLAN0_IDX, &setting);
-		if (strlen(setting.ssid) > 0) {
+		if (strlen((char *)setting.ssid) > 0) {
 			if (strcmp((const char *)setting.ssid, (const char *)ssid) == 0) {
 				printf("\n\r[WLAN_SCENARIO_EXAMPLE] %s started\n", ssid);
 				break;
@@ -609,7 +609,7 @@ static void mode_switch_4(void)
 	password = "12345678";
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.security_type = RTW_SECURITY_WPA2_AES_PSK;
 	if (wifi_connect(&connect_param, 1) == RTW_SUCCESS) {
@@ -696,7 +696,7 @@ static void mode_switch_5(void)
 	password = "12345678";
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.security_type = RTW_SECURITY_WPA2_AES_PSK;
 	if (wifi_connect(&connect_param, 1) == RTW_SUCCESS) {
@@ -759,8 +759,8 @@ static void mode_switch_6(void)
 	password = "12345678";
 	rtw_softap_info_t softAP_config = {0};
 	softAP_config.ssid.len = strlen(ssid);
-	rtw_memcpy(softAP_config.ssid.val, ssid, softAP_config.ssid.len);
-	softAP_config.password = password;
+	rtw_memcpy(softAP_config.ssid.val, (unsigned char *)ssid, softAP_config.ssid.len);
+	softAP_config.password = (unsigned char *)password;
 	softAP_config.password_len = strlen(password);
 	softAP_config.channel = 6;
 	softAP_config.security_type = RTW_SECURITY_WPA2_AES_PSK;
@@ -779,7 +779,7 @@ static void mode_switch_6(void)
 	while (1) {
 		rtw_wifi_setting_t setting;
 		wifi_get_setting(WLAN0_IDX, &setting);
-		if (strlen(setting.ssid) > 0) {
+		if (strlen((char *)setting.ssid) > 0) {
 			if (strcmp((const char *)setting.ssid, (const char *)ssid) == 0) {
 				printf("\n\r[WLAN_SCENARIO_EXAMPLE] %s started\n", ssid);
 				break;
@@ -848,8 +848,8 @@ static void mode_switch_7(void)
 	password = "12345678";
 	rtw_softap_info_t softAP_config = {0};
 	softAP_config.ssid.len = strlen(ssid);
-	rtw_memcpy(softAP_config.ssid.val, ssid, softAP_config.ssid.len);
-	softAP_config.password = password;
+	rtw_memcpy(softAP_config.ssid.val, (unsigned char *)ssid, softAP_config.ssid.len);
+	softAP_config.password = (unsigned char *)password;
 	softAP_config.password_len = strlen(password);
 	softAP_config.channel = 6;
 	softAP_config.security_type = RTW_SECURITY_WPA2_AES_PSK;
@@ -866,7 +866,7 @@ static void mode_switch_7(void)
 	while (1) {
 		rtw_wifi_setting_t setting;
 		wifi_get_setting(WLAN1_IDX, &setting);
-		if (strlen(setting.ssid) > 0) {
+		if (strlen((char *)setting.ssid) > 0) {
 			if (strcmp((const char *) setting.ssid, (const char *)ssid) == 0) {
 				printf("\n\r[WLAN_SCENARIO_EXAMPLE] %s started\n", ssid);
 				break;
@@ -900,7 +900,7 @@ static void mode_switch_7(void)
 
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.security_type = RTW_SECURITY_WPA2_AES_PSK;
 	if (wifi_connect(&connect_param, 1) == RTW_SUCCESS) {
@@ -923,7 +923,7 @@ static void mode_switch_7(void)
 	password = "12345678";
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.security_type = RTW_SECURITY_WPA2_AES_PSK;
 	if (wifi_connect(&connect_param, 1) == RTW_SUCCESS) {
@@ -963,8 +963,8 @@ static void scenario_1(void)
 	// As the process beginning, please enter the PIN code in AP side.
 	// It will take at most 2 min to do the procedure.
 	char *argv[3];
-	argv[1] = "pin";
-	argv[2] = "92402508";
+	argv[1] = (char *)"pin";
+	argv[2] = (char *)"92402508";
 	cmd_wps(3, argv);
 
 	// If not connected, retry one time.
@@ -1052,7 +1052,7 @@ static void scenario_2(void)
 	// As the process beginning, please push the WPS button on AP.
 	// It will take at most 2 min to do the procedure.
 	char *argv[2];
-	argv[1] = "pbc";
+	argv[1] = (char *)"pbc";
 	cmd_wps(2, argv);
 
 	// If not connected, retry one time.
@@ -1120,7 +1120,7 @@ static void scenario_3(void)
 	rtw_network_info_t connect_param = {0};
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.security_type = RTW_SECURITY_WPA2_AES_PSK;
 	if (wifi_connect(&connect_param, 1) == RTW_SUCCESS) {
@@ -1190,7 +1190,7 @@ static void scenario_4(void)
 	// As the process beginning, please push the WPS button on AP.
 	// It will take at most 2 min to do the procedure.
 	char *argv[2];
-	argv[1] = "pbc";
+	argv[1] = (char *)"pbc";
 	cmd_wps(2, argv);
 
 	// If not connected, retry one time.
@@ -1357,7 +1357,7 @@ static void scenario_5(void)
 	u8 ret = 0;
 	memcpy(connect_param.ssid.val, ssid, strlen(ssid));
 	connect_param.ssid.len = strlen(ssid);
-	connect_param.password = password;
+	connect_param.password = (unsigned char *)password;
 	connect_param.password_len = strlen(password);
 	connect_param.security_type = RTW_SECURITY_WPA2_AES_PSK;
 	connect_param.joinstatus_user_callback = wifi_join_status_callback;
@@ -1451,7 +1451,7 @@ static rtw_result_t scan_result_handler(unsigned int scanned_AP_num, void *user_
 	}
 
 	if (wifi_get_scan_records(&scanned_AP_num, scan_buf) < 0) {
-		rtw_mfree(scan_buf, 0);
+		rtw_mfree((uint8_t *)scan_buf, 0);
 		return RTW_ERROR;
 	}
 
@@ -1478,7 +1478,7 @@ static rtw_result_t scan_result_handler(unsigned int scanned_AP_num, void *user_
 		printf(" %s ", scanned_ap_info->SSID.val);
 		printf("\r\n");
 	}
-	rtw_mfree(scan_buf, 0);
+	rtw_mfree((uint8_t *)scan_buf, 0);
 	return RTW_SUCCESS;
 }
 
@@ -1503,7 +1503,7 @@ static rtw_result_t scan_result_RSSI_handler(unsigned int scanned_AP_num, void *
 	}
 
 	if (wifi_get_scan_records(&scanned_AP_num, scan_buf) < 0) {
-		rtw_mfree(scan_buf, 0);
+		rtw_mfree((uint8_t *)scan_buf, 0);
 		return RTW_ERROR;
 	}
 
@@ -1516,14 +1516,14 @@ static rtw_result_t scan_result_RSSI_handler(unsigned int scanned_AP_num, void *
 		printf(" SSID: %s", scanned_ap_info->SSID.val);
 		printf("\r\n");
 	}
-	rtw_mfree(scan_buf, 0);
+	rtw_mfree((uint8_t *)scan_buf, 0);
 	return RTW_SUCCESS;
 }
 
 static void example_wlan_scenario_thread(void *in_id)
 {
 	char *id = in_id;
-
+	printf("\nExample: wlan_scenario \n");
 #if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
 	rtw_create_secure_context(configMINIMAL_SECURE_STACK_SIZE);
 #endif

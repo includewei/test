@@ -22,9 +22,9 @@
 *****************************************************************************/
 #define RTSP_CHANNEL 0
 #define RTSP_RESOLUTION VIDEO_FHD
-#define RTSP_FPS 15
-#define RTSP_GOP 15
-#define RTSP_BPS 1*1024*1024
+#define RTSP_FPS 30
+#define RTSP_GOP 30
+#define RTSP_BPS 2*1024*1024
 #define VIDEO_RCMODE 2 // 1: CBR, 2: VBR
 
 #define USE_H265 0
@@ -85,11 +85,22 @@ static rtsp2_params_t rtsp2_v1_params = {
 #define MD_TYPE VIDEO_RGB
 
 #if MD_RESOLUTION == VIDEO_VGA
-#define MD_WIDTH	320//640
-#define MD_HEIGHT	180//480
+#define MD_WIDTH	640
+#define MD_HEIGHT	480
 #elif MD_RESOLUTION == VIDEO_WVGA
 #define MD_WIDTH	640
 #define MD_HEIGHT	360
+#endif
+
+#if USE_SENSOR == SENSOR_GC4653
+#define SENSOR_MAX_WIDTH 2560
+#define SENSOR_MAX_HEIGHT 1440
+#elif USE_SENSOR == SENSOR_JXF51
+#define SENSOR_MAX_WIDTH 1536
+#define SENSOR_MAX_HEIGHT 1536
+#else
+#define SENSOR_MAX_WIDTH 1920
+#define SENSOR_MAX_HEIGHT 1080
 #endif
 
 static video_params_t video_v4_params = {
@@ -107,8 +118,8 @@ static video_params_t video_v4_params = {
 	.roi = {
 		.xmin = 0,
 		.ymin = 0,
-		.xmax = 1920, //ORIGIN WIDTH
-		.ymax = 1080, //ORIGIN WIDTH
+		.xmax = SENSOR_MAX_WIDTH,
+		.ymax = SENSOR_MAX_HEIGHT,
 	}
 };
 
@@ -129,24 +140,24 @@ static mm_siso_t *siso_rgb_md         = NULL;
 //--------------------------------------------
 // Draw Rect
 //--------------------------------------------
-#define MD_DRAW 0
+#define MD_DRAW 1
 
 #if MD_DRAW
-#include "../../../../component/video/osd2/isp_osd_example.h"
-static struct result_frame g_results;
+#include "osd_render.h"
+
 #endif
 static void md_process(void *md_result)
 {
 
-	int *md_res = (int *) md_result;
+	char *md_res = (char *) md_result;
 	//draw md rect
 	int motion = 0, j, k;
-	int jmin = row - 1, jmax = 0;
-	int kmin = col - 1, kmax = 0;
-	for (j = 0; j < row; j++) {
-		for (k = 0; k < col; k++) {
-			printf("%d ", md_res[j * col + k]);
-			if (md_res[j * col + k]) {
+	int jmin = md_row - 1, jmax = 0;
+	int kmin = md_col - 1, kmax = 0;
+	for (j = 0; j < md_row; j++) {
+		for (k = 0; k < md_col; k++) {
+			printf("%d ", md_res[j * md_col + k]);
+			if (md_res[j * md_col + k]) {
 				motion = 1;
 				if (j < jmin) {
 					jmin = j;
@@ -167,22 +178,15 @@ static void md_process(void *md_result)
 	printf("\r\n\r\n");
 #if MD_DRAW
 	//draw md region
-	int osd_ready2draw = osd_get_status();
-	if (osd_ready2draw == 1) {
-		if (motion) {
-			g_results.num = 1;
-			g_results.obj[0].idx = 0;
-			g_results.obj[0].class = 0;
-			g_results.obj[0].score = 0;
-			g_results.obj[0].left = (int)(kmin * RTSP_WIDTH / col) + 1;
-			g_results.obj[0].top = (int)(jmin * RTSP_HEIGHT / row) + 1;
-			g_results.obj[0].right = (int)((kmax + 1) * RTSP_WIDTH / col) - 1;
-			g_results.obj[0].bottom = (int)((jmax + 1) * RTSP_HEIGHT / row) - 1;
-		} else {
-			g_results.num = 0;
-		}
-		osd_update_rect_result(g_results);
+	canvas_clean_all(RTSP_CHANNEL, 0);
+	if (motion) {
+		int xmin = (int)(kmin * RTSP_WIDTH / md_col) + 1;
+		int ymin = (int)(jmin * RTSP_HEIGHT / md_row) + 1;
+		int xmax = (int)((kmax + 1) * RTSP_WIDTH / md_col) - 1;
+		int ymax = (int)((jmax + 1) * RTSP_HEIGHT / md_row) - 1;
+		canvas_set_rect(RTSP_CHANNEL, 0, xmin, ymin, xmax, ymax, 3, COLOR_GREEN);
 	}
+	canvas_update(RTSP_CHANNEL, 0);
 #endif
 }
 
@@ -200,7 +204,7 @@ void mmf2_video_example_md_rtsp_init(void)
 	if (video_v1_ctx) {
 		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SET_VOE_HEAP, voe_heap_size);
 		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v1_params);
-		mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, RTSP_FPS*3);
+		mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, RTSP_FPS * 3);
 		mm_module_ctrl(video_v1_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
 	} else {
 		printf("video open fail\n\r");
@@ -233,24 +237,11 @@ void mmf2_video_example_md_rtsp_init(void)
 		.Tbase = 2,
 		.Tlum = 3
 	};
-	int md_mask [16 * 16] = {
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-	};
+	char md_mask [md_col * md_row] = {0};
+	for (int i = 0; i < md_col * md_row; i++) {
+		md_mask[i] = 1;
+	}
+
 	md_ctx  = mm_module_open(&md_module);
 	if (md_ctx) {
 		mm_module_ctrl(md_ctx, CMD_MD_SET_PARAMS, (int)&md_param);
@@ -299,9 +290,11 @@ void mmf2_video_example_md_rtsp_init(void)
 	mm_module_ctrl(video_rgb_ctx, CMD_VIDEO_YUV, 2);
 
 #if MD_DRAW
-	char *tag[1] = {"motion"};
-	osd_set_tag(1, tag);
-	example_isp_osd(1, RTSP_CHANNEL, 16, 32);
+	int ch_enable[3] = {1, 0, 0};
+	int char_resize_w[3] = {16, 0, 0}, char_resize_h[3] = {32, 0, 0};
+	int ch_width[3] = {RTSP_WIDTH, 0, 0}, ch_height[3] = {RTSP_HEIGHT, 0, 0};
+	osd_render_dev_init(ch_enable, char_resize_w, char_resize_h);
+	osd_render_task_start(ch_enable, ch_width, ch_height);
 #endif
 
 	atcmd_userctrl_init();
@@ -311,7 +304,7 @@ mmf2_example_md_rtsp_fail:
 	return;
 }
 
-static char *example = "mmf2_video_example_md_rtsp_init";
+static const char *example = "mmf2_video_example_md_rtsp_init";
 static void example_deinit(void)
 {
 	//Pause Linker

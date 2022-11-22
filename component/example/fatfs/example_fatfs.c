@@ -1,8 +1,8 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include <platform_stdlib.h>
-#include "basic_types.h"
 #include "platform_opts.h"
+#include "osdep_service.h"
 #include "section_config.h"
 
 #include "example_fatfs.h"
@@ -41,8 +41,8 @@
 
 #define TEST_SIZE       512
 
-u8 WRBuf[TEST_SIZE];
-u8 RDBuf[TEST_SIZE];
+uint8_t WRBuf[TEST_SIZE];
+uint8_t RDBuf[TEST_SIZE];
 #endif // defined(CONFIG_PLATFORM_8195A)
 
 /* Config for Ameba-Pro */
@@ -75,7 +75,7 @@ u8 RDBuf[TEST_SIZE];
 #endif
 #endif // defined(CONFIG_PLATFORM_8195BHP)
 
-#if defined(CONFIG_PLATFORM_8721D) || defined(CONFIG_PLATFORM_AMEBAD2)
+#if defined(CONFIG_PLATFORM_8721D) || defined(CONFIG_PLATFORM_AMEBAD2) || defined(CONFIG_PLATFORM_AMEBALITE)
 #if CONFIG_FATFS_IF_SD
 #include <disk_if/inc/sdcard.h>
 #elif CONFIG_FATFS_IF_USB
@@ -100,9 +100,9 @@ _Sema       us_sto_rdy_sema;
 #endif
 #define TEST_SIZE		(512)
 
-u8 WRBuf[TEST_SIZE];
-u8 RDBuf[TEST_SIZE];
-#endif //defined(CONFIG_PLATFORM_8721D) || defined(CONFIG_PLATFORM_AMEBAD2)
+uint8_t WRBuf[TEST_SIZE];
+uint8_t RDBuf[TEST_SIZE];
+#endif //defined(CONFIG_PLATFORM_8721D) || defined(CONFIG_PLATFORM_AMEBAD2)  || defined(CONFIG_PLATFORM_AMEBALITE)
 
 
 FRESULT list_files(char *);
@@ -111,9 +111,9 @@ FATFS 	fs_sd;
 FIL     m_file;
 /*
 SECTION(".lpddr.rodata")
-u8 WRBuf[TEST_SIZE]__attribute__((aligned(32)));
+uint8_t WRBuf[TEST_SIZE]__attribute__((aligned(32)));
 SECTION(".lpddr.rodata")
-u8 RDBuf[TEST_SIZE]__attribute__((aligned(32)));
+uint8_t RDBuf[TEST_SIZE]__attribute__((aligned(32)));
 */
 #if defined(CONFIG_PLATFORM_8195BHP) || defined(CONFIG_PLATFORM_8735B)
 #define TEST_BUF_SIZE	(512)
@@ -125,51 +125,8 @@ fatfs_sd_params_t fatfs_sd;
 fatfs_flash_params_t fatfs_flash;
 #endif
 
-#if 0
-static char cBuffer[512];
-
-#define FATFS_BUF_SIZE (1024*1024/2)
-SECTION(".lpddr.rodata")
-u8 fatfs_buf[FATFS_BUF_SIZE]__attribute__((aligned(32)));
-u32 fatfs_buf_pos = 0;
-
-int fatfs_buffer_write(char *data, u32 len)
-{
-	int res = 0;
-	int bw;
-	int offset = 0;
-
-	printf("frame_size %d\n\r", len);
-
-	while (len > 0) {
-		if (fatfs_buf_pos + len >= FATFS_BUF_SIZE) {
-			memcpy(fatfs_buf + fatfs_buf_pos, data + offset, FATFS_BUF_SIZE - fatfs_buf_pos);
-
-			res = f_write(&m_file, fatfs_buf, FATFS_BUF_SIZE, (u32 *)&bw);
-			if (res) {
-				printf("res = %d\n\r", res);
-				f_lseek(&m_file, 0);
-				printf("Write error.\n\r");
-			}
-			//printf("Write %d bytes.\n\r", bw);
-
-			offset += FATFS_BUF_SIZE - fatfs_buf_pos;
-			len -= FATFS_BUF_SIZE - fatfs_buf_pos;
-			fatfs_buf_pos = 0;
-		} else {
-			memcpy(fatfs_buf + fatfs_buf_pos, data + offset, len);
-			fatfs_buf_pos = fatfs_buf_pos + len;
-			len = 0;
-		}
-	}
-
-	return 0;
-}
-#endif
-
 void example_fatfs_thread(void *param)
 {
-
 	int Fatfs_ok = 1;
 	int ret_flash_mount, ret_flash_test;
 	int sd_drv_num, flash_drv_num;
@@ -178,11 +135,11 @@ void example_fatfs_thread(void *param)
 	char	sd_drv[4];
 	char	flash_drv[4];
 
-	u8 WRBuf[TEST_BUF_SIZE];
-	u8 RDBuf[TEST_BUF_SIZE];
+	uint8_t WRBuf[TEST_BUF_SIZE];
+	uint8_t RDBuf[TEST_BUF_SIZE];
 
-	u8 test_info[] = "\"Ameba test dual fatfs sd card ~~~~\"";
-	u8 test_info2[] = "\"Ameba test dual fatfs flash ~~~~\"";
+	uint8_t test_info[] = "\"Ameba test dual fatfs sd card ~~~~\"";
+	uint8_t test_info2[] = "\"Ameba test dual fatfs flash ~~~~\"";
 
 	FRESULT res;
 	DIR		m_dir;
@@ -262,31 +219,31 @@ void example_fatfs_thread(void *param)
 		memset(&WRBuf[0], 0x00, TEST_BUF_SIZE);
 		memset(&RDBuf[0], 0x00, TEST_BUF_SIZE);
 
-		strcpy(&WRBuf[0], &test_info[0]);
+		strcpy((char *)&WRBuf[0], (char *)&test_info[0]);
 
 		do {
-			res = f_write(&m_file, WRBuf, strlen(WRBuf), (u32 *)&bw);
+			res = f_write(&m_file, WRBuf, strlen((char *)WRBuf), (uint32_t *)&bw);
 			if (res) {
 				f_lseek(&m_file, 0);
 				printf("Write error.\n");
 			}
 			printf("Write %d bytes.\n", bw);
-		} while (bw < strlen(WRBuf));
+		} while (bw < strlen((char *)WRBuf));
 
-		printf("Write content:\n%s\n", WRBuf);
+		printf("Write content:\n%s\n", (char *)WRBuf);
 		printf("\n");
 
 		/* move the file pointer to the file head*/
 		res = f_lseek(&m_file, 0);
 
 		do {
-			res = f_read(&m_file, RDBuf, strlen(WRBuf), (u32 *)&br);
+			res = f_read(&m_file, RDBuf, strlen((char *)WRBuf), (uint32_t *)&br);
 			if (res) {
 				f_lseek(&m_file, 0);
 				printf("Read error.\n");
 			}
 			printf("Read %d bytes.\n", br);
-		} while (br < strlen(WRBuf));
+		} while (br < strlen((char *)WRBuf));
 
 		printf("Read content:\n%s\n", RDBuf);
 
@@ -321,16 +278,16 @@ void example_fatfs_thread(void *param)
 		memset(&WRBuf[0], 0x00, TEST_BUF_SIZE);
 		memset(&RDBuf[0], 0x00, TEST_BUF_SIZE);
 
-		strcpy(&WRBuf[0], &test_info2[0]);
+		strcpy((char *)&WRBuf[0], (char *)&test_info2[0]);
 
 		do {
-			res = f_write(&m_file, WRBuf, strlen(WRBuf), (u32 *)&bw);
+			res = f_write(&m_file, WRBuf, strlen((char *)WRBuf), (uint32_t *)&bw);
 			if (res) {
 				f_lseek(&m_file, 0);
 				printf("Write error.\n");
 			}
 			printf("Write %d bytes.\n", bw);
-		} while (bw < strlen(WRBuf));
+		} while (bw < strlen((char *)WRBuf));
 
 		printf("Write content:\n%s\n", WRBuf);
 		printf("\n");
@@ -339,13 +296,13 @@ void example_fatfs_thread(void *param)
 		res = f_lseek(&m_file, 0);
 
 		do {
-			res = f_read(&m_file, RDBuf, strlen(WRBuf), (u32 *)&br);
+			res = f_read(&m_file, RDBuf, strlen((char *)WRBuf), (uint32_t *)&br);
 			if (res) {
 				f_lseek(&m_file, 0);
 				printf("Read error.\n");
 			}
 			printf("Read %d bytes.\n", br);
-		} while (br < strlen(WRBuf));
+		} while (br < strlen((char *)WRBuf));
 
 		printf("Read content:\n%s\n", RDBuf);
 
@@ -459,10 +416,10 @@ void example_fatfs_thread(void *param)
 	drv_num = FATFS_RegisterDiskDriver(&USB_disk_Driver);
 #elif CONFIG_FATFS_IF_SD
 	drv_num = FATFS_RegisterDiskDriver(&SD_disk_Driver);
-	u8 test_info[] = "\"Ameba test fatfs sd card ~~~~\"";
+	uint8_t test_info[] = "\"Ameba test fatfs sd card ~~~~\"";
 #elif CONFIG_FATFS_IF_FLASH
 	drv_num = FATFS_RegisterDiskDriver(&FLASH_disk_Driver);
-	u8 test_info[] = "\"Ameba test fatfs flash~~~~\"";
+	uint8_t test_info[] = "\"Ameba test fatfs flash~~~~\"";
 	flash = 1;
 #endif
 
@@ -528,7 +485,7 @@ void example_fatfs_thread(void *param)
 		strcpy(&WRBuf[0], &test_info[0]);
 
 		do {
-			res = f_write(&m_file, WRBuf, strlen(WRBuf), (u32 *)&bw);
+			res = f_write(&m_file, WRBuf, strlen(WRBuf), (uint32_t *)&bw);
 			if (res) {
 				f_lseek(&m_file, 0);
 				printf("Write error.\n");
@@ -543,7 +500,7 @@ void example_fatfs_thread(void *param)
 		res = f_lseek(&m_file, 0);
 
 		do {
-			res = f_read(&m_file, RDBuf, strlen(WRBuf), (u32 *)&br);
+			res = f_read(&m_file, RDBuf, strlen(WRBuf), (uint32_t *)&br);
 			if (res) {
 				f_lseek(&m_file, 0);
 				printf("Read error.\n");
@@ -618,7 +575,7 @@ void example_fatfs_thread(void *param)
 	int test_result = 1;
 	int ret = 0;
 	int flash = 0;
-	u8 test_info[] = "\"Ameba test fatfs sd card ~~~~\"";
+	uint8_t test_info[] = "\"Ameba test fatfs sd card ~~~~\"";
 
 #if CONFIG_FATFS_IF_USB
 	_usb_init();
@@ -707,7 +664,7 @@ void example_fatfs_thread(void *param)
 		// write and read test
 		strcpy(path, logical_drv);
 
-		snprintf(&path[strlen(path)], sizeof(path) "%s", filename);
+		snprintf(&path[strlen(path)], sizeof(path), "%s", filename);
 
 		//Open source file
 		res = f_open(&m_file, path, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
@@ -725,7 +682,7 @@ void example_fatfs_thread(void *param)
 		strcpy(&WRBuf[0], &test_info[0]);
 
 		do {
-			res = f_write(&m_file, WRBuf, strlen(WRBuf), (u32 *)&bw);
+			res = f_write(&m_file, WRBuf, strlen(WRBuf), (uint32_t *)&bw);
 			if (res) {
 				f_lseek(&m_file, 0);
 				printf("Write error.\n");
@@ -740,7 +697,7 @@ void example_fatfs_thread(void *param)
 		res = f_lseek(&m_file, 0);
 
 		do {
-			res = f_read(&m_file, RDBuf, strlen(WRBuf), (u32 *)&br);
+			res = f_read(&m_file, RDBuf, strlen(WRBuf), (uint32_t *)&br);
 			if (res) {
 				f_lseek(&m_file, 0);
 				printf("Read error.\n");
@@ -791,9 +748,9 @@ void example_fatfs_thread(void *param)
 	int ret = 0;
 	int flash = 0;
 #if CONFIG_FATFS_IF_SD
-	u8 test_info[] = "\"Ameba test fatfs sd card ~~~~\"";
+	uint8_t test_info[] = "\"Ameba test fatfs sd card ~~~~\"";
 #elif CONFIG_FATFS_IF_FLASH
-	u8 test_info[] = "\"Ameba test fatfs flash ~~~~\"";
+	uint8_t test_info[] = "\"Ameba test fatfs flash ~~~~\"";
 #endif
 
 
@@ -890,7 +847,7 @@ void example_fatfs_thread(void *param)
 		strcpy(&WRBuf[0], &test_info[0]);
 
 		do {
-			res = f_write(&m_file, WRBuf, strlen(WRBuf), (u32 *)&bw);
+			res = f_write(&m_file, WRBuf, strlen(WRBuf), (uint32_t *)&bw);
 			if (res) {
 				f_lseek(&m_file, 0);
 				printf("Write error.\n");
@@ -905,7 +862,7 @@ void example_fatfs_thread(void *param)
 		res = f_lseek(&m_file, 0);
 
 		do {
-			res = f_read(&m_file, RDBuf, strlen(WRBuf), (u32 *)&br);
+			res = f_read(&m_file, RDBuf, strlen(WRBuf), (uint32_t *)&br);
 			if (res) {
 				f_lseek(&m_file, 0);
 				printf("Read error.\n");
@@ -936,8 +893,138 @@ exit:
 }
 #endif
 
+#if defined(CONFIG_PLATFORM_AMEBALITE)
+void example_fatfs_thread(void *param)
+{
 
-char *print_file_info(FILINFO fileinfo, char *fn, char *path)
+	int a = 0;
+	int drv_num = 0;
+	int Fatfs_ok = 0;
+
+	FRESULT res;
+	FATFS	m_fs;
+	FIL 	m_file;
+
+	char	logical_drv[4]; /* root diretor */
+	char path[64];
+	char filename[64] = "TEST.TXT";
+	int br, bw;
+	int test_result = 1;
+	int ret = 0;
+	int flash = 0;
+#if CONFIG_FATFS_IF_FLASH
+	uint8_t test_info[] = "\"Ameba test fatfs flash ~~~~\"";
+#else
+	DBG_8195A("This chip only support fatfs flash.\n SD, EMMC and USB not supported\n");
+	return;
+#endif
+
+	//1 register disk driver to fatfs
+	printf("Register disk driver to Fatfs.\n");
+
+#if CONFIG_FATFS_IF_FLASH
+	drv_num = FATFS_RegisterDiskDriver(&FLASH_disk_Driver);
+#endif
+
+	if (drv_num < 0) {
+		printf("Rigester disk driver to FATFS fail.\n");
+	} else {
+		Fatfs_ok = 1;
+
+		logical_drv[0] = drv_num + '0';
+		logical_drv[1] = ':';
+		logical_drv[2] = '/';
+		logical_drv[3] = 0;
+	}
+	//1 Fatfs write and read test
+	if (Fatfs_ok) {
+
+		printf("FatFS Write/Read test begin2......\n\n");
+
+		res = f_mount(&m_fs, logical_drv, 1);
+		printf("res:%d\n", res);
+		if (res) {
+#if CONFIG_FATFS_IF_FLASH
+			res = f_mkfs(logical_drv, NULL, NULL, 4096);
+			if (res != FR_OK) {
+				printf("Create FAT volume on Flash fail:%d\n", res);
+				goto exit;
+			}
+			if (f_mount(&m_fs, logical_drv, 0) != FR_OK) {
+				printf("FATFS mount logical drive on Flash fail.\n");
+				goto exit;
+			}
+#endif
+		}
+
+		// write and read test
+		strcpy(path, logical_drv);
+
+		snprintf(&path[strlen(path)], sizeof(path), "%s", filename);
+
+		//Open source file
+		res = f_open(&m_file, path, FA_OPEN_ALWAYS | FA_READ | FA_WRITE);
+		if (res) {
+			printf("open file (%s) fail.\n", filename);
+			goto exit;
+		}
+
+		printf("Test file name:%s\n\n", filename);
+
+		// clean write and read buffer
+		memset(&WRBuf[0], 0x00, TEST_SIZE);
+		memset(&RDBuf[0], 0x00, TEST_SIZE);
+
+		strcpy(&WRBuf[0], &test_info[0]);
+
+		do {
+			res = f_write(&m_file, WRBuf, strlen(WRBuf), (uint32_t *)&bw);
+			if (res) {
+				f_lseek(&m_file, 0);
+				printf("Write error.\n");
+			}
+			printf("Write %d bytes.\n", bw);
+		} while (bw < strlen(WRBuf));
+
+		printf("Write content:\n%s\n", WRBuf);
+		printf("\n");
+
+		/* move the file pointer to the file head*/
+		res = f_lseek(&m_file, 0);
+
+		do {
+			res = f_read(&m_file, RDBuf, strlen((char *)WRBuf), (uint32_t *)&br);
+			if (res) {
+				f_lseek(&m_file, 0);
+				printf("Read error.\n");
+			}
+			printf("Read %d bytes.\n", br);
+		} while (br < strlen((char *)WRBuf));
+
+		printf("Read content:\n%s\n", RDBuf);
+
+		// close source file
+		res = f_close(&m_file);
+		if (res) {
+			printf("close file (%s) fail.\n", filename);
+		}
+
+		//unmount
+		if (f_unmount(logical_drv) != FR_OK) {
+			printf("FATFS unmount logical drive fail.\n");
+		}
+
+		if (FATFS_UnRegisterDiskDriver(drv_num)) {
+			printf("Unregister disk driver from FATFS fail.\n");
+		}
+	}
+
+exit:
+	vTaskDelete(NULL);
+}
+#endif
+
+void print_file_info(FILINFO fileinfo, char *fn, char *path)
 {
 	char info[256];
 	char fname[64];
@@ -960,7 +1047,6 @@ char *print_file_info(FILINFO fileinfo, char *fn, char *path)
 			 fn,
 			 path);
 	printf("%s\n\r", info);
-	return info;
 }
 
 FRESULT list_files(char *list_path)
@@ -994,7 +1080,7 @@ FRESULT list_files(char *list_path)
 #else
 			filename = m_fileinfo.fname;
 #endif
-			if (*filename == '.' || *filename == '..') {
+			if (*filename == '.' || (filename[0] == '.' && filename[1] == '.')) {
 				continue;
 			}
 

@@ -3,5 +3,5 @@
 
 #include "module_vipnn.h"
 
-extern nnmodel_t yamnet_fwfs;
+extern nnmodel_t yamnet;
 #endif

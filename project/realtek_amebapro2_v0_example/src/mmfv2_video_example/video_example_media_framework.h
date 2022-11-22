@@ -4,6 +4,8 @@
 #include "platform_opts.h"
 #include "sensor.h"
 
+#include "sys_api.h" 	// for system reset
+
 #define USR_CMD_RTSP_PAUSE			    (u32)0x1
 #define USR_CMD_RTSP1_PAUSE 			(u32)(0x1 << 1)
 #define USR_CMD_RTSP2_PAUSE 			(u32)(0x1 << 2)
@@ -16,7 +18,7 @@
 #define USR_CMD_MBNSSD_PAUSE            (u32)(0x1 << 20)
 #define USR_CMD_FRC_PAUSE               (u32)(0x1 << 21)
 #define USR_CMD_VIPNN_PAUSE             (u32)(0x1 << 22)
-#define USR_CMD_EXAMPLE_DEINIT		    (u32)(0x1 << 30)
+#define USR_CMD_EXAMPLE_DEINIT		    (u32)(0x1 << 31)
 
 void video_example_media_framework(void);
 
@@ -52,14 +54,28 @@ void mmf2_video_example_array_rtsp_init(void);
 
 void mmf2_video_example_v1_param_change_init(void);
 
-void mmf2_video_example_av_mp4_httpfs_init(void);
+void mmf2_video_example_vipnn_rtsp_init(void);
 
-void mmf2_video_example_v4_rgb_init(void);
+void mmf2_video_example_face_rtsp_init(void);
 
-void mmf2_video_example_v1_reset_init(void);
+void mmf2_video_example_joint_test_all_nn_rtsp_init(void);
+
+void mmf2_video_example_demuxer_rtsp_init(void);
+
+void mmf2_video_example_h264_pcmu_array_mp4_init(void);
+
+void mmf2_video_example_audio_vipnn_init(void);
+
+void mmf2_video_example_md_rtsp_init(void);
+
+void mmf2_video_example_md_nn_rtsp_init(void);
+
+void mmf2_video_example_joint_test_rtsp_mp4_init_fcs(void);
+
+void mmf2_video_example_vipnn_facedet_init(void);
 
 void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void);
 
-void mmf2_video_example_joint_test_rtsp_mp4_init_fcs(void);
+void mmf2_video_example_av_mp4_httpfs_init(void);
 
 #endif /* MMF2_VIDEO_EXAMPLE_H */

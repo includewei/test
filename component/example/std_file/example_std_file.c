@@ -1,15 +1,17 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "platform_opts.h"
+#include "osdep_service.h"
 #include "section_config.h"
-
+#include <string.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include "vfs.h"
 #include "time.h"
 
 #define STACK_SIZE		4096
 
-int list_files(char *list_path);
+int list_files(const char *list_path);
 int del_dir(const char *path, int del_self);
 
 FILE     *m_file;
@@ -32,9 +34,9 @@ int filter_fn(const struct dirent *ent)
 #define TEST_INTERFACE_RAM  0x02 //Fatfs
 void example_std_file_thread(void *param)
 {
-	u8 WRBuf[TEST_BUF_SIZE] = {0};
-	u8 RDBuf[TEST_BUF_SIZE] = {0};
-	u8 test_info[] = "### Ameba test standard file VFS ###\n\r";
+	char WRBuf[TEST_BUF_SIZE] = {0};
+	char RDBuf[TEST_BUF_SIZE] = {0};
+	char test_info[] = "### Ameba test standard file VFS ###\n\r";
 	int res = 0;
 	char path[64];
 	/* test files */
@@ -59,7 +61,7 @@ void example_std_file_thread(void *param)
 	vfs_user_register("lfs", VFS_LITTLEFS, 0);
 	vfs_user_register("ram", VFS_FATFS, VFS_INF_RAM);
 
-	unsigned char *tag = NULL;
+	const char *tag = NULL;
 	for (i = 0; i < interface; i++) {
 		memset(path, 0x00, sizeof(path));
 		if (i == TEST_INTERFACE_SD) {
@@ -69,7 +71,7 @@ void example_std_file_thread(void *param)
 		} else if (i == TEST_INTERFACE_RAM) {
 			tag = "ram:/";
 		} else {
-			return -1;
+			goto exit;
 		}
 		strcpy(path, tag);
 		sprintf(&path[strlen(path)], "%s", sd_fn);
@@ -189,7 +191,6 @@ void example_std_file_thread(void *param)
 	vfs_user_unregister("lfs", VFS_LITTLEFS, 0);
 	vfs_user_unregister("ram", VFS_FATFS, VFS_INF_RAM);
 	vfs_deinit(NULL);
-fail:
 exit:
 	vTaskDelete(NULL);
 }
@@ -257,7 +258,7 @@ void print_file_info(struct dirent *entry, char *path)
 	printf("%s\n\r", info);
 }
 
-int list_files(char *list_path)
+int list_files(const char *list_path)
 {
 	int res = 0;
 	DIR *m_dir;

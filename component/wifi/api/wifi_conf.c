@@ -23,7 +23,7 @@
 #include <wifi_wps_config.h>
 #endif
 
-#if defined(CONFIG_INIC_IPC) && CONFIG_INIC_IPC
+#if defined(CONFIG_AS_INIC_NP)
 #include "inic_ipc_api.h"
 #endif
 
@@ -53,7 +53,7 @@ extern struct netif xnetif[NET_IF_NUM];
  ******************************************************/
 static internal_join_block_param_t *join_block_param = NULL;
 
-#if defined(CONFIG_MBED_ENABLED) || defined (CONFIG_INIC_IPC)
+#if defined(CONFIG_MBED_ENABLED) || defined (CONFIG_AS_INIC_NP)
 rtw_mode_t wifi_mode = RTW_MODE_STA;
 #else
 extern rtw_mode_t wifi_mode;
@@ -67,6 +67,7 @@ write_fast_connect_info_ptr p_store_fast_connect_info = NULL;
 
 /* The flag to check if wifi init is completed */
 static int _wifi_is_on = 0;
+extern void *param_indicator;
 
 /******************************************************
  *               Variables Definitions
@@ -144,6 +145,29 @@ int wifi_connect(rtw_network_info_t *connect_param, unsigned char block)
 	if (is_promisc_enabled()) {
 		RTW_API_INFO("\npromisc is ongoing, can not do wifi connect now!");
 		return RTW_BUSY;
+	}
+
+	if ((strlen((const char *)connect_param->ssid.val) < 0) || (strlen((const char *)connect_param->ssid.val) > 32)) {
+		RTW_API_INFO("\nwifi connect param ssid is wrong!");
+		rtw_join_status = RTW_JOINSTATUS_FAIL;
+		return RTW_ERROR;
+	}
+
+	if ((((connect_param->password_len >  RTW_MAX_PSK_LEN) ||
+		  (connect_param->password_len <  RTW_MIN_PSK_LEN)) &&
+		 ((connect_param->security_type == RTW_SECURITY_WPA_TKIP_PSK) ||
+		  (connect_param->security_type == RTW_SECURITY_WPA_AES_PSK) ||
+		  (connect_param->security_type == RTW_SECURITY_WPA2_AES_PSK) ||
+		  (connect_param->security_type == RTW_SECURITY_WPA2_TKIP_PSK) ||
+		  (connect_param->security_type == RTW_SECURITY_WPA2_MIXED_PSK) ||
+		  (connect_param->security_type == RTW_SECURITY_WPA_WPA2_MIXED) ||
+#ifdef CONFIG_SAE_SUPPORT
+		  (connect_param->security_type == RTW_SECURITY_WPA3_AES_PSK)
+#endif
+		 ))) {
+		RTW_API_INFO("\nwifi connect param password is wrong!");
+		rtw_join_status = RTW_JOINSTATUS_FAIL;
+		return RTW_INVALID_KEY;
 	}
 
 	p_wifi_joinstatus_user_callback = connect_param->joinstatus_user_callback;
@@ -261,6 +285,7 @@ int wifi_get_channel(int *channel)
 
 void wifi_set_user_config(void)
 {
+#ifndef CONFIG_AS_INIC_NP
 	// adaptivity
 	wifi_user_config.rtw_adaptivity_en = DISABLE;
 	/*
@@ -268,6 +293,7 @@ void wifi_set_user_config(void)
 	 * 1: RTW_ADAPTIVITY_MODE_CARRIER_SENSE
 	 */
 	wifi_user_config.rtw_adaptivity_mode = 0;
+	wifi_user_config.rtw_adaptivity_th_l2h_ini = 0;
 	//trp
 	wifi_user_config.rtw_tx_pwr_lmt_enable = 2;	// 0: disable, 1: enable, 2: Depend on efuse(flash)
 	wifi_user_config.rtw_tx_pwr_by_rate	= 2;	// 0: disable, 1: enable, 2: Depend on efuse(flash)
@@ -320,6 +346,7 @@ void wifi_set_user_config(void)
 #endif
 
 	wifi_user_config.channel_plan = 0;
+#endif
 }
 
 int wifi_get_disconn_reason_code(unsigned short *reason_code)
@@ -330,6 +357,11 @@ int wifi_get_disconn_reason_code(unsigned short *reason_code)
 rtw_join_status_t wifi_get_join_status(void)
 {
 	return rtw_join_status;
+}
+
+void wifi_set_join_status(rtw_join_status_t status)
+{
+	rtw_join_status = status;
 }
 
 int wifi_on(rtw_mode_t mode)
@@ -495,7 +527,7 @@ int wifi_set_mode(rtw_mode_t mode)
 	}
 
 #ifdef CONFIG_WLAN_SWITCH_MODE
-#ifndef CONFIG_INIC_IPC
+#ifndef CONFIG_AS_INIC_NP
 #if defined(CONFIG_AUTO_RECONNECT) && CONFIG_AUTO_RECONNECT
 	wifi_get_autoreconnect(&autoreconnect_mode);
 	if (autoreconnect_mode != RTW_AUTORECONNECT_DISABLE) {
@@ -611,7 +643,7 @@ int wifi_set_mode(rtw_mode_t mode)
 		wifi_mode = RTW_MODE_STA;
 	}
 #endif
-#ifndef CONFIG_INIC_IPC
+#ifndef CONFIG_AS_INIC_NP
 #if defined(CONFIG_AUTO_RECONNECT) && CONFIG_AUTO_RECONNECT
 	/* enable auto reconnect */
 	if (autoreconnect_mode != RTW_AUTORECONNECT_DISABLE) {
@@ -626,7 +658,7 @@ int wifi_set_mode(rtw_mode_t mode)
 
 Exit:
 #ifdef CONFIG_WLAN_SWITCH_MODE
-#ifndef CONFIG_INIC_IPC
+#ifndef CONFIG_AS_INIC_NP
 #if defined(CONFIG_AUTO_RECONNECT) && CONFIG_AUTO_RECONNECT
 	/* enable auto reconnect */
 	if (autoreconnect_mode != RTW_AUTORECONNECT_DISABLE) {

@@ -10,6 +10,10 @@
 
 #ifndef CONFIG_PLATFORM_8735B
 #include "platform_autoconf.h"
+#else
+#if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
+#include "osdep_service.h"
+#endif
 #endif
 
 #define wifi_wait_time 500 //Here we wait 5 second to wiat the fast connect 
@@ -32,7 +36,7 @@ void sensor_board_init()
 }
 #endif
 
-void common_init()
+void common_init(void)
 {
 	uint32_t wifi_wait_count = 0;
 
@@ -61,7 +65,7 @@ static void close_all_context()
 //------------------------------------------------------------------------------
 // audio only examples
 //------------------------------------------------------------------------------
-void example_mmf2_audio_only()
+void example_mmf2_audio_only(void)
 {
 
 	// 1 Audio (AAC) -> RTSP (A)
@@ -110,7 +114,8 @@ void example_mmf2_audio_only()
 //------------------------------------------------------------------------------
 // video support examples
 //------------------------------------------------------------------------------
-void example_mmf2_video_surport()
+#if !defined(CONFIG_PLATFORM_8735B)
+void example_mmf2_video_surport(void)
 {
 
 	// CH1 Video -> H264 -> RTSP
@@ -197,6 +202,7 @@ void example_mmf2_video_surport()
 	// V1 parameter change
 	//mmf2_example_v1_param_change_init();
 }
+#endif
 
 void example_mmf2_signal_stream_main(void *param)
 {
@@ -204,30 +210,31 @@ void example_mmf2_signal_stream_main(void *param)
 	rtw_create_secure_context(configMINIMAL_SECURE_STACK_SIZE);
 #endif
 	//int ret;
+#if !defined(CONFIG_PLATFORM_8735B)
 #if ISP_BOOT_MODE_ENABLE == 0
+	common_init();
+#endif
+#else
 	common_init();
 #endif
 
 	example_mmf2_audio_only();
 
+#if !defined(CONFIG_PLATFORM_8735B)
 #if DEVICE_SURPORT_VIDEO
 	sensor_board_init();
 	example_mmf2_video_surport();
 #endif
-
+#endif
 
 	// TODO: exit condition or signal
 	while (1) {
 		vTaskDelay(1000);
 	}
-
-	//stop_all_streaming();
-
-	//close_all_context();
-	//vTaskDelete(NULL);
 }
 
 //TODO: isp boot stream parameter, should be placed in other place
+#if !defined(CONFIG_PLATFORM_8735B)
 #if CONFIG_EXAMPLE_MEDIA_FRAMEWORK && ISP_BOOT_MODE_ENABLE
 #include "isp_api.h"
 #include "mmf2_video_config.h"
@@ -249,6 +256,7 @@ CINIT_DATA_SECTION isp_boot_stream_t isp_boot_stream = {
 	.sensor_fps = SENSOR_FPS,
 	.isp_fw_location = ISP_FW_LOCATION
 };
+#endif
 #endif
 
 void example_media_framework(void)

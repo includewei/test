@@ -15,8 +15,8 @@
 
 #include "avcodec.h"
 #include "wave_sample/wave_sample.h"
-#include "input_wav_baby_975ms.h"
-#include "input_wav_dog_975ms.h"
+#include "wave_sample/input_wav_baby_975ms.h"
+#include "wave_sample/input_wav_dog_975ms.h"
 #include "video_example_media_framework.h"
 // TODO: move model id to proper header
 
@@ -53,16 +53,12 @@ static array_params_t wav_array_params = {
 	}
 };
 #else
-static audio_params_t audio_params = {
-	.sample_rate = ASR_16KHZ,
-	.word_length = WL_16BIT,
-	.mic_gain    = MIC_0DB,
-	.dmic_l_gain    = DMIC_BOOST_24DB,
-	.dmic_r_gain    = DMIC_BOOST_24DB,
-	.use_mic_type   = USE_AUDIO_AMIC,
-	.channel     = 1,
-	.enable_aec  = 0
-};
+static audio_params_t audio_params;
+static void audio_params_customized_setting(void)
+{
+	memcpy(&audio_params, &default_audio_params, sizeof(audio_params_t));
+	audio_params.sample_rate = ASR_16KHZ;  // NN audio classification require 16K
+}
 #endif
 
 static nn_data_param_t aud_info = {
@@ -98,6 +94,7 @@ void mmf2_video_example_audio_vipnn_init(void)
 	//--------------Audio --------------
 	audio_ctx = mm_module_open(&audio_module);
 	if (audio_ctx) {
+		audio_params_customized_setting();
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_PARAMS, (int)&audio_params);
 		mm_module_ctrl(audio_ctx, MM_CMD_SET_QUEUE_LEN, 6);
 		mm_module_ctrl(audio_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
@@ -111,7 +108,7 @@ void mmf2_video_example_audio_vipnn_init(void)
 	// YAMNET
 	vipnn_ctx = mm_module_open(&vipnn_module);
 	if (vipnn_ctx) {
-		//mm_module_ctrl(vipnn_ctx, CMD_VIPNN_SET_MODEL, (int)&yamnet_fwfs);
+		//mm_module_ctrl(vipnn_ctx, CMD_VIPNN_SET_MODEL, (int)&yamnet);
 		mm_module_ctrl(vipnn_ctx, CMD_VIPNN_SET_MODEL, (int)&yamnet_s);
 		mm_module_ctrl(vipnn_ctx, CMD_VIPNN_SET_IN_PARAMS, (int)&aud_info);
 		mm_module_ctrl(vipnn_ctx, CMD_VIPNN_SET_DISPPOST, (int)0);
@@ -146,7 +143,7 @@ mmf2_example_audio_vipnn_fail:
 	return;
 }
 
-static char *example = "mmf2_video_example_audio_vipnn_init";
+static const char *example = "mmf2_video_example_audio_vipnn_init";
 static void example_deinit(void)
 {
 	//Pause Linker

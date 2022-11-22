@@ -8,9 +8,7 @@
 - Clone the following repository for KVS producer
 	- amazon-kinesis-video-streams-producer-embedded-c
     ```
-    git clone --recursive https://github.com/aws-samples/amazon-kinesis-video-streams-producer-embedded-c.git producer
-    cd producer
-    git reset --hard c6114634437eb417487cd986fa7ba6ca2d188470
+    git clone -b v1.0.1 --recursive https://github.com/aws-samples/amazon-kinesis-video-streams-producer-embedded-c.git producer
     ```
 
 ## Set mbedtls version

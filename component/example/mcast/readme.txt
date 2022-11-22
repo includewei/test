@@ -3,9 +3,6 @@
 #                             example_mcast                                      #
 #                                                                                #
 ##################################################################################
-
-Date: 2018-06-11
-
 Table of Contents
 ~~~~~~~~~~~~~~~~~
  - Description
@@ -23,9 +20,7 @@ Description
 Setup Guide
 ~~~~~~~~~~~
 	1.In lwipopts.h, please set #define LWIP_UDP  and #define LWIP_IGMP    1
-    2.In platform_opts.h  #define CONFIG_EXAMPLE_MCAST    1
-	For AmebaD2 :Amebad2 Changes how example is compiled, and Removed macro controls (CONFIG_EXAMPLE_XXX)in platform_opts.h
-		GCC:  use CMD "make xip EXAMPLE=mcast" to compile mcast example.
+	2.GCC:  use CMD "make all EXAMPLE=mcast" to compile mcast example.
 
 Parameter Setting and Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -39,4 +34,4 @@ Supported List
 ~~~~~~~~~~~~~~
 [Supported List]
         Supported IC :
-                Ameba-pro, Ameba-z2, Ameba-D, AmebaD2
+                 RTL8730A, RTL872XE

@@ -3,7 +3,10 @@
 //------------------------------------------------------
 #include <math.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include "sys_api.h"
 #include "mmf2_module.h"
 #include "module_vipnn.h"
 #include "hal_cache.h"
@@ -63,6 +66,7 @@ static void *yamnet_free_model(void *nn_model)
 			free(nn_model);
 		}
 	}
+	return NULL;
 }
 
 static void *yamnet_get_network_filename(void)
@@ -255,7 +259,7 @@ static void *yamnet_postprocess(void *tensor_out, nn_tensor_param_t *param)
 }
 
 
-nnmodel_t yamnet_fwfs = {
+nnmodel_t yamnet = {
 	.nb 			= yamnet_get_network_filename,
 	.preprocess 	= yamnet_preprocess,
 	.postprocess 	= yamnet_postprocess,

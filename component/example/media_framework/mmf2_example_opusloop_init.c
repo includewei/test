@@ -18,6 +18,7 @@ static mm_siso_t *siso_audio_opusc        = NULL;
 static mm_siso_t *siso_opus_e2d	          = NULL;
 static mm_siso_t *siso_opusd_audio     	  = NULL;
 
+#if !USE_DEFAULT_AUDIO_SET
 static audio_params_t audio_params = {
 #if defined(CONFIG_PLATFORM_8721D)
 	.sample_rate = SR_8K,
@@ -37,15 +38,16 @@ static audio_params_t audio_params = {
 	.mix_mode = 0,
 	.enable_aec  = 0
 };
+#endif
 
 static opusc_params_t opusc_params = {
 	//8000/16000
-	.sample_rate = 8000,//16000,
+	.sample_rate = 8000,
 	.channel = 1,
-	.bit_length = 16, //16 recommand
-	.complexity = 5,  //0~10
-	.bitrate = 25000, //default 25000
-	.use_framesize = 0,  //set 0 only when using audio loop
+	.bit_length = 16,			//16 recommand
+	.complexity = 5,			//0~10
+	.bitrate = 25000,			//default 25000
+	.use_framesize = 0,			//set 0 only when using audio loop
 	.enable_vbr = 1,
 	.vbr_constraint = 0,
 	.packetLossPercentage = 0,
@@ -54,11 +56,11 @@ static opusc_params_t opusc_params = {
 };
 
 static opusd_params_t opusd_params = {
-	.sample_rate = 8000,//16000,
+	.sample_rate = 8000,
 	.channel = 1,
-	.bit_length = 16,         //16 recommand
-	.frame_size_in_msec = 10, //will not be uused
-	.with_opus_enc = 0,       //enable semaphore if the application with opus encoder
+	.bit_length = 16,			//16 recommand
+	.frame_size_in_msec = 10,	//will not be uused
+	.with_opus_enc = 0,			//enable semaphore if the application with opus encoder
 	.opus_application = OPUS_APPLICATION_AUDIO
 };
 
@@ -66,7 +68,9 @@ void mmf2_example_opusloop_init(void)
 {
 	audio_ctx = mm_module_open(&audio_module);
 	if (audio_ctx) {
+#if !USE_DEFAULT_AUDIO_SET
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_PARAMS, (int)&audio_params);
+#endif
 		mm_module_ctrl(audio_ctx, MM_CMD_SET_QUEUE_LEN, 6);
 		mm_module_ctrl(audio_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_APPLY, 0);

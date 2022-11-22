@@ -47,6 +47,8 @@
 /* On POSIX systems, profile.h is a KRB5 header.  To avoid collisions, just
    pull in profile.h's content here.  The profile.h header won't be provided
    by Mingw-w64 anymore at one point. */
+#include <sys/types.h>
+
 #if 0
 #include <profile.h>
 #else

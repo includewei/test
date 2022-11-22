@@ -20,15 +20,22 @@ void example_kvs_webrtc(void);
 #define KVS_WEBRTC_SIGNALING_CACHE_FILE_PATH    "sd:/SignalingCache_v0"
 
 /* log level */
-#define KVS_WEBRTC_LOG_LEVEL    LOG_LEVEL_ERROR  //LOG_LEVEL_VERBOSE  LOG_LEVEL_WARN
+/* LOG_LEVEL_VERBOSE
+ * LOG_LEVEL_DEBUG
+ * LOG_LEVEL_INFO
+ * LOG_LEVEL_WARN
+ * LOG_LEVEL_ERROR
+ * LOG_LEVEL_FATAL
+ * LOG_LEVEL_SILEN */
+#define KVS_WEBRTC_LOG_LEVEL    LOG_LEVEL_INFO
 
 /* Enable two-way audio communication */
 #define ENABLE_AUDIO_SENDRECV
 
 /* Audio format setting */
-#define AUDIO_G711_MULAW        0
+#define AUDIO_G711_MULAW        1
 #define AUDIO_G711_ALAW         0
-#define AUDIO_OPUS              1
+#define AUDIO_OPUS              0
 #if (AUDIO_G711_MULAW+AUDIO_G711_ALAW+AUDIO_OPUS) != 1
 #error only one of audio format should be set
 #endif

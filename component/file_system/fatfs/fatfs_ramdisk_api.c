@@ -113,17 +113,17 @@ int usb_ram_deinit(void)
 	int ret = 0;
 	return ret;
 }
-int usb_ram_getcapacity(u32 *sector_count)
+int usb_ram_getcapacity(uint32_t *sector_count)
 {
 	*sector_count = SECTOR_COUNT_RAM;
 	return 0;
 }
-int usb_ram_readblocks(u32 sector, u8 *data, u32 count)
+int usb_ram_readblocks(uint32_t sector, uint8_t *data, uint32_t count)
 {
 	RAM_disk_read(data, sector, count);
 	return 0;
 }
-int usb_ram_writeblocks(u32 sector, const u8 *data, u32 count)
+int usb_ram_writeblocks(uint32_t sector, const uint8_t *data, uint32_t count)
 {
 	RAM_disk_write(data, sector, count);
 	return 0;

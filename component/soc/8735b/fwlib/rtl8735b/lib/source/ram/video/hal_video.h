@@ -40,8 +40,6 @@
 #include "rtl8735b_voe_type.h"
 #include "rtl8735b_voe_cmd.h"
 
-// converter LF --> CRLF
-#define printf(fmt, arg...)				printf(fmt"\r", ##arg)
 
 #endif
 
@@ -167,33 +165,22 @@ typedef struct {
 	int type;				// output type I/P frame	//VCENC_INTRA_FRAME/INTER_FRAME ...
 	int enc_used;			// ENC buffer used size
 	int jpg_used;			// JPEG buffer used size
+
+	int enc_slot;			// ENC buffer used slot
+	int jpg_slot;			// JPEG buffer used slot
+
 	int enc_time;			// HW encode time on Normal , Queue avail on Buffer/Queue full return
 	int jpg_time;			// HW JPEG time
 	int cmd;
 	int cmd_status;
 	u32 time_stamp;			// time_stamp current time stamp
+	u32 meta_offset;		// metadata offset size
 
 } __attribute__((aligned(32))) enc2out_t;
 
 
 
-typedef struct {
-	// ringbuffer
-	int	out_size;			// out_buf_size
-	int	rsvd_size;			// rsvd_size
-	int	queue_size;			// queue_size
-	int remain_size;		// remain_size
-	int	renew_addr;			// ring buffer force renew pointer address
-	int	put_addr;			// ring buffer put pointer address
-	int	get_addr;			// ring buffer get pointer address
-	int buf_full;			// ring buffer full
-	int queue_avail;		// ring buffer queue avail count
-	int	size_used;			// ring buffer used size
-	int	slot_used;			// ring buffer used slot (frame)
-	int	*out_buf;			// start buffer address offset
-	int	*rsvd_buf;			// reserved buffer address offset
-	void *queue;
-} hal_video_buf_s;
+
 
 typedef struct {
 	// OSD SW workaround
@@ -216,6 +203,7 @@ typedef struct {
 
 typedef struct {
 	i32 bps;
+	i32 isp_fps;
 	i32 fps;
 	i32 maxqp;
 	i32 minqp;
@@ -275,13 +263,15 @@ typedef struct {
 	volatile QueueHandle_t	md_queue;
 	volatile QueueHandle_t  out_queue;
 
-	osThreadId				tid_out;
-	osThreadId				tid_md;
+	xTaskHandle				tid_out;
+	xTaskHandle				tid_md;
 
 	int						out_queue_full_cnt;
 	int						video_show_info;
 
 	u32 ctx[MAX_CHANNEL];
+	u32 *load_time;
+	u32 *hal_version;
 
 	__attribute__((aligned(32))) volatile int		voe_info;
 
@@ -367,8 +357,7 @@ int hal_video_out_mode(int ch, int type, int mode);
 int hal_video_release(int ch, int type, int mode);
 
 
-
-int hal_video_froce_i(int ch);
+int hal_video_force_i(int ch);
 int hal_video_set_rc(rate_ctrl_s *rc, int ch);
 
 int hal_video_out_cb(output_callback_t out_cb, u32 out_queue_size, u32 arg, int ch);
@@ -424,8 +413,8 @@ void hal_video_get_fcs_peri_info(fcs_peri_info_ram_t *pfcs_peri_info);
 int hal_video_peri_update_with_fcs(video_peri_info_t *p_video_peri_info);
 int hal_video_check_fcs_OK(void);
 void hal_video_reset_fcs_OK(void);
-
-
+int hal_video_osd_reset(int ch);
+int hal_video_get_realfps(int ch, int *isp_fpsx100, int *enc_fpsx100);
 
 
 extern hal_video_adapter_t vv_adapter;
@@ -638,6 +627,29 @@ static __inline__ int hal_video_isp_set_directI2C_mode(int ch, int direct_i2c_mo
 
 	cml = v_adp->cmd[ch];
 	cml->direct_i2c_mode = direct_i2c_mode;
+	dcache_clean_invalidate_by_addr((uint32_t *)v_adp->cmd[ch], sizeof(commandLine_s));
+	return OK;
+}
+
+
+static __inline__ int hal_video_isp_set_gray_mode(int ch, int gray_mode)
+{
+	hal_video_adapter_t *v_adp = &vv_adapter;
+	commandLine_s *cml;
+
+	cml = v_adp->cmd[ch];
+	cml->gray_mode = gray_mode;
+	dcache_clean_invalidate_by_addr((uint32_t *)v_adp->cmd[ch], sizeof(commandLine_s));
+	return OK;
+}
+
+static __inline__ int hal_video_isp_set_init_iq_mode(int ch, int init_iq_mode)
+{
+	hal_video_adapter_t *v_adp = &vv_adapter;
+	commandLine_s *cml;
+
+	cml = v_adp->cmd[ch];
+	cml->all_init_iq_set_flag = init_iq_mode;
 	dcache_clean_invalidate_by_addr((uint32_t *)v_adp->cmd[ch], sizeof(commandLine_s));
 	return OK;
 }

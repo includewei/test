@@ -13,8 +13,15 @@ void example_media_uvcd(void);
 #define MAX_W 2560
 #define MAX_H 1440
 #else
+
+#if USE_SENSOR == SENSOR_JXF51
+#define MAX_W 1536
+#define MAX_H 1536
+#else
 #define MAX_W 1920
 #define MAX_H 1080
+#endif
+
 #endif
 
 #define UVCD_YUY2 1
@@ -28,5 +35,7 @@ void example_media_uvcd(void);
 #define FORMAT_TYPE_MJPEG       2
 #define FORMAT_TYPE_H264        3
 #define FORMAT_TYPE_H265        4
+
+void example_tuning_rtsp_video_v2_init(void);
 
 #endif /* MMF2_EXAMPLE_H */

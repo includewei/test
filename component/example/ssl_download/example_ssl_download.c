@@ -5,6 +5,7 @@
 #include <platform_stdlib.h>
 
 #include "platform_opts.h"
+#include <osdep_service.h>
 
 #define STACKSIZE     2048
 #if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1) && defined(CONFIG_SSL_CLIENT_PRIVATE_IN_TZ) && (CONFIG_SSL_CLIENT_PRIVATE_IN_TZ == 1)
@@ -62,7 +63,7 @@ static void example_ssl_download_thread(void *param)
 		printf("ERROR: ssl_handshake ret(-0x%x)", -ret);
 		goto exit;
 	} else {
-		unsigned char buf[BUFFER_SIZE + 1];
+		char buf[BUFFER_SIZE + 1];
 		int pos = 0, read_size = 0, resource_size = 0, content_len = 0, header_removed = 0;
 
 		printf("SSL ciphersuite %s\n", ssl_get_ciphersuite(&ssl));
@@ -86,7 +87,7 @@ static void example_ssl_download_thread(void *param)
 					printf("\nHTTP Header: %s\n", buf);
 
 					// Remove header size to get first read size of data from body head
-					read_size = pos - ((unsigned char *) body - buf);
+					read_size = pos - (body - buf);
 					pos = 0;
 
 					content_len_pos = strstr(buf, "Content-Length: ");
@@ -229,7 +230,7 @@ static void example_ssl_download_thread(void *param)
 	}
 #endif
 
-#if MBEDTLS_SSL_MAX_CONTENT_LEN == 4096
+#if defined(MBEDTLS_SSL_MAX_CONTENT_LEN) && MBEDTLS_SSL_MAX_CONTENT_LEN == 4096
 	if (ret = mbedtls_ssl_conf_max_frag_len(&conf, MBEDTLS_SSL_MAX_FRAG_LEN_4096) < 0) {
 		printf("ERROR: mbedtls_ssl_conf_max_frag_len ret(%d)\n", ret);
 		goto exit;
@@ -245,14 +246,14 @@ static void example_ssl_download_thread(void *param)
 		printf("ERROR: mbedtls_ssl_handshake ret(-0x%x)", -ret);
 		goto exit;
 	} else {
-		unsigned char buf[BUFFER_SIZE + 1];
+		char buf[BUFFER_SIZE + 1];
 		int pos = 0, read_size = 0, resource_size = 0, content_len = 0, header_removed = 0;
 
 		printf("SSL ciphersuite %s\n", mbedtls_ssl_get_ciphersuite(&ssl));
 		sprintf(buf, "GET %s HTTP/1.1\r\nHost: %s\r\n\r\n", RESOURCE, SERVER_HOST);
-		mbedtls_ssl_write(&ssl, buf, strlen(buf));
+		mbedtls_ssl_write(&ssl, (const unsigned char *) buf, strlen(buf));
 
-		while ((read_size = mbedtls_ssl_read(&ssl, buf + pos, BUFFER_SIZE - pos)) > 0) {
+		while ((read_size = mbedtls_ssl_read(&ssl, (unsigned char *) (buf + pos), BUFFER_SIZE - pos)) > 0) {
 			if (header_removed == 0) {
 				char *header = NULL;
 
@@ -269,13 +270,13 @@ static void example_ssl_download_thread(void *param)
 					printf("\nHTTP Header: %s\n", buf);
 
 					// Remove header size to get first read size of data from body head
-					read_size = pos - ((unsigned char *) body - buf);
+					read_size = pos - (body - buf);
 					pos = 0;
 
 					content_len_pos = strstr(buf, "Content-Length: ");
 					if (content_len_pos) {
 						content_len_pos += strlen("Content-Length: ");
-						*(strstr(content_len_pos, "\r\n")) = 0;
+						*(strstr((const char *)content_len_pos, "\r\n")) = 0;
 						content_len = atoi(content_len_pos);
 					}
 				} else {

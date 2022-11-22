@@ -18,6 +18,18 @@
 #define NAND_PAGE_SIZE 		2048
 #define NAND_SPARE_SIZE 	64
 
+#if !defined(CONFIG_FTL_VERIFY)
+#define CONFIG_FTL_VERIFY 0
+#endif
+
+#if !defined(CONFIG_NAND_CB_TEST)
+#define CONFIG_NAND_CB_TEST 0
+#endif
+
+#if !defined(CONFIG_LITTLE_WEAR_LEVELING_VERIFY)
+#define CONFIG_LITTLE_WEAR_LEVELING_VERIFY 0
+#endif
+
 #if (CONFIG_FTL_VERIFY || CONFIG_NAND_CB_TEST)
 #define CONIG_FTL_TEST_CNT 0x10000
 static int make_incorrect_data = 0;
@@ -28,6 +40,9 @@ void ftl_test_set_make_incorrect_data(bool value)
 #endif
 
 bbm_info_attr *bbm_info = NULL;
+
+int bbm_mark_bad_block(bbm_info_attr *bbm_info, int block);
+int bbm_update_table(bbm_info_attr *bbm);
 
 int bbm_find_table_index(bbm_info_attr *bbm)
 {
@@ -64,9 +79,10 @@ int nand_erase_cb(int page)
 	return ret;
 }
 
-void nand_unlock_cb(void)
+int nand_unlock_cb(void)
 {
 	snand_global_unlock();
+	return 0;
 }
 
 
@@ -514,7 +530,7 @@ int bbm_update_table(bbm_info_attr *bbm)
 	int ret = 0;
 	for (i = 0; i < FW_BAD_BLOCK_TABLE_CNT; i++) {
 		if (bbm_is_bad_block(bbm, bbm->bbmt_offset + i) == false) {
-			ret = bbm_nand_write(bbm, bbm->bbmt_offset + i, 0, bbm->pbbt, bbm->page_size, 0); //Update the bad blcoj result
+			ret = bbm_nand_write(bbm, bbm->bbmt_offset + i, 0, (unsigned char *)bbm->pbbt, bbm->page_size, 0); //Update the bad blcoj result
 			if (ret >= 0) {
 				count += 1;
 			}
@@ -671,7 +687,7 @@ int ftl_get_nand_info(nand_info *value)
 	return ret;
 }
 
-void ftl_erase_bbm_table(void)
+int ftl_erase_bbm_table(void)
 {
 	int count = 0;
 	int i = 0;

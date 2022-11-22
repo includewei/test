@@ -1,4 +1,9 @@
 
+#include <osdep_service.h>
+#include <wifi_constants.h>
+#include "wifi_conf.h"
+#include "lwip_netconf.h"
+
 #if defined(CONFIG_PLATFORM_8711B)
 #include "rtl8710b_ota.h"
 #include <FreeRTOS.h>
@@ -14,15 +19,13 @@
 #include "rtl8721d_ota.h"
 #include <FreeRTOS.h>
 #include <task.h>
+#elif defined(CONFIG_PLATFORM_AMEBALITE)
+#include "ameba_ota.h"
 #endif
-#include <osdep_service.h>
-#include <wifi_constants.h>
-#include "wifi_conf.h"
-#include "lwip_netconf.h"
-#define PORT	80
-#define HOST	"192.168.1.53"  //"m-apps.oss-cn-shenzhen.aliyuncs.com"
-#define RESOURCE ""     //"051103061600.bin"
 
+#define PORT	80
+static const char *host = "192.168.0.101";  //"m-apps.oss-cn-shenzhen.aliyuncs.com"
+static const char *resource = "/bin/OTA_All.bin";     //"051103061600.bin"
 
 #ifdef HTTP_OTA_UPDATE
 void http_update_ota_task(void *param)
@@ -41,7 +44,7 @@ void http_update_ota_task(void *param)
 	}
 	int ret = -1;
 
-	ret = http_update_ota(HOST, PORT, RESOURCE);
+	ret = http_update_ota((char *)host, PORT, (char *)resource);
 
 	printf("\n\r[%s] Update task exit", __FUNCTION__);
 	if (!ret) {

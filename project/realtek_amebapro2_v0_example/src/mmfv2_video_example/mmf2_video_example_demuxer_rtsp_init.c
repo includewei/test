@@ -10,12 +10,12 @@
 #include "module_demuxer.h"
 #include "video_example_media_framework.h"
 #include "log_service.h"
+#include "mmf2_pro2_video_config.h"
 
 static mm_context_t *rtsp2_ctx		= NULL;
 static mm_context_t *demuxer_ctx	= NULL;
 
 static mm_siso_t *siso_demuxer_rtsp	= NULL;
-
 
 #define V1_CHANNEL 0
 #define V1_RESOLUTION VIDEO_2K
@@ -51,6 +51,9 @@ static mm_siso_t *siso_demuxer_rtsp	= NULL;
 #elif V1_RESOLUTION == VIDEO_2K
 #define V1_WIDTH	2560
 #define V1_HEIGHT	1440
+#else	// default value
+#define V1_WIDTH	1280
+#define V1_HEIGHT	720
 #endif
 
 
@@ -147,7 +150,7 @@ mmf2_exmaple_demuxer_rtsp_fail:
 	return;
 }
 
-static char *example = "mmf2_video_example_demuxer_rtsp";
+static const char *example = "mmf2_video_example_demuxer_rtsp";
 static void example_deinit(void)
 {
 	//Pause Linker

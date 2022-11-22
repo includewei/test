@@ -4,13 +4,10 @@
 #                                                                                #
 ##################################################################################
 
-Date: 2018-06-11
-
 Table of Contents
 ~~~~~~~~~~~~~~~~~
  - Description
  - Setup Guide
- - Parameter Setting and Configuration
  - Result description
  - Supported List
  
@@ -20,18 +17,13 @@ Description
 	
 Setup Guide
 ~~~~~~~~~~~
-	1. In [platform_opts.h], please setting #define CONFIG_EXAMPLE_SOCKET_SELECT 1
-	For AmebaD2 :Amebad2 Changes how example is compiled, and Removed macro controls (CONFIG_EXAMPLE_XXX)in platform_opts.h
-		GCC: use CMD "make xip EXAMPLE=socket_select" to compile socket_select example.
-
-    2. Can make automatical Wi-Fi connection when booting by using wlan fast connect example.
-	
-Parameter Setting and Configuration
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         1. Modify SERVER_PORT definition for listen port of created TCP server.
         2. Can enable CONNECT_REMOTE to include TCP connection to remote server in example. 
         3. Modify REMOTE_HOST and REMOTE_PORT for remote server.
+        4.GCC: use CMD "make all EXAMPLE=socket_select" to compile socket_select example.
 
+      Can make automatical Wi-Fi connection when booting by using wlan fast connect example.
+      
 Result description
 ~~~~~~~~~~~~~~~~~~
        The socket select example thread will be started automatically when booting.
@@ -42,5 +34,4 @@ Supported List
 ~~~~~~~~~~~~~~
 [Supported List]
         Supported IC :
-                Ameba-pro, Ameba-z2, Ameba-D, AmebaD2
-		
+               RTL8730A, RTL872XE

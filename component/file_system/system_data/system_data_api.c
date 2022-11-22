@@ -124,7 +124,7 @@ exit:
 	return ret;
 }
 
-static int sys_read_wlan_data_from_nor_flash(u8 *data)
+static int sys_read_wlan_data_from_nor_flash(u8 *data, uint32_t len)
 {
 	flash_t flash;
 	u8	read_signature[4] = {0};
@@ -139,7 +139,7 @@ static int sys_read_wlan_data_from_nor_flash(u8 *data)
 	}
 
 	device_mutex_lock(RT_DEV_LOCK_FLASH);
-	flash_stream_read(&flash, FAST_RECONNECT_DATA + SYS_DATA_WIFI_DATA_ADDR, sizeof(struct wlan_fast_reconnect), data);
+	flash_stream_read(&flash, FAST_RECONNECT_DATA + SYS_DATA_WIFI_DATA_ADDR, len, data);
 	device_mutex_unlock(RT_DEV_LOCK_FLASH);
 
 	return 0;
@@ -335,7 +335,7 @@ exit:
 	return ret;
 }
 
-static int sys_read_wlan_data_from_flash_ftl(u8 *data)
+static int sys_read_wlan_data_from_flash_ftl(u8 *data, uint32_t len)
 {
 	u8	read_signature[4] = {0};
 	int offset;
@@ -355,7 +355,7 @@ static int sys_read_wlan_data_from_flash_ftl(u8 *data)
 	}
 
 	offset = SYS_DATA_WIFI_DATA_ADDR;
-	ret = ftl_common_read(address + offset, data, sizeof(struct wlan_fast_reconnect));
+	ret = ftl_common_read(address + offset, data, len);
 	if (ret < 0) {
 		printf("\n\r[%s] ftl read wlan data failed", __func__);
 		goto exit;
@@ -440,18 +440,18 @@ int sys_write_bt_data_to_flash(u8 *data, uint32_t len)
 #endif
 }
 
-int sys_read_wlan_data_from_flash(u8 *data)
+int sys_read_wlan_data_from_flash(u8 *data, uint32_t len)
 {
 #if defined(CONFIG_FTL_EN) && CONFIG_FTL_EN
 	int ret = 0;
 
-	ret = sys_read_wlan_data_from_flash_ftl(data);
+	ret = sys_read_wlan_data_from_flash_ftl(data, len);
 
 	return ret;
 #else
 	int ret = 0;
 
-	ret = sys_read_wlan_data_from_nor_flash(data);
+	ret = sys_read_wlan_data_from_nor_flash(data, len);
 
 	return ret;
 #endif

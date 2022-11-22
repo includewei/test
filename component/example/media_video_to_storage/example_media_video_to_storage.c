@@ -153,7 +153,7 @@ static void setting_audio_amic(void)
 	audio_set_dma_buffer(&audio_obj, ad_dma_txdata, ad_dma_rxdata, AD_PAGE_SIZE, DMA_AD_PAGE_NUM);
 
 	//Init RX dma
-	audio_rx_irq_handler(&audio_obj, (audio_irq_handler)audio_rx_irq, (uint32_t)&audio_obj);
+	audio_rx_irq_handler(&audio_obj, (audio_irq_handler)audio_rx_irq, (uint32_t *)&audio_obj);
 
 	/* Use (DMA page count -1) because occur RX interrupt in first */
 	for (i = 0; i < (DMA_AD_PAGE_NUM - 1); i++) {

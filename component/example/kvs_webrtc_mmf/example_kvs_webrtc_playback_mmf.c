@@ -9,6 +9,7 @@
 #include "mmf2_siso.h"
 
 #include "avcodec.h"
+#include "module_video.h"
 #include "module_demuxer.h"
 #include "module_kvs_webrtc.h"
 #include "example_kvs_webrtc_playback_mmf.h"

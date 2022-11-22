@@ -1,12 +1,15 @@
 #include "FreeRTOS.h"
 #include "task.h"
-#include "basic_types.h"
+#include <stdint.h>
 #include "platform_opts.h"
-
 #include "usb.h"
 #include "cdc/inc/usbd_cdc.h"
 
-static int acm_receive(void *buf, u16 length);
+#define USB_CONSOLE_LOG //The default mode is loopback
+
+extern void console_stdio_init(void *read_cb, void *write_cb);
+
+static int acm_receive(void *buf, uint16_t length);
 usbd_cdc_acm_usr_cb_t cdc_acm_usr_cb = {
 	.init = NULL,
 	.deinit = NULL,
@@ -15,17 +18,67 @@ usbd_cdc_acm_usr_cb_t cdc_acm_usr_cb = {
 	.transmit_complete = NULL,//acm_transmit_complete,
 #endif
 };
-//Loop back mode
-static int acm_receive(void *buf, u16 length)
+
+#ifdef USB_CONSOLE_LOG
+#define USBCDC_BUF_SIZE 2048
+static char cdc_buffer[2][USBCDC_BUF_SIZE];
+static int cdc_buffer_idx[2] = {0};
+static int cdc_buffer_slot = 0;
+
+static unsigned cdc_acm_write_buffer(unsigned fd, const void *buf, unsigned len)
 {
 	int ret = 0;
-	u16 len = length;
+	if (cdc_port_status()) {
+		ret = usbd_cdc_acm_sync_transmit_data((void *)buf, len);
+		if (ret != 0) {
+			vTaskDelay(10);
+			ret = usbd_cdc_acm_sync_transmit_data((void *)buf, len); //Try again
+		}
+	}
+	return len;
+}
+
+static unsigned cdc_acm_read_buffer(unsigned fd, void *buf, unsigned len)
+{
+	int curr_slot;
+	unsigned cnt;
+	__disable_irq();
+	curr_slot = cdc_buffer_slot;
+	cdc_buffer_slot ^= 1;
+	__enable_irq();
+	cnt = (unsigned)cdc_buffer_idx[curr_slot];
+	memcpy(buf, cdc_buffer[curr_slot], cdc_buffer_idx[curr_slot]);
+	cdc_buffer_idx[curr_slot] = 0;
+
+	return cnt;
+}
+#endif
+
+static int acm_receive(void *buf, uint16_t length)
+{
+#ifndef USB_CONSOLE_LOG
+	int ret = 0;
+	uint16_t len = length;
 	ret = usbd_cdc_acm_sync_transmit_data(buf, len);
 	if (ret != 0) {
 		printf("\nFail to transmit data: %d\n", ret);
 	}
 
 	return ret;
+#else
+	int i = 0;
+	uint16_t len = length;
+	int *idx = &cdc_buffer_idx[cdc_buffer_slot];
+	char *ptr = (char *)buf;
+	for (i = 0; i < len; i++) {
+		idx = &cdc_buffer_idx[cdc_buffer_slot];
+		if ((*idx) < USBCDC_BUF_SIZE - 1) {
+			cdc_buffer[cdc_buffer_slot][*idx] = ptr[i];
+			(*idx)++;
+		}
+	}
+	return 0;
+#endif
 }
 
 void get_cdc_status(void) //Please
@@ -58,6 +111,9 @@ void example_cdc_thread(void *param)
 	}
 	vTaskDelay(2000);
 	get_cdc_status();
+#ifdef USB_CONSOLE_LOG
+	console_stdio_init((void *)cdc_acm_read_buffer, (void *)cdc_acm_write_buffer);
+#endif
 exit:
 	vTaskDelete(NULL);
 }

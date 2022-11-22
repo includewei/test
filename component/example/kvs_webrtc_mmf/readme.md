@@ -24,9 +24,7 @@
     ```
     - nodejs/llhttp
     ```
-    git clone -b release https://github.com/nodejs/llhttp.git
-    cd llhttp
-    git reset --hard a4aa7a70e8b9a67f378b53264c61bb044a224366
+    git clone -b release/v6.0.6 https://github.com/nodejs/llhttp.git
     ```
 
 ## Set mbedtls version
@@ -166,5 +164,6 @@
     ```
 
 ## Validate result
-- we can use KVS WebRTC Test Page to test the result  
-https://awslabs.github.io/amazon-kinesis-video-streams-webrtc-sdk-js/examples/index.html
+- we can use KVS WebRTC Test Page to test the result.  
+  https://awslabs.github.io/amazon-kinesis-video-streams-webrtc-sdk-js/examples/index.html
+- Please refer `test_page_setup.jpg` to set up the test page.

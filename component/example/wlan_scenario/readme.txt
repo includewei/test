@@ -9,15 +9,16 @@ Includes:
       - Use scenario about 6 cases
 
 Configuration:
-Modify the argument of example_wlan_scenario() in example_entry.c to switch example cases.
-[platform_opts.h]
+1.Modify the argument of example_wlan_scenario() in example_entry.c to switch example cases.
+
+2.[platform_opts.h]  for example case about WPS or P2P
 	#define CONFIG_ENABLE_WPS		1
 	#define CONFIG_ENABLE_P2P		1	
-	#define CONFIG_EXAMPLE_WLAN_FAST_CONNECT	0
-	#define CONFIG_EXAMPLE_WLAN_SCENARIO	1
 
-For AmebaD2 :Amebad2 Changes how example is compiled, and Removed macro controls (CONFIG_EXAMPLE_XXX)in platform_opts.h
-		GCC:use CMD "make xip EXAMPLE=wlan_scenario" to compile wlan_scenario example.
+3.GCC:use CMD "make all EXAMPLE=wlan_scenario" to compile wlan_scenario example.
+
+
+For AmebaPro2 :AmebaPro2 don't define CONFIG_ENABLE_P2P to test.
 
 Execution:
 The Wi-Fi example thread will be started automatically when booting.
@@ -100,4 +101,4 @@ The currently argument options are:
 
 [Supported List]
 	Supported :
-	    Ameba-1, Ameba-z, Ameba-pro, Ameba-z2, Ameba-D2
+	     RTL8730A, RTL872XE

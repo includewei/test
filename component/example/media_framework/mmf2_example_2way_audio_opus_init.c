@@ -29,6 +29,7 @@ static mm_siso_t *siso_opusd_audio	= NULL;
 static mm_context_t *rtsp4_ctx      = NULL;
 static mm_simo_t *simo_opusc_rtsp   = NULL;
 
+#if !USE_DEFAULT_AUDIO_SET
 static audio_params_t audio_params = {
 #if defined(CONFIG_PLATFORM_8721D)
 	.sample_rate = SR_8K,//SR_16K,//
@@ -37,7 +38,7 @@ static audio_params_t audio_params = {
 	// .direction = APP_AMIC_IN|APP_LINE_OUT,
 	.direction = APP_LINE_IN | APP_LINE_OUT,
 #else
-	.sample_rate = ASR_8KHZ,//ASR_16KHZ,//
+	.sample_rate = ASR_8KHZ,
 	.word_length = WL_16BIT,
 	.mic_gain    = MIC_0DB,
 	.dmic_l_gain    = DMIC_BOOST_24DB,
@@ -48,15 +49,16 @@ static audio_params_t audio_params = {
 	.mix_mode = 0,
 	.enable_aec  = 1
 };
+#endif
 
 static opusc_params_t opusc_rtsp_params = {
 	//audio	8000/16000
-	.sample_rate = 8000,//16000,//
+	.sample_rate = 8000,
 	.channel = 1,
-	.bit_length = 16,     //16 recommand
-	.complexity = 5,      //0~10
-	.bitrate = 25000,     //default 25000
-	.use_framesize = 20,//10,// //needs to the same or bigger than AUDIO_DMA_PAGE_SIZE/(sample_rate/1000)/2 but less than 60
+	.bit_length = 16,			//16 recommand
+	.complexity = 5,			//0~10
+	.bitrate = 25000,			//default 25000
+	.use_framesize = 40,		//needs to the same or bigger than AUDIO_DMA_PAGE_SIZE/(sample_rate/1000)/2 but less than 60
 	.enable_vbr = 1,
 	.vbr_constraint = 0,
 	.packetLossPercentage = 0,
@@ -67,21 +69,21 @@ static opusc_params_t opusc_rtsp_params = {
 static rtsp2_params_t rtsp2_a_opus_params = {
 	.type = AVMEDIA_TYPE_AUDIO,
 	.u = {
-		.a_opus = {
+		.a = {
 			.codec_id   = AV_CODEC_ID_OPUS,
 			.channel    = 1,
-			.samplerate = 8000,//16000,//
-			.frame_size = 20//10//        //equal to use_framesize in opusc_rtsp_params
+			.samplerate = 8000,
+			.frame_size = 40    //equal to use_framesize in opusc_rtsp_params
 		}
 	}
 };
 
 static opusd_params_t opusd_params = {
-	.sample_rate = 8000,//16000,//
+	.sample_rate = 8000,
 	.channel = 1,
-	.bit_length = 16,         //16 recommand
-	.frame_size_in_msec = 10, //will not be uused
-	.with_opus_enc = 0,       //enable semaphore if the application with opus encoder
+	.bit_length = 16,         	//16 recommand
+	.frame_size_in_msec = 10, 	//will not be uused
+	.with_opus_enc = 0,       	//enable semaphore if the application with opus encoder
 	.opus_application = OPUS_APPLICATION_AUDIO
 };
 
@@ -97,7 +99,9 @@ void mmf2_example_2way_audio_opus_init(void)
 
 	audio_ctx = mm_module_open(&audio_module);
 	if (audio_ctx) {
+#if !USE_DEFAULT_AUDIO_SET
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_PARAMS, (int)&audio_params);
+#endif
 		mm_module_ctrl(audio_ctx, MM_CMD_SET_QUEUE_LEN, 6);
 		mm_module_ctrl(audio_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_APPLY, 0);

@@ -4,6 +4,7 @@
 *
 ******************************************************************************/
 #include "platform_opts.h"
+#include "log_service.h"
 
 #include "mmf2_link.h"
 #include "mmf2_siso.h"
@@ -32,7 +33,7 @@
 #define V1_FPS 15
 #define V1_GOP 15
 #define V1_BPS 1024*1024
-#define V1_RCMODE 1 // 1: CBR, 2: VBR
+#define V1_RCMODE 2 // 1: CBR, 2: VBR
 
 #define USE_H265 0
 
@@ -83,6 +84,7 @@ static video_params_t video_v1_params = {
 };
 
 #if ENABLE_AUDIO_TRACK
+#if !USE_DEFAULT_AUDIO_SET
 static audio_params_t audio_params = {
 	.sample_rate = ASR_8KHZ,
 	.word_length = WL_16BIT,
@@ -90,6 +92,7 @@ static audio_params_t audio_params = {
 	.channel     = 1,
 	.enable_aec  = 0
 };
+#endif
 #if USE_AUDIO_AAC
 static aac_params_t aac_params = {
 	.sample_rate = 8000,
@@ -141,11 +144,15 @@ static void change_resolution_parameter(int parm_index)
 	}
 }
 
+static void atcmd_kvs_producer_init(void);
+
 void example_kvs_producer_mmf_thread(void *param)
 {
 #if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
 	rtw_create_secure_context(2048);
 #endif
+
+	atcmd_kvs_producer_init();
 
 	if (!voe_boot_fsc_status()) {
 		wifi_common_init();
@@ -172,7 +179,9 @@ void example_kvs_producer_mmf_thread(void *param)
 #if ENABLE_AUDIO_TRACK
 	audio_ctx = mm_module_open(&audio_module);
 	if (audio_ctx) {
+#if !USE_DEFAULT_AUDIO_SET
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_PARAMS, (int)&audio_params);
+#endif
 		mm_module_ctrl(audio_ctx, MM_CMD_SET_QUEUE_LEN, 6);
 		mm_module_ctrl(audio_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_APPLY, 0);
@@ -315,10 +324,74 @@ void example_kvs_producer_mmf_thread(void *param)
 
 example_kvs_producer_mmf:
 
-	// TODO: exit condition or signal
-	while (1) {
-		vTaskDelay(1000);
-	}
+	vTaskDelete(NULL);
+}
+
+static void fKVSC(void *arg)
+{
+	uint32_t t0 = xTaskGetTickCount();
+	//Pause Linker
+#if ENABLE_AUDIO_TRACK
+#if USE_AUDIO_AAC
+	miso_pause(miso_video_aac_kvs_v1_a1, MM_OUTPUT);
+#elif USE_AUDIO_G711
+	miso_pause(miso_video_g711e_kvs_v1_a1, MM_OUTPUT);
+#endif
+#else
+	siso_pause(siso_video_kvs_v1);
+#endif
+
+	//Stop module
+	mm_module_ctrl(kvs_producer_v1_ctx, CMD_KVS_PRODUCER_PAUSE, 0);
+	mm_module_ctrl(video_v1_ctx, CMD_VIDEO_STREAM_STOP, V1_CHANNEL);
+#if ENABLE_AUDIO_TRACK
+	mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_TRX, 0);
+#if USE_AUDIO_AAC
+	mm_module_ctrl(aac_ctx, CMD_AAC_STOP, 0);
+#endif
+#endif
+
+	//Delete linker
+#if ENABLE_AUDIO_TRACK
+#if USE_AUDIO_AAC
+	miso_delete(miso_video_aac_kvs_v1_a1);
+#elif USE_AUDIO_G711
+	miso_delete(miso_video_g711e_kvs_v1_a1);
+#endif
+#else
+	siso_delete(siso_video_kvs_v1);
+#endif
+#if USE_AUDIO_AAC
+	siso_delete(siso_audio_aac);
+#elif USE_AUDIO_G711
+	siso_delete(siso_audio_g711e);
+#endif
+
+	//Close module
+	mm_module_close(video_v1_ctx);
+#if ENABLE_AUDIO_TRACK
+	mm_module_close(audio_ctx);
+#if USE_AUDIO_AAC
+	mm_module_close(aac_ctx);
+#elif USE_AUDIO_G711
+	mm_module_close(g711e_ctx);
+#endif
+#endif
+	mm_module_close(kvs_producer_v1_ctx);
+
+	//Video Deinit
+	video_deinit();
+
+	printf(">>>>>> Deinit take %d ms \r\n", xTaskGetTickCount() - t0);
+}
+
+static log_item_t kvs_items[] = {
+	{"KVSC", fKVSC,},
+};
+
+static void atcmd_kvs_producer_init(void)
+{
+	log_service_add_table(kvs_items, sizeof(kvs_items) / sizeof(kvs_items[0]));
 }
 
 void example_kvs_producer_mmf(void)

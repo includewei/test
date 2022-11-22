@@ -97,7 +97,7 @@ void mmf2_video_example_v2_init(void)
 	video_v2_ctx = mm_module_open(&video_module);
 	if (video_v2_ctx) {
 		mm_module_ctrl(video_v2_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v2_params);
-		mm_module_ctrl(video_v2_ctx, MM_CMD_SET_QUEUE_LEN, V2_FPS*3);
+		mm_module_ctrl(video_v2_ctx, MM_CMD_SET_QUEUE_LEN, V2_FPS * 3);
 		mm_module_ctrl(video_v2_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
 	} else {
 		rt_printf("video open fail\n\r");
@@ -136,7 +136,7 @@ mmf2_video_exmaple_v2_fail:
 	return;
 }
 
-static char *example = "mmf2_video_example_v2";
+static const char *example = "mmf2_video_example_v2";
 static void example_deinit(void)
 {
 	//Pause Linker

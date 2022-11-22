@@ -3,19 +3,17 @@
 #include "time.h"
 
 #include "FreeRTOS.h"
-#include "task.h"
-#include "basic_types.h"
 #include <cmsis.h>
-#include "FreeRTOS.h"
 #include "task.h"
-#include "basic_types.h"
+#include <stdint.h>
+#include <stdlib.h>
 #include "section_config.h"
 #include "lfs.h"
 #include "lfs_util.h"
 #include "snand_api.h"
 #include "ftl_common_api.h"
 #include "vfs.h"
-
+#include "lfs_reent.h"
 static lfs_t lfs;
 
 #define NOR_BLOCK_COUNT  100
@@ -32,6 +30,8 @@ struct lfs_config vfs_ftl_cfg = {
 	.prog  = vfs_ftl_block_prog,
 	.erase = vfs_ftl_block_erase,
 	.sync  = vfs_ftl_block_sync,
+	.lock  =  lfs_system_lock,
+	.unlock = lfs_system_unlock,
 
 	// block device configuration
 	.read_size = 0,
@@ -63,9 +63,9 @@ int vfs_ftl_block_prog(const struct lfs_config *c, lfs_block_t block, lfs_off_t 
 {
 	int ret = 0;
 	if (sys_get_boot_sel() == FTL_NAND_FLASH) {
-		ret = ftl_common_write(((NAND_APP_BASE / vfs_ftl_cfg.block_size) + block) * c->block_size + off, buffer, size);
+		ret = ftl_common_write(((NAND_APP_BASE / vfs_ftl_cfg.block_size) + block) * c->block_size + off, (unsigned char *)buffer, size);
 	} else {
-		ftl_common_write(block * c->block_size + FLASH_APP_BASE + off, buffer, size);
+		ftl_common_write(block * c->block_size + FLASH_APP_BASE + off, (unsigned char *)buffer, size);
 	}
 	if (ret == 0) {
 		ret = LFS_ERR_OK;
@@ -525,7 +525,7 @@ int littlefs_scandir(const char *dirp, struct dirent ***namelist,
 			if (!entry) {
 				break;
 			}
-			list[count] = (struct dirent *)__wrap_malloc(sizeof(struct dirent));
+			list[count] = (struct dirent *)malloc(sizeof(struct dirent));
 			memcpy(list[count], entry, sizeof(struct dirent));
 
 			count += 1;
@@ -556,9 +556,9 @@ int littlefs_puts(const char *str, vfs_file *finfo)
 {
 	return -1;
 }
-int littlefs_gets(char *str, int num, vfs_file *finfo)
+char *littlefs_gets(char *str, int num, vfs_file *finfo)
 {
-	return -1;
+	return NULL;
 }
 
 int littlefs_mount(int interface)

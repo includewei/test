@@ -113,6 +113,7 @@ static video_params_t video_v2_params = {
 	.use_static_addr = 1
 };
 
+#if !USE_DEFAULT_AUDIO_SET
 static audio_params_t audio_params = {
 	.sample_rate = ASR_8KHZ,
 	.word_length = WL_16BIT,
@@ -120,6 +121,7 @@ static audio_params_t audio_params = {
 	.channel     = 1,
 	.enable_aec  = 0
 };
+#endif
 
 static aac_params_t aac_params = {
 	.sample_rate = 8000,
@@ -210,7 +212,9 @@ void example_kvs_producer_mmf_thread(void *param)
 	//-------- Audio --------------
 	audio_ctx = mm_module_open(&audio_module);
 	if (audio_ctx) {
+#if !USE_DEFAULT_AUDIO_SET
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_PARAMS, (int)&audio_params);
+#endif
 		mm_module_ctrl(audio_ctx, MM_CMD_SET_QUEUE_LEN, 6);
 		mm_module_ctrl(audio_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_APPLY, 0);

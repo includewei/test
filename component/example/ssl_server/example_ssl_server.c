@@ -253,7 +253,7 @@ static void example_ssl_server_thread(void *param)
 	mbedtls_x509_crt server_x509;
 	mbedtls_pk_context server_pk;
 
-	char *response = "<HTML><BODY>TLS OK</BODY></HTML>";
+	const char *response = "<HTML><BODY>TLS OK</BODY></HTML>";
 
 #if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
 	rtw_create_secure_context(configMINIMAL_SECURE_STACK_SIZE);

@@ -24,15 +24,25 @@
 #include "video_api.h"
 #include "platform_opts.h"
 #include "hal_voe_nsc.h"
-
+#include "video_boot.h"
+#include "sensor.h"
+#include "fwfs.h"
+#include "hal_sys_ctrl.h"
 static isp_info_t isp_info;
 static voe_info_t voe_info = {0};
 static int voe_info_init = 0;
+
+#if NONE_FCS_MODE
+static int voe_load_sesnor_init = 0;
+int video_get_fw_isp_info(void);
+#endif
 
 volatile video_peri_info_t g_video_peri_info = {0};
 
 hal_gpio_adapter_t sensor_en_gpio;
 int sensor_en_pin_delay_init = 0;
+static int fcs_queue_start_time = 0;
+static int fcs_queue_end_time = 0;
 
 //Video boot config//
 #include "fw_img_export.h"
@@ -63,15 +73,15 @@ unsigned char *video_load_sensor(unsigned int sensor_start_addr);
 unsigned char *video_load_iq(unsigned int iq_start_addr);
 /////////////////////////////////
 #include "section_config.h"
-SDRAM_DATA_SECTION unsigned char sensor_buf[4096];
-SDRAM_DATA_SECTION unsigned char iq_buf[64 * 1024];
+SDRAM_DATA_SECTION unsigned char sensor_buf[FW_SENSOR_SIZE];
+SDRAM_DATA_SECTION unsigned char iq_buf[FW_IQ_SIZE];
 
 int video_dbg_level = VIDEO_LOG_MSG;
 
 #define video_dprintf(level, ...) if(level >= video_dbg_level) printf(__VA_ARGS__)
 
-char *fmt_table[] = {"hevc", "h264", "jpeg", "nv12", "rgb", "nv16", "hevc", "h264"};
-char *paramter_table[] = {
+const char *fmt_table[] = {"hevc", "h264", "jpeg", "nv12", "rgb", "nv16", "hevc", "h264"};
+const char *paramter_table[] = {
 	"-l 1 --gopSize=1 -U1 -u1 -q-1 --roiMapDeltaQpBlockUnit 0 --roiMapDeltaQpEnable 1",	// HEVC
 	"-l 1 --gopSize=3 -U1 -u1 -q-1 -I6 -A-8 --smoothPsnrInGOP=1 --rcQpDeltaRange=15 --picQpDeltaRange=-4:6 --blockRCSize=1",
 	"-g 1 -b 1",			// JPEG
@@ -80,8 +90,36 @@ char *paramter_table[] = {
 	"",						// NV16
 };
 
-int isp_ch_buf_num[5] = {2, 2, 2, 2, 2};
+static int isp_ch_buf_num[5] = {2, 2, 2, 2, 2};
 
+#if VIDEO_MPU_VOE_HEAP
+#include "cmsis.h"
+#include "mpu.h"
+void setup_mpu(uint32_t start, uint32_t end, int index, int enable)
+{
+	video_dprintf(VIDEO_LOG_MSG, "the mpu start %x end %x index %x enable %x\r\n", start, end, index, enable);
+	MPU->MAIR0 = 0;
+	MPU->RNR = index;// region 1
+	MPU->RBAR = (start & (~0x1F)) | (0 << 3) | (0x2 << 1) | 0; // non-sharable readonly no exectualbe
+	if (enable) {
+		MPU->RLAR = (end & (~0x1F)) | (0 << 4) | (2 << 2) | 1;    // use attr2, EN=1 M
+	} else {
+		MPU->RLAR = (end & (~0x1F)) | (0 << 4) | (2 << 2) | 0;
+	}
+	MPU->CTRL |= MPU_CTRL_ENABLE_Msk;
+}
+
+void video_mpu_trigger(void)
+{
+	unsigned char *ptr = (unsigned char *)voe_info.voe_heap_addr;
+	ptr[0] = 0x00;
+	ptr[1] = 0xff;
+}
+#endif
+unsigned char *video_get_iq_buf(void)
+{
+	return iq_buf;
+}
 void video_set_debug_level(int value)
 {
 	if (value <= VIDEO_LOG_OFF) {
@@ -91,12 +129,21 @@ void video_set_debug_level(int value)
 	}
 }
 
+void video_set_framerate(int fps)
+{
+	int max_fps = fps;
+	int min_fps = fps;
+
+	hal_video_isp_ctrl(0xF021, 1, &min_fps);
+	hal_video_isp_ctrl(0xF022, 1, &max_fps);
+}
+
 // Output stream callback function
 static void temp_output_cb(void *param1, void  *param2, uint32_t arg)
 {
 	enc2out_t *enc2out = (enc2out_t *)param1;
 	hal_video_adapter_t  *v_adp = (hal_video_adapter_t *)param2;
-	commandLine_s *cml = &v_adp->cmd[enc2out->ch];
+	commandLine_s *cml = (commandLine_s *)&v_adp->cmd[enc2out->ch];
 
 	video_dprintf(VIDEO_LOG_INF, "ch = %d, type = %d\r\n", enc2out->ch, enc2out->codec);
 
@@ -191,8 +238,8 @@ int iq_tuning_cmd(int argc, char **argv)
 	}
 	ccmd = atoi(argv[0]);
 
-	cmd_data = malloc(IQ_CMD_DATA_SIZE + 32); // for cache alignment
-	if (cmd_data == NULL) {
+	cmd_data = (uint32_t)malloc(IQ_CMD_DATA_SIZE + 32); // for cache alignment
+	if ((void *)cmd_data == NULL) {
 		video_dprintf(VIDEO_LOG_ERR, "malloc cmd buf fail\r\n");
 		return NOK;
 	}
@@ -242,7 +289,7 @@ int iq_tuning_cmd(int argc, char **argv)
 	}
 
 	if (cmd_data) {
-		free(cmd_data);
+		free((void *)cmd_data);
 	}
 	return OK;
 }
@@ -311,13 +358,27 @@ int video_ctrl(int ch, int cmd, int arg)
 		encode_rc_parm_t *rc_param = (encode_rc_parm_t *)arg;
 		memset(&rc_ctrl, 0x0, sizeof(rate_ctrl_s));
 
-		rc_ctrl.maxqp = rc_param->maxQp;
-		rc_ctrl.minqp = rc_param->minQp;
+		if (rc_param->maxQp) {
+			rc_ctrl.maxqp = rc_param->maxQp;
+		}
+
+		if (rc_param->minQp) {
+			rc_ctrl.minqp = rc_param->minQp;
+		}
+
+		if (rc_param->maxIQp) {
+			rc_ctrl.qpMaxI = rc_param->maxIQp;
+		}
+
+		if (rc_param->minIQp) {
+			rc_ctrl.qpMinI = rc_param->minIQp;
+		}
+
 		hal_video_set_rc(&rc_ctrl, ch);
 	}
 	break;
 	case VIDEO_FORCE_IFRAME: {
-		hal_video_froce_i(ch);
+		hal_video_force_i(ch);
 	}
 	break;
 	case VIDEO_BPS: {
@@ -331,6 +392,21 @@ int video_ctrl(int ch, int cmd, int arg)
 		rate_ctrl_s rc_ctrl;
 		memset(&rc_ctrl, 0x0, sizeof(rate_ctrl_s));
 		rc_ctrl.gop = arg;
+		hal_video_set_rc(&rc_ctrl, ch);
+	}
+	break;
+	case VIDEO_ISPFPS: {
+		rate_ctrl_s rc_ctrl;
+		memset(&rc_ctrl, 0x0, sizeof(rate_ctrl_s));
+		rc_ctrl.isp_fps = arg;
+		hal_video_isp_ctrl(0xF022, 1, &arg);
+		hal_video_set_rc(&rc_ctrl, ch);
+	}
+	break;
+	case VIDEO_FPS: {
+		rate_ctrl_s rc_ctrl;
+		memset(&rc_ctrl, 0x0, sizeof(rate_ctrl_s));
+		rc_ctrl.fps = arg;
 		hal_video_set_rc(&rc_ctrl, ch);
 	}
 	break;
@@ -416,16 +492,6 @@ static int video_set_voe_heap(int heap_addr, int heap_size, int use_malloc)
 #endif
 }
 
-#define ISP_COMMON_BUF  900*1024
-#define ENC_COMMON_BUF  500*1024
-#define ENABLE_OSD_BUF  900*1024
-#define ENABLE_MD_BUF   500*1024
-#define ENABLE_HDR_BUF  500*1024
-
-#define ISP_CREATE_BUF 200*1024
-#define ENC_CREATE_BUF 420*1024
-#define SNAPSHOT_BUF   300*1024
-
 int video_buf_calc(int v1_enable, int v1_w, int v1_h, int v1_bps, int v1_shapshot,
 				   int v2_enable, int v2_w, int v2_h, int v2_bps, int v2_shapshot,
 				   int v3_enable, int v3_w, int v3_h, int v3_bps, int v3_shapshot,
@@ -445,8 +511,11 @@ int video_buf_calc(int v1_enable, int v1_w, int v1_h, int v1_bps, int v1_shapsho
 	video_dprintf(VIDEO_LOG_INF, "3dnr = %d,%d,%d\r\n", v3dnr_w, v3dnr_h, voe_heap_size);
 
 	//common buffer
-	voe_heap_size += ISP_COMMON_BUF;
-	voe_heap_size += ENC_COMMON_BUF;
+	if (v3dnr_w >= 2560) {
+		voe_heap_size += ISP_COMMON_BUF;
+	}
+	//voe_heap_size += ENC_COMMON_BUF;
+
 	if (isp_info.osd_enable) {
 		if (isp_info.osd_buf_size) {
 			voe_heap_size += isp_info.osd_buf_size;
@@ -477,7 +546,7 @@ int video_buf_calc(int v1_enable, int v1_w, int v1_h, int v1_bps, int v1_shapsho
 		//enc common
 		voe_heap_size += ENC_CREATE_BUF;
 		//enc buffer
-		voe_heap_size += ((v1_w * v1_h) / 2 +  v1_bps * 2);
+		voe_heap_size += ((v1_w * v1_h) / VIDEO_RSVD_DIVISION + (v1_bps * V1_ENC_BUF_SIZE) / 8);
 		//shapshot
 		if (v1_shapshot) {
 			voe_heap_size += ((v1_w * v1_h * 3) / 2) + SNAPSHOT_BUF;
@@ -496,7 +565,7 @@ int video_buf_calc(int v1_enable, int v1_w, int v1_h, int v1_bps, int v1_shapsho
 		//enc common
 		voe_heap_size += ENC_CREATE_BUF;
 		//enc buffer
-		voe_heap_size += ((v2_w * v2_h) / 2 +  v2_bps * 2);
+		voe_heap_size += ((v2_w * v2_h) / VIDEO_RSVD_DIVISION + (v2_bps * V2_ENC_BUF_SIZE) / 8);
 		//shapshot
 		if (v2_shapshot) {
 			voe_heap_size += ((v2_w * v2_h * 3) / 2) + SNAPSHOT_BUF;
@@ -515,7 +584,7 @@ int video_buf_calc(int v1_enable, int v1_w, int v1_h, int v1_bps, int v1_shapsho
 		//enc common
 		voe_heap_size += ENC_CREATE_BUF;
 		//enc buffer
-		voe_heap_size += ((v3_w * v3_h) / 2 +  v3_bps * 2);
+		voe_heap_size += ((v3_w * v3_h) / VIDEO_RSVD_DIVISION + (v3_bps * V3_ENC_BUF_SIZE) / 8);
 		//shapshot
 		if (v3_shapshot) {
 			voe_heap_size += ((v3_w * v3_h * 3) / 2) + SNAPSHOT_BUF;
@@ -533,16 +602,19 @@ int video_buf_calc(int v1_enable, int v1_w, int v1_h, int v1_bps, int v1_shapsho
 
 	video_dprintf(VIDEO_LOG_INF, "v4 = %d,%d,%d\r\n", v4_w, v4_h, voe_heap_size);
 
-	video_set_voe_heap(NULL, voe_heap_size, 1);
+	video_set_voe_heap((int)NULL, voe_heap_size, 1);
 
 	return voe_heap_size;
 }
 
 void video_buf_release(void)
 {
-	if ((voe_info.voe_heap_addr) != NULL) {
-		free(voe_info.voe_heap_addr);
-		voe_info.voe_heap_addr = NULL;
+	if ((void *)(voe_info.voe_heap_addr) != NULL) {
+#if VIDEO_MPU_VOE_HEAP
+		setup_mpu((uint32_t)voe_info.voe_heap_addr, (uint32_t)voe_info.voe_heap_addr + voe_info.voe_heap_size - 1, 1, 0);
+#endif
+		free((void *)voe_info.voe_heap_addr);
+		voe_info.voe_heap_addr = (uint32_t)NULL;
 	}
 }
 
@@ -563,7 +635,7 @@ void video_init_peri(void)
 	g_video_peri_info.pwr_ctrl_pin = PIN_A5;
 	g_video_peri_info.snr_clk_pin = PIN_D13;
 
-	peri_update_with_fcs = hal_video_peri_update_with_fcs(&g_video_peri_info);
+	peri_update_with_fcs = hal_video_peri_update_with_fcs((video_peri_info_t *)&g_video_peri_info);
 
 	if (!hal_video_check_fcs_OK()) {
 
@@ -577,6 +649,15 @@ void video_init_peri(void)
 			i2c_master_video.pltf_dat.sda_pin = g_video_peri_info.sda_pin;
 			i2c_master_video.init_dat.index = g_video_peri_info.i2c_id;
 			hal_i2c_pin_unregister_simple(&i2c_master_video);
+
+			//Disable the sensor power
+			video_dprintf(VIDEO_LOG_INF, "unregister sensor pwr 0x%02x \n", g_video_peri_info.pwr_ctrl_pin);
+			hal_gpio_init(&sensor_en_gpio, g_video_peri_info.pwr_ctrl_pin);
+			hal_gpio_set_dir(&sensor_en_gpio, GPIO_OUT);
+
+			hal_gpio_write(&sensor_en_gpio, 0);
+			hal_gpio_deinit(&sensor_en_gpio);
+			vTaskDelay(50);
 		}
 
 
@@ -657,14 +738,16 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 {
 	int ch = v_stream->stream_id;
 	int fcs_v = v_stream->fcs;
+	int isp_fps = isp_info.sensor_fps;
 	int fps = 30;
 	int gop = 30;
-	int rcMode = 2;
+	int rcMode = 1;
 	int bps = 1024 * 1024;
 	int minQp = 0;
 	int maxQP = 51;
 	int rotation = 0;
 	int jpeg_qlevel = 5;
+	int meta_size = v_stream->meta_size;
 
 	char cmd1[256];
 	char cmd2[256];
@@ -675,9 +758,21 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 	int type;
 	int res = 0;
 	int codec = 0;
-	int out_rsvd_size = (v_stream->width * v_stream->height) / 2;
-	int out_buf_size = v_stream->bps * 2 + out_rsvd_size;
+	int out_rsvd_size = (v_stream->width * v_stream->height) / VIDEO_RSVD_DIVISION;
+	int out_buf_size = 0;
 	int jpeg_out_buf_size = out_rsvd_size * 3;
+
+	switch (ch) {
+	case 0:
+		out_buf_size = (v_stream->bps * V1_ENC_BUF_SIZE) / 8 + out_rsvd_size;
+		break;
+	case 1:
+		out_buf_size = (v_stream->bps * V2_ENC_BUF_SIZE) / 8 + out_rsvd_size;
+		break;
+	case 2:
+		out_buf_size = (v_stream->bps * V3_ENC_BUF_SIZE) / 8 + out_rsvd_size;
+		break;
+	}
 
 	video_dprintf(VIDEO_LOG_INF, "video w = %d, video h = %d\r\n", v_stream->width, v_stream->height);
 
@@ -707,8 +802,9 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 	if (v_stream->rc_mode) {
 		rcMode = v_stream->rc_mode - 1;
 		if (rcMode) {
-			minQp = 20;
-			maxQP = 45;
+			minQp = 25;
+			maxQP = 48;
+			bps = v_stream->bps / 2;
 		}
 	}
 
@@ -753,7 +849,7 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 
 		if (hal_video_out_cb(output_cb, 4096, (uint32_t)ctx, ch) != OK) {
 			video_dprintf(VIDEO_LOG_ERR, "hal_video_cb_register fail\n");
-			return NULL;
+			return -1;
 		}
 		static int count = 0;
 		count++;
@@ -779,7 +875,7 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 	}
 
 	if ((codec & (CODEC_HEVC | CODEC_H264)) != 0) {
-		sprintf(fps_cmd1, "-f %d -j %d -R %d -B %d --vbr %d -n %d -m %d", fps, fps, gop, bps, rcMode, minQp, maxQP);
+		sprintf(fps_cmd1, "-f %d -j %d -R %d -B %d --vbr %d -n %d -m %d -z %d", fps, isp_fps, gop, bps, rcMode, minQp, maxQP, meta_size);
 		sprintf(cmd1, "%s %d %s -w %d -h %d -r %d --mode %d --codecFormat %d %s --dbg 1 -i isp"
 				, fmt_table[(codec & (CODEC_HEVC | CODEC_H264)) - 1]
 				, ch
@@ -793,7 +889,7 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 	}
 
 	if ((codec & CODEC_JPEG) != 0) {
-		sprintf(fps_cmd2, "-n %d", fps);
+		sprintf(fps_cmd2, "-n %d -z %d", fps, meta_size);
 		sprintf(cmd2, "%s %d %s -w %d -h %d -r %d -q %d --mode %d --codecFormat %d %s --dbg 1 -i isp"
 				, fmt_table[2]
 				, ch
@@ -839,7 +935,7 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 	//string to command
 	if (hal_video_str2cmd(cmd1, cmd2, cmd3) == NOK) {
 		video_dprintf(VIDEO_LOG_ERR, "hal_video_str2cmd fail\n");
-		return NULL;
+		return -1;
 	}
 
 	hal_video_isp_set_sensor_gpio(ch, g_video_peri_info.rst_pin, g_video_peri_info.pwdn_pin, g_video_peri_info.pwr_ctrl_pin);
@@ -847,11 +943,11 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 
 	video_dprintf(VIDEO_LOG_INF, "set video callback\r\n");
 	if (output_cb != NULL) {
-		if (hal_video_out_cb(output_cb, 1024, (uint32_t)ctx, ch) != OK) {
+		if (hal_video_out_cb(output_cb, 4096, (uint32_t)ctx, ch) != OK) {
 			video_dprintf(VIDEO_LOG_ERR, "hal_video_cb_register fail\n");
 		}
 	} else {
-		if (hal_video_out_cb(temp_output_cb, 1024, (uint32_t)ctx, ch) != OK) {
+		if (hal_video_out_cb(temp_output_cb, 4096, (uint32_t)ctx, ch) != OK) {
 			video_dprintf(VIDEO_LOG_ERR, "hal_video_cb_register fail\n");
 		}
 	}
@@ -878,6 +974,11 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 		hal_video_isp_set_roi(ch, v_stream->roi.xmin, v_stream->roi.ymin, v_stream->roi.xmax - v_stream->roi.xmin, v_stream->roi.ymax - v_stream->roi.ymin);
 	}
 
+	// if (v_stream->meta_size) {
+	// hal_video_isp_set_isp_meta_out(ch, 1);
+	// }
+
+
 	video_dprintf(VIDEO_LOG_INF, "hal_video_open\r\n");
 	if (hal_video_open(ch) != OK) {
 		video_dprintf(VIDEO_LOG_ERR, "hal_video_open fail\n");
@@ -901,7 +1002,7 @@ int video_close(int ch)
 	video_dprintf(VIDEO_LOG_INF, "hal_video_close\r\n");
 	if (hal_video_close(ch) != OK) {
 		video_dprintf(VIDEO_LOG_ERR, "hal_video_close fail\n");
-		return NULL;
+		return -1;
 	}
 
 	osDelay(10); 				// To idle task clean task usage memory
@@ -913,6 +1014,47 @@ int video_get_stream_info(int id)
 {
 	return voe_info.stream_is_open[id];
 }
+
+#if CONFIG_TUNING
+#include <stdio.h>
+#include "vfs.h"
+#define TUNING_USB_MODE //If you need to load from sd card, please disable the marco. 
+#define TUNING_IQ     0X00
+#define TUNING_SENSOR 0X01
+static unsigned char *g_uvcd_iq = NULL;
+void video_set_uvcd_iq(unsigned int addr)
+{
+	g_uvcd_iq = (unsigned char *)addr;
+}
+int sd_load_iq_sensor(int index, unsigned char *buf) //Index 0 iq, index 1 sensor
+{
+	FILE     *m_file;
+	struct stat fstat;
+	int br = 0;
+	vfs_init(NULL);
+	vfs_user_register("sd", VFS_FATFS, VFS_INF_SD);
+	const char *path = NULL;
+	if (index == 0) {
+		path = "sd:/iq.bin";
+	} else {
+		path = "sd:/sensor.bin";
+	}
+	m_file = fopen(path, "r");
+	if (!m_file) {
+		video_dprintf(VIDEO_LOG_ERR, "open file %s fail from sd card\r\n", path);
+		goto EXIT;
+	}
+	stat(path, &fstat);
+	br = fread(buf, 1, fstat.st_size, m_file);
+	if (br != fstat.st_size) {
+		video_dprintf(VIDEO_LOG_ERR, "The length is not correct %d %d\r\n", br, fstat.st_size);
+	}
+	fclose(m_file);
+	return 0;
+EXIT:
+	return -1;
+}
+#endif
 
 hal_video_adapter_t *video_init(int iq_start_addr, int sensor_start_addr)
 {
@@ -926,22 +1068,66 @@ hal_video_adapter_t *video_init(int iq_start_addr, int sensor_start_addr)
 			unsigned char *sensor_addr = NULL;
 			iq_addr = video_load_iq(iq_start_addr);
 			sensor_addr = video_load_sensor(sensor_start_addr);
+#if CONFIG_TUNING
+#ifdef TUNING_USB_MODE
+			if (g_uvcd_iq) {
+				if (g_uvcd_iq[0] == 0 && g_uvcd_iq[1] == 0) {
+					int *dtmp = (int *)iq_addr;
+					memcpy(g_uvcd_iq, iq_addr, FW_IQ_SIZE);
+					hal_video_load_iq((voe_cpy_t)hal_voe_cpy, (int *)iq_addr, __voe_code_start__);
+					video_dprintf(VIDEO_LOG_MSG, "[%s] Load default IQ.size:%d 0x%X,	0x%X 0x%X 0x%X.\r\n", __FUNCTION__, *dtmp, *dtmp, dtmp[1], dtmp[2], dtmp[3]);
+				} else {
+					int *dtmp = (int *)g_uvcd_iq;
+					memcpy(iq_addr, g_uvcd_iq, FW_IQ_SIZE);
+					hal_video_load_iq((voe_cpy_t)hal_voe_cpy, (int *)g_uvcd_iq, __voe_code_start__);
+					video_dprintf(VIDEO_LOG_MSG, "[%s] Load user IQ.size:%d 0x%X,	0x%X 0x%X 0x%X.\r\n", __FUNCTION__, *dtmp, *dtmp, dtmp[1], dtmp[2], dtmp[3]);
+				}
+			} else {
+				video_dprintf(VIDEO_LOG_MSG, "[%s] uvcd iq is null.\r\n", __FUNCTION__);
+			}
+			hal_video_load_sensor((voe_cpy_t)hal_voe_cpy, (int *)sensor_addr, __voe_code_start__);
+#else
+			res = sd_load_iq_sensor(TUNING_IQ, iq_buf);
+			if (res < 0) {
+				video_dprintf(VIDEO_LOG_MSG, "Use the original IQ\r\n");
+			} else {
+				iq_addr = iq_buf;
+			}
+			res = sd_load_iq_sensor(TUNING_SENSOR, sensor_buf);
+			if (res < 0) {
+				video_dprintf(VIDEO_LOG_MSG, "Use the original SENSOR\r\n");
+			} else {
+				sensor_addr = sensor_buf;
+			}
+			hal_video_load_iq((voe_cpy_t)hal_voe_cpy, (int *)iq_addr, __voe_code_start__);
+			hal_video_load_sensor((voe_cpy_t)hal_voe_cpy, (int *)sensor_addr, __voe_code_start__);
+#endif
+#else
+			hal_video_load_iq((voe_cpy_t)hal_voe_cpy, (int *)iq_addr, __voe_code_start__);
+			hal_video_load_sensor((voe_cpy_t)hal_voe_cpy, (int *)sensor_addr, __voe_code_start__);
+#endif
 			video_dprintf(VIDEO_LOG_MSG, "iq timestamp: %04d/%02d/%02d %02d:%02d:%02d\r\n", *(unsigned short *)(iq_addr + 12), iq_addr[14], iq_addr[15], iq_addr[16],
 						  iq_addr[17], *(unsigned short *)(iq_addr + 18));
-			hal_video_load_iq((voe_cpy_t)hal_voe_cpy, iq_addr, __voe_code_start__);
-			hal_video_load_sensor((voe_cpy_t)hal_voe_cpy, sensor_addr, __voe_code_start__);
 		}
 
 		if (voe_fw_reload == 1) {
-			video_load_fw(isp_boot->fcs_voe_fw_addr);
+			hal_status_t v_ret;
+			video_reld_img_ctrl_info_t reld_info;
+			v_ret = hal_sys_get_video_img_ld_offset(&reld_info, VIDEO_VOE_OFFSET);
+			if (HAL_OK == v_ret) {
+				video_dprintf(VIDEO_LOG_INF, "fwin(%x),enc_en(%x),VOE_OFFSET = 0x%x\r\n", reld_info.fwin, reld_info.enc_en, reld_info.data_start_offset);
+				video_load_fw(reld_info.data_start_offset);
+			} else {
+				video_dprintf(VIDEO_LOG_ERR, "It can't load the VOE fw\r\n");
+			}
 			voe_fw_reload = 0;
 		}
 
 		video_init_peri();
 
-		voe_info.voe_heap_addr = malloc(voe_info.voe_heap_size);
+		voe_info.voe_heap_addr = (uint32_t)malloc(voe_info.voe_heap_size);
 		dcache_clean_invalidate_by_addr((uint32_t *)voe_info.voe_heap_addr, voe_info.voe_heap_size);
-		res = hal_video_init(voe_info.voe_heap_addr, voe_info.voe_heap_size);
+		res = hal_video_init((uint32_t *)voe_info.voe_heap_addr, voe_info.voe_heap_size);
 		if (res != OK) {
 			video_dprintf(VIDEO_LOG_ERR, "hal_video_init fail\n");
 			return NULL;
@@ -951,11 +1137,18 @@ hal_video_adapter_t *video_init(int iq_start_addr, int sensor_start_addr)
 
 	}
 	if (isp_boot->fcs_status == 1 && isp_boot->fcs_setting_done == 0) {
+		unsigned char *iq_addr = NULL;
+		iq_addr = video_load_iq(iq_start_addr);
+		video_dprintf(VIDEO_LOG_MSG, "iq timestamp: %04d/%02d/%02d %02d:%02d:%02d\r\n", *(unsigned short *)(iq_addr + 12), iq_addr[14], iq_addr[15], iq_addr[16],
+					  iq_addr[17], *(unsigned short *)(iq_addr + 18));
 		voe_info.voe_heap_addr = isp_boot->voe_heap_addr;
 		voe_info.voe_heap_size = isp_boot->voe_heap_size;
 		video_dprintf(VIDEO_LOG_INF, "voe_info.voe_heap_addr %x voe_info.voe_heap_size %x\r\n", voe_info.voe_heap_addr, voe_info.voe_heap_size);
+		video_init_peri();
 	}
-
+#if VIDEO_MPU_VOE_HEAP
+	setup_mpu((uint32_t)voe_info.voe_heap_addr, (uint32_t)voe_info.voe_heap_addr + voe_info.voe_heap_size - 1, 1, 1);
+#endif
 	hal_video_adapter_t *v_adp = hal_video_get_adp();
 
 	return 	v_adp;
@@ -964,8 +1157,8 @@ hal_video_adapter_t *video_init(int iq_start_addr, int sensor_start_addr)
 void *video_deinit(void)
 {
 	if (hal_voe_ready() == OK) {
-		if ((voe_info.voe_heap_addr) != NULL) {
-			free(voe_info.voe_heap_addr);
+		if ((void *)(voe_info.voe_heap_addr) != NULL) {
+			video_buf_release();
 		}
 
 		video_deinit_peri();
@@ -986,9 +1179,9 @@ void voe_set_iq_sensor_fw(int id)
 {
 	extern int __voe_code_start__[];
 	unsigned int p_fcs_data, p_iq_data, p_sensor_data = 0;
-	p_fcs_data    = (uint8_t *)(isp_boot->p_fcs_ld_info.fcs_hdr_start + (isp_boot->p_fcs_ld_info.sensor_set[id].fcs_data_offset));
-	p_iq_data     = (uint8_t *)(p_fcs_data + (isp_boot->p_fcs_ld_info.sensor_set[id].iq_start_addr));
-	p_sensor_data = (uint8_t *)(p_fcs_data + (isp_boot->p_fcs_ld_info.sensor_set[id].sensor_start_addr));
+	p_fcs_data    = (int)(isp_boot->p_fcs_ld_info.fcs_hdr_start + (isp_boot->p_fcs_ld_info.sensor_set[id].fcs_data_offset));
+	p_iq_data     = (int)(p_fcs_data + (isp_boot->p_fcs_ld_info.sensor_set[id].iq_start_addr));
+	p_sensor_data = (int)(p_fcs_data + (isp_boot->p_fcs_ld_info.sensor_set[id].sensor_start_addr));
 	video_dprintf(VIDEO_LOG_INF, "ch %d p_fcs_data %x p_sensor_data %x\r\n", id, p_iq_data, p_sensor_data);
 
 	unsigned char *iq_addr = NULL;
@@ -997,36 +1190,91 @@ void voe_set_iq_sensor_fw(int id)
 	sensor_addr = video_load_sensor(p_sensor_data);
 	if (iq_addr == NULL || sensor_addr == NULL) {
 		video_dprintf(VIDEO_LOG_ERR, "It can't allocate the buffer\r\n");
-		return NULL;
+		return;
 	}
+#if CONFIG_TUNING
+#ifdef TUNING_USB_MODE
+	if (g_uvcd_iq) {
+		if (g_uvcd_iq[0] == 0 && g_uvcd_iq[1] == 0) {
+			int *dtmp = (int *)iq_addr;
+			memcpy(g_uvcd_iq, iq_addr, FW_IQ_SIZE);
+			hal_video_load_iq((voe_cpy_t)hal_voe_cpy, (int *)iq_addr, __voe_code_start__);
+			video_dprintf(VIDEO_LOG_MSG, "[%s] Load default IQ.size:%d 0x%X,	0x%X 0x%X 0x%X.\r\n", __FUNCTION__, *dtmp, *dtmp, dtmp[1], dtmp[2], dtmp[3]);
+		} else {
+			int *dtmp = (int *)g_uvcd_iq;
+			memcpy(iq_addr, g_uvcd_iq, FW_IQ_SIZE);
+			hal_video_load_iq((voe_cpy_t)hal_voe_cpy, dtmp, __voe_code_start__);
+			video_dprintf(VIDEO_LOG_MSG, "[%s] Load user IQ.size:%d 0x%X,	0x%X 0x%X 0x%X.\r\n", __FUNCTION__, *dtmp, *dtmp, dtmp[1], dtmp[2], dtmp[3]);
+		}
+		//hal_video_load_iq((voe_cpy_t)hal_voe_cpy, iq_addr, __voe_code_start__);
+	} else {
+		video_dprintf(VIDEO_LOG_MSG, "[%s] uvcd iq is null.\r\n", __FUNCTION__);
+	}
+	hal_video_load_sensor((voe_cpy_t)hal_voe_cpy, (int *)sensor_addr, __voe_code_start__);
+#else
+	int res = 0;
+	res = sd_load_iq_sensor(TUNING_IQ, iq_buf);
+	if (res < 0) {
+		video_dprintf(VIDEO_LOG_MSG, "Use the original IQ\r\n");
+	} else {
+		iq_addr = iq_buf;
+	}
+	res = sd_load_iq_sensor(TUNING_SENSOR, sensor_buf);
+	if (res < 0) {
+		video_dprintf(VIDEO_LOG_MSG, "Use the original SENSOR\r\n");
+	} else {
+		sensor_addr = sensor_buf;
+	}
+	hal_video_load_iq((voe_cpy_t)hal_voe_cpy, (int *)iq_addr, __voe_code_start__);
+	hal_video_load_sensor((voe_cpy_t)hal_voe_cpy, (int *)sensor_addr, __voe_code_start__);
+#endif
+#else
+	hal_video_load_iq((voe_cpy_t)hal_voe_cpy, (int *)iq_addr, __voe_code_start__);
+	hal_video_load_sensor((voe_cpy_t)hal_voe_cpy, (int *)sensor_addr, __voe_code_start__);
+#endif
 	video_dprintf(VIDEO_LOG_MSG, "iq timestamp: %04d/%02d/%02d %02d:%02d:%02d\r\n", *(unsigned short *)(iq_addr + 12), iq_addr[14], iq_addr[15], iq_addr[16],
 				  iq_addr[17], *(unsigned short *)(iq_addr + 18));
-	hal_video_load_iq((voe_cpy_t)hal_voe_cpy, iq_addr, __voe_code_start__);
-	hal_video_load_sensor((voe_cpy_t)hal_voe_cpy, sensor_addr, __voe_code_start__);
 }
 
 int voe_get_sensor_info(int id, int *iq_data, int *sensor_data)
 {
 	int ret = 0;
-	unsigned int p_fcs_data, p_iq_data, p_sensor_data = 0;
+	int sensor_id = id + 1;
+#if NONE_FCS_MODE
+	video_get_fw_isp_info();
+#endif
+
 	if (id >= isp_boot->p_fcs_ld_info.multi_fcs_cnt) {
 		ret = -1;
 		video_dprintf(VIDEO_LOG_ERR, "sensor id is bigger than isp_boot->p_fcs_ld_info.multi_fcs_cnt\r\n");
 	} else {
-		p_fcs_data    = (uint8_t *)(isp_boot->p_fcs_ld_info.fcs_hdr_start + (isp_boot->p_fcs_ld_info.sensor_set[id].fcs_data_offset));
-		p_iq_data     = (uint8_t *)(p_fcs_data + (isp_boot->p_fcs_ld_info.sensor_set[id].iq_start_addr));
-		p_sensor_data = (uint8_t *)(p_fcs_data + (isp_boot->p_fcs_ld_info.sensor_set[id].sensor_start_addr));
-		video_dprintf(VIDEO_LOG_INF, "ch %d p_fcs_data %x p_sensor_data %x\r\n", id, p_iq_data, p_sensor_data);
-		*iq_data = p_iq_data;
-		*sensor_data = p_sensor_data;
+		hal_status_t v_ret;
+		video_reld_img_ctrl_info_t reld_info;
+		for (int i = 1; i <= 2; i++) {
+			v_ret = hal_sys_get_video_img_ld_offset(&reld_info, ((sensor_id << 4) | i));
+			if (HAL_OK == v_ret) {
+				if (VIDEO_ISP_SENSOR_IQ == i) {
+					video_dprintf(VIDEO_LOG_MSG, "fwin(%x),enc_en(%x),IQ_OFFSET = 0x%x\r\n ", reld_info.fwin, reld_info.enc_en, reld_info.data_start_offset);
+					*iq_data = reld_info.data_start_offset;
+				} else if (VIDEO_ISP_SENSOR_DATA == i) {
+					video_dprintf(VIDEO_LOG_MSG, "fwin(%x),enc_en(%x),SENSOR_OFFSET = 0x%x\r\n", reld_info.fwin, reld_info.enc_en, reld_info.data_start_offset);
+					*sensor_data  = reld_info.data_start_offset;
+				}
+			} else {
+				video_dprintf(VIDEO_LOG_ERR, "It can't load the sensor fw\r\n");
+				goto EXIT;
+			}
+		}
+		video_dprintf(VIDEO_LOG_MSG, "sensor id %d iq_data %x sensor_data %x\r\n", id, *iq_data, *sensor_data);
 	}
+EXIT:
 	return ret;
 }
 
 void voe_dump_isp_info(void)
 {
 	//video_boot_stream_t *isp_boot = (video_boot_stream_t *)bl4voe_shared.data;
-	int i = 0;
+	int i, j = 0;
 	unsigned int p_fcs_data, p_iq_data, p_sensor_data = 0;
 	video_dprintf(VIDEO_LOG_INF, "isp_boot->fcs_voe_fw_addr %x\r\n", isp_boot->fcs_voe_fw_addr);
 	video_dprintf(VIDEO_LOG_INF, "fcs_id %d\r\n", isp_boot->p_fcs_ld_info.fcs_id);
@@ -1035,6 +1283,7 @@ void voe_dump_isp_info(void)
 	video_dprintf(VIDEO_LOG_INF, "version %d\r\n", isp_boot->p_fcs_ld_info.version);
 	video_dprintf(VIDEO_LOG_INF, "wait_km_init_timeout_us %d\r\n", isp_boot->p_fcs_ld_info.wait_km_init_timeout_us);
 	video_dprintf(VIDEO_LOG_INF, "fcs_hdr_start %x\r\n", isp_boot->p_fcs_ld_info.fcs_hdr_start);
+	//video_dprintf(VIDEO_LOG_INF, "ispiq_img_offset %x\r\n", isp_boot->p_fcs_ld_info.ispiq_img_offset);
 	for (i = 0; i < isp_boot->p_fcs_ld_info.multi_fcs_cnt; i++) {
 		video_dprintf(VIDEO_LOG_INF, "sesnor %d fcs_data_size %x\r\n", i, isp_boot->p_fcs_ld_info.sensor_set[i].fcs_data_size);
 		video_dprintf(VIDEO_LOG_INF, "sesnor %d fcs_data_offset %x\r\n", i, isp_boot->p_fcs_ld_info.sensor_set[i].fcs_data_offset);
@@ -1042,12 +1291,33 @@ void voe_dump_isp_info(void)
 		video_dprintf(VIDEO_LOG_INF, "sesnor %d iq_data_size %x\r\n", i, isp_boot->p_fcs_ld_info.sensor_set[i].iq_data_size);
 		video_dprintf(VIDEO_LOG_INF, "sesnor %d sensor_start_addr %x\r\n", i, isp_boot->p_fcs_ld_info.sensor_set[i].sensor_start_addr);
 		video_dprintf(VIDEO_LOG_INF, "sesnor %d sensor_data_size %x\r\n", i, isp_boot->p_fcs_ld_info.sensor_set[i].sensor_data_size);
-		p_fcs_data    = (uint8_t *)(isp_boot->p_fcs_ld_info.fcs_hdr_start + (isp_boot->p_fcs_ld_info.sensor_set[i].fcs_data_offset));
-		p_iq_data     = (uint8_t *)(p_fcs_data + (isp_boot->p_fcs_ld_info.sensor_set[i].iq_start_addr));
-		p_sensor_data = (uint8_t *)(p_fcs_data + (isp_boot->p_fcs_ld_info.sensor_set[i].sensor_start_addr));
+		p_fcs_data    = (unsigned int)(isp_boot->p_fcs_ld_info.fcs_hdr_start + (isp_boot->p_fcs_ld_info.sensor_set[i].fcs_data_offset));
+		p_iq_data     = (unsigned int)(p_fcs_data + (isp_boot->p_fcs_ld_info.sensor_set[i].iq_start_addr));
+		p_sensor_data = (unsigned int)(p_fcs_data + (isp_boot->p_fcs_ld_info.sensor_set[i].sensor_start_addr));
 		video_dprintf(VIDEO_LOG_INF, "sensor %d p_fcs_data %x p_iq_data %x p_sensor_data %x\r\n", i, p_fcs_data, p_iq_data, p_sensor_data);
 	}
 	video_dprintf(VIDEO_LOG_INF, "isp_boot->fcs_voe_fw_addr %x\r\n", isp_boot->fcs_voe_fw_addr);
+
+	hal_status_t v_ret;
+	video_reld_img_ctrl_info_t reld_info;
+	for (j = 0; j < isp_boot->p_fcs_ld_info.multi_fcs_cnt; j++) {
+		video_dprintf(VIDEO_LOG_MSG, "sensor_set(%d)\r\n", j);
+		for (i = 1; i <= 2; i++) {
+			v_ret = hal_sys_get_video_img_ld_offset(&reld_info, ((j << 4) | i));
+			if (HAL_OK == v_ret) {
+				if (VIDEO_ISP_SENSOR_IQ == i) {
+					video_dprintf(VIDEO_LOG_MSG, "fwin(%x),enc_en(%x),IQ_OFFSET = 0x%x\r\n ", reld_info.fwin, reld_info.enc_en, reld_info.data_start_offset);
+				} else if (VIDEO_ISP_SENSOR_DATA == i) {
+					video_dprintf(VIDEO_LOG_MSG, "fwin(%x),enc_en(%x),SENSOR_OFFSET = 0x%x\r\n", reld_info.fwin, reld_info.enc_en, reld_info.data_start_offset);
+				}
+			}
+		}
+	}
+	v_ret = hal_sys_get_video_img_ld_offset(&reld_info, VIDEO_VOE_OFFSET);
+	if (HAL_OK == v_ret) {
+		video_dprintf(VIDEO_LOG_MSG, "fwin(%x),enc_en(%x),VOE_OFFSET = 0x%x\r\n", reld_info.fwin, reld_info.enc_en, reld_info.data_start_offset);
+	}
+
 }
 
 void voe_t2ff_prealloc(void)
@@ -1061,7 +1331,7 @@ void voe_t2ff_prealloc(void)
 			video_dprintf(VIDEO_LOG_ERR, "The voe buffer is not enough\r\n");
 			while (1);
 		} else {
-			ptr = (char *) pvPortInsertPreAlloc((void *)isp_boot->voe_heap_addr, isp_boot->voe_heap_size);
+			ptr = (unsigned char *) pvPortInsertPreAlloc((void *)isp_boot->voe_heap_addr, isp_boot->voe_heap_size);
 			if (ptr == NULL) {
 				video_dprintf(VIDEO_LOG_ERR, "It can't be allocate buffer\r\n");
 				while (1);
@@ -1130,7 +1400,7 @@ int video_fcs_write_sensor_id(int SensorName)
 		return -1;
 	} else {
 		if (SensorName != isp_boot->p_fcs_ld_info.fcs_id) {
-			video_set_fcs_id(SensorName);
+			//video_set_fcs_id(SensorName);//Don't support now
 		}
 		return 0;
 	}
@@ -1162,21 +1432,31 @@ int video_load(int sensor_index)
 {
 
 
-	if (!hal_voe_fcs_check_OK()) {
-		// Enable ISP PWR
-		hal_gpio_init(&sensor_en_gpio, PIN_A5);
-		hal_gpio_set_dir(&sensor_en_gpio, GPIO_OUT);
-		hal_gpio_write(&sensor_en_gpio, 1);
-	}
+	/* 	if (!hal_voe_fcs_check_OK()) {
+			// Enable ISP PWR
+			hal_gpio_init(&sensor_en_gpio, PIN_A5);
+			hal_gpio_set_dir(&sensor_en_gpio, GPIO_OUT);
+			hal_gpio_write(&sensor_en_gpio, 1);
+		} */
 	video_dprintf(VIDEO_LOG_INF, "sensor_index %d\r\n", sensor_index);
 	voe_set_iq_sensor_fw(sensor_index);
 	// extern int _binary_voe_bin_start[];			// VOE binary address
 	// extern int __voe_code_start__[];
 	// int *voe_bin_addr = (int *)isp_boot->fcs_voe_fw_addr;
-	video_load_fw(isp_boot->fcs_voe_fw_addr);
+	hal_status_t v_ret;
+	video_reld_img_ctrl_info_t reld_info;
+	v_ret = hal_sys_get_video_img_ld_offset(&reld_info, VIDEO_VOE_OFFSET);
+	if (HAL_OK == v_ret) {
+		video_dprintf(VIDEO_LOG_INF, "fwin(%x),enc_en(%x),VOE_OFFSET = 0x%x\r\n", reld_info.fwin, reld_info.enc_en, reld_info.data_start_offset);
+		video_load_fw(reld_info.data_start_offset);
+	} else {
+		video_dprintf(VIDEO_LOG_ERR, "It can't find the voe fw\r\n");
+		return -1;
+	}
 	//hal_video_load_fw((voe_cpy_t)hal_voe_cpy, _binary_voe_bin_start, __voe_code_start__);
 	video_dprintf(VIDEO_LOG_INF, "voe_info.voe_heap_addr %x voe_heap_size %x\r\n", voe_info.voe_heap_addr, voe_info.voe_heap_size);
-	if (hal_video_init(voe_info.voe_heap_addr, voe_info.voe_heap_size) != OK) {
+	video_init_peri();
+	if (hal_video_init((uint32_t *)voe_info.voe_heap_addr, voe_info.voe_heap_size) != OK) {
 		video_dprintf(VIDEO_LOG_ERR, "hal_video_init fail\n");
 		return -1;
 	}
@@ -1189,10 +1469,12 @@ void *video_fw_deinit(void)
 	if (hal_voe_ready() == OK) {
 		video_dprintf(VIDEO_LOG_INF, "video_deinit\r\n");
 		hal_gpio_write(&sensor_en_gpio, 0);
+
+		video_deinit_peri();
 		hal_video_deinit();
 		// Disable ISP PWR
 		//hal_gpio_write(&sensor_en_gpio, 0);
-		hal_gpio_deinit(&sensor_en_gpio);
+		//hal_gpio_deinit(&sensor_en_gpio);
 		rtw_mdelay_os(50);
 	}
 	return NULL;
@@ -1209,74 +1491,70 @@ int video_reset_fw(int ch, int id)
 
 unsigned char *video_load_iq(unsigned int iq_start_addr)
 {
-	int offset = 0;
+	unsigned int iq_full_size = 0;
 	void *fp = NULL;
-	unsigned int iq_full_size;
-
-	fp = pfw_open("ISP_IQ", 0);
-	if (!fp) {
-		video_dprintf(VIDEO_LOG_ERR, "It cannot open file ISP_IQ\n\r");
-		goto EXIT;
+	if (hal_sys_get_ld_fw_idx() == FW_1) {
+		fp = pfw_open("FW1", M_RAW);
+		if (!fp) {
+			video_dprintf(VIDEO_LOG_ERR, "cannot open file FW1\n\r");
+			return NULL;
+		}
+	} else if (hal_sys_get_ld_fw_idx() == FW_2) {
+		fp = pfw_open("FW2", M_RAW);
+		if (!fp) {
+			video_dprintf(VIDEO_LOG_ERR, "cannot open file FW2\n\r");
+			return NULL;
+		}
+	} else {
+		return NULL;
 	}
-	if (sys_get_boot_sel() == 0) { // NOR
-		offset = (u32)iq_start_addr - isp_boot->p_fcs_ld_info.fcs_hdr_start;
-	} else if (sys_get_boot_sel() == 1) { // NAND
-		offset = (u32)iq_start_addr - VOE_NAND_FLASH_OFFSET;
-	}
 
-	iq_full_size = 65536;//default iq size
-	pfw_seek(fp, offset, SEEK_SET);
+	iq_full_size = FW_IQ_SIZE;//default iq size
+	pfw_seek(fp, iq_start_addr, SEEK_SET);
 	pfw_read(fp, iq_buf, iq_full_size);
 	pfw_close(fp);
 	return iq_buf;
-EXIT:
-	if (fp) {
-		pfw_close(fp);
-	}
-	return NULL;
 }
 
 unsigned char *video_load_sensor(unsigned int sensor_start_addr)
 {
-	int offset = 0;
+	unsigned int sensor_size = 0;
 	void *fp = NULL;
-	unsigned int sensor_size;
+	if (hal_sys_get_ld_fw_idx() == FW_1) {
+		fp = pfw_open("FW1", M_RAW);
+		if (!fp) {
+			video_dprintf(VIDEO_LOG_ERR, "cannot open file FW1\n\r");
+			return NULL;
+		}
+	} else if (hal_sys_get_ld_fw_idx() == FW_2) {
+		fp = pfw_open("FW2", M_RAW);
+		if (!fp) {
+			video_dprintf(VIDEO_LOG_ERR, "cannot open file FW2\n\r");
+			return NULL;
+		}
+	} else {
+		return NULL;
+	}
 
-	fp = pfw_open("ISP_IQ", 0);
-	if (!fp) {
-		video_dprintf(VIDEO_LOG_ERR, "It cannot open file ISP_IQ\n\r");
-		goto EXIT;
-	}
-	if (sys_get_boot_sel() == 0) { // NOR
-		offset = (u32)sensor_start_addr - isp_boot->p_fcs_ld_info.fcs_hdr_start;
-	} else if (sys_get_boot_sel() == 1) { // NAND
-		offset = (u32)sensor_start_addr - VOE_NAND_FLASH_OFFSET;
-	}
-	sensor_size = 4096;//Default size for sensor fw
-	pfw_seek(fp, offset, SEEK_SET);
+	sensor_size = FW_SENSOR_SIZE;//Default size for sensor fw
+	pfw_seek(fp, sensor_start_addr, SEEK_SET);
 	pfw_read(fp, sensor_buf, sensor_size);
 	pfw_close(fp);
 	return sensor_buf;
-EXIT:
-	if (fp) {
-		pfw_close(fp);
-	}
-	return NULL;
 }
 
 int video_load_fw(unsigned int sensor_start_addr)
 {
-	int offset = 0;
 	unsigned int fw_size = 0;
 	void *fp = NULL;
 	if (hal_sys_get_ld_fw_idx() == FW_1) {
-		fp = pfw_open("FW1", 0);
+		fp = pfw_open("FW1", M_RAW);
 		if (!fp) {
 			video_dprintf(VIDEO_LOG_ERR, "cannot open file FW1\n\r");
 			return -1;
 		}
 	} else if (hal_sys_get_ld_fw_idx() == FW_2) {
-		fp = pfw_open("FW2", 0);
+		fp = pfw_open("FW2", M_RAW);
 		if (!fp) {
 			video_dprintf(VIDEO_LOG_ERR, "cannot open file FW2\n\r");
 			return -1;
@@ -1284,29 +1562,181 @@ int video_load_fw(unsigned int sensor_start_addr)
 	} else {
 		return -1;
 	}
-	if (sys_get_boot_sel() == 0) { // NOR;
-		offset = (u32)sensor_start_addr - hal_sys_get_ld_fw_img_dev_nor_offset() - 0x1080;
-	} else if (sys_get_boot_sel() == 1) { // NAND
-		offset = (u32)sensor_start_addr - VOE_NAND_FLASH_OFFSET;
-	}
-	fw_size = 600 * 1024; //Default voe fw size
+
+	fw_size = FW_VOE_SIZE; //Default voe fw size
 	unsigned char *buf = malloc(fw_size);
 	if (buf == NULL) {
 		video_dprintf(VIDEO_LOG_ERR, "It don't the enough memory %s\r\n", __FUNCTION__);
 		return -1;
 	}
-	pfw_seek(fp, offset, SEEK_SET);
+	pfw_seek(fp, sensor_start_addr, SEEK_SET);
 	pfw_read(fp, buf, fw_size);
 	pfw_close(fp);
 	dcache_clean_invalidate_by_addr((uint32_t *)buf, (int32_t)fw_size);
-	hal_video_load_fw((voe_cpy_t)hal_voe_cpy, buf, __voe_code_start__);
+	hal_video_load_fw((voe_cpy_t)hal_voe_cpy, (int *)buf, __voe_code_start__);
 	if (buf) {
 		free(buf);
 	}
 	return 0;
 }
 
-void video_get_fcs_info(video_boot_stream_t **isp_fcs_info)
+void video_get_fcs_info(void *isp_fcs_info)
 {
-	*isp_fcs_info = isp_boot;
+	video_boot_stream_t **_isp_fcs_info = (video_boot_stream_t **)isp_fcs_info;
+	*_isp_fcs_info = isp_boot;
 }
+
+void video_set_fcs_queue_info(int start_time, int end_time)
+{
+	fcs_queue_start_time = start_time;
+	fcs_queue_end_time = end_time;
+	video_dprintf(VIDEO_LOG_INF, "fcs start_time %d end_time %d\r\n", fcs_queue_start_time, fcs_queue_end_time);
+}
+
+void video_get_fcs_queue_info(int *start_time, int *end_time)
+{
+	*start_time = fcs_queue_start_time;
+	*end_time = fcs_queue_end_time;
+	video_dprintf(VIDEO_LOG_INF, "fcs start_time %d end_time %d\r\n", fcs_queue_start_time, fcs_queue_end_time);
+}
+
+#if NONE_FCS_MODE
+#define FW_IMG_ISP_ID           0xCAA6
+#define FW_IMG_VOE_ID           0xC2A7
+
+int video_get_fw_isp_info(void)
+{
+	if (voe_load_sesnor_init) {
+		return 0;
+	}
+
+	isp_multi_fcs_hdr_t multi_fcs_hdr;
+	int psensor_set_start = 0;
+	iq_info_t iq_start;
+	sensor_info_t sensor_start;
+	uint32_t i;
+	fw_img_hdr_t img_hdr;
+	int ptr_isp_multi_sensor, p_data = 0;
+	ptr_isp_multi_sensor = 0X1080;
+
+	isp_multi_fcs_ld_info_t *p_isp_sensor_ld_info = malloc(sizeof(isp_multi_fcs_ld_info_t));
+
+	memset(p_isp_sensor_ld_info, 0x00, sizeof(isp_multi_fcs_ld_info_t));
+
+	int offset = 0;
+	void *fp = NULL;
+
+	printf("video_get_fw_isp_info\r\n");
+
+	if (hal_sys_get_ld_fw_idx() == FW_1) {
+		fp = pfw_open("FW1", M_RAW);
+		if (!fp) {
+			video_dprintf(VIDEO_LOG_ERR, "cannot open file FW1\n\r");
+			goto EXIT;
+		}
+	} else if (hal_sys_get_ld_fw_idx() == FW_2) {
+		fp = pfw_open("FW2", M_RAW);
+		if (!fp) {
+			video_dprintf(VIDEO_LOG_ERR, "cannot open file FW2\n\r");
+			goto EXIT;
+		}
+	} else {
+		goto EXIT;
+	}
+
+
+	if (!fp) {
+		video_dprintf(VIDEO_LOG_ERR, "It cannot open file FW\n\r");
+		goto EXIT;
+	}
+
+
+	pfw_seek(fp, 0X1000, SEEK_SET);
+
+	pfw_read(fp, &img_hdr, sizeof(fw_img_hdr_t));
+
+	video_dprintf(VIDEO_LOG_INF, "imglen %x nxtoffset %x type_id %x nxt_type_id %x\r\n", img_hdr.imglen, img_hdr.nxtoffset, img_hdr.type_id, img_hdr.nxt_type_id);
+
+	if (img_hdr.type_id == FW_IMG_ISP_ID) {
+		pfw_seek(fp, 0X2100, SEEK_SET);//Skip the manifest
+		pfw_read(fp, &multi_fcs_hdr, sizeof(isp_multi_fcs_hdr_t));
+		offset = 0x1080;
+		p_isp_sensor_ld_info->fcs_hdr_start = 0x1080 * 2;
+		p_isp_sensor_ld_info->magic         = (multi_fcs_hdr.magic);
+		p_isp_sensor_ld_info->version       = (multi_fcs_hdr.version);
+		p_isp_sensor_ld_info->multi_fcs_cnt = (multi_fcs_hdr.multi_fcs_cnt);
+		p_isp_sensor_ld_info->wait_km_init_timeout_us = (multi_fcs_hdr.wait_km_init_timeout_us);
+	} else {
+		video_dprintf(VIDEO_LOG_ERR, "It IS NOT FW_IMG_ISP_ID\r\n");
+		goto EXIT;
+	}
+
+
+	for (i = 0; i < MULTI_FCS_MAX; i++) {
+		if ((MULTI_SENSOR_SET_INVALID_PTN1 != (multi_fcs_hdr.fcs_data_offset[i])) &&
+			(MULTI_SENSOR_SET_INVALID_PTN2 != (multi_fcs_hdr.fcs_data_offset[i])) &&
+			(MULTI_SENSOR_SET_INVALID_PTN1 != (multi_fcs_hdr.fcs_data_size[i])) &&
+			(MULTI_SENSOR_SET_INVALID_PTN2 != (multi_fcs_hdr.fcs_data_size[i]))) {
+			p_isp_sensor_ld_info->sensor_set[i].fcs_data_offset = (multi_fcs_hdr.fcs_data_offset[i]);
+			p_isp_sensor_ld_info->sensor_set[i].fcs_data_size   = (multi_fcs_hdr.fcs_data_size[i]);
+			video_dprintf(VIDEO_LOG_INF, "index %d fcs_data_offset %x fcs_data_size %x\r\n", i, p_isp_sensor_ld_info->sensor_set[i].fcs_data_offset,
+						  p_isp_sensor_ld_info->sensor_set[i].fcs_data_size);
+			psensor_set_start = (ptr_isp_multi_sensor + (multi_fcs_hdr.fcs_data_offset[i]));
+			p_data = (psensor_set_start + (multi_fcs_hdr.fcs_data_size[i])) + offset;
+			video_dprintf(VIDEO_LOG_INF, "index %d p_data %x\r\n", i, p_data);
+			//load_op_f(&iq_start, p_data, sizeof(iq_info_t));
+			pfw_seek(fp, p_data, SEEK_SET);
+			pfw_read(fp, &iq_start, sizeof(iq_info_t));
+			p_data = (psensor_set_start + (multi_fcs_hdr.fcs_data_size[i]) + sizeof(iq_info_t)) + offset;
+			video_dprintf(VIDEO_LOG_INF, "index %d p_data %x\r\n", i, p_data);
+			//load_op_f(&sensor_start, p_data, sizeof(sensor_info_t));
+			pfw_seek(fp, p_data, SEEK_SET);
+			pfw_read(fp, &sensor_start, sizeof(sensor_info_t));
+			p_isp_sensor_ld_info->sensor_set[i].iq_start_addr     = iq_start.start_addr;
+			p_isp_sensor_ld_info->sensor_set[i].iq_data_size      = iq_start.data_size;
+			p_isp_sensor_ld_info->sensor_set[i].sensor_start_addr = sensor_start.start_addr;
+			p_isp_sensor_ld_info->sensor_set[i].sensor_data_size  = sensor_start.data_size;
+			video_dprintf(VIDEO_LOG_INF, "index %d iq_start_addr %x iq_data_size %x\r\n", i, p_isp_sensor_ld_info->sensor_set[i].iq_start_addr,
+						  p_isp_sensor_ld_info->sensor_set[i].iq_data_size);
+			video_dprintf(VIDEO_LOG_INF, "index %d sensor_start_addr %x sensor_data_size %x\r\n", i, p_isp_sensor_ld_info->sensor_set[i].sensor_start_addr,
+						  p_isp_sensor_ld_info->sensor_set[i].sensor_data_size);
+		}
+	}
+	int p_fcs_data, p_iq_data, p_sensor_data = 0;
+	for (i = 0; i < multi_fcs_hdr.multi_fcs_cnt; i++) {
+		video_dprintf(VIDEO_LOG_INF, "sesnor %d fcs_data_size %x\r\n", i, p_isp_sensor_ld_info->sensor_set[i].fcs_data_size);
+		video_dprintf(VIDEO_LOG_INF, "sesnor %d fcs_data_offset %x\r\n", i, p_isp_sensor_ld_info->sensor_set[i].fcs_data_offset);
+		video_dprintf(VIDEO_LOG_INF, "sesnor %d iq_start_addr %x\r\n", i, p_isp_sensor_ld_info->sensor_set[i].iq_start_addr);
+		video_dprintf(VIDEO_LOG_INF, "sesnor %d iq_data_size %x\r\n", i, p_isp_sensor_ld_info->sensor_set[i].iq_data_size);
+		video_dprintf(VIDEO_LOG_INF, "sesnor %d sensor_start_addr %x\r\n", i, p_isp_sensor_ld_info->sensor_set[i].sensor_start_addr);
+		video_dprintf(VIDEO_LOG_INF, "sesnor %d sensor_data_size %x\r\n", i, p_isp_sensor_ld_info->sensor_set[i].sensor_data_size);
+		p_fcs_data    = 0x1080 + 0x1080 + (p_isp_sensor_ld_info->sensor_set[i].fcs_data_offset);
+		p_iq_data     = p_fcs_data + (p_isp_sensor_ld_info->sensor_set[i].iq_start_addr);
+		p_sensor_data = p_fcs_data + (p_isp_sensor_ld_info->sensor_set[i].sensor_start_addr);
+		video_dprintf(VIDEO_LOG_INF, "sensor %d p_fcs_data %x p_iq_data %x p_sensor_data %x\r\n", i, p_fcs_data, p_iq_data, p_sensor_data);
+	}
+	/* isp_boot->p_fcs_ld_info.fcs_hdr_start = 0x1080*2;
+	isp_boot->p_fcs_ld_info.multi_fcs_cnt = multi_fcs_hdr.multi_fcs_cnt; */
+	int fcs_id = isp_boot->p_fcs_ld_info.fcs_id;
+	memcpy(&isp_boot->p_fcs_ld_info, p_isp_sensor_ld_info, sizeof(isp_multi_fcs_ld_info_t));
+	isp_boot->p_fcs_ld_info.fcs_id = fcs_id;
+	if (fp) {
+		pfw_close(fp);
+	}
+	if (p_isp_sensor_ld_info) {
+		free(p_isp_sensor_ld_info);
+	}
+
+
+
+	video_dprintf(VIDEO_LOG_INF, "Get the ISP FW location\r\n");
+
+	//voe_dump_isp_info();
+
+	voe_load_sesnor_init = 1;
+
+	return 0;
+EXIT:
+	return -1;
+}
+#endif

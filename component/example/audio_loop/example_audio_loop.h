@@ -5,11 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define USE_DMIC 1
-#define USE_AMIC 2
+#define USE_DMIC_L		 	1
+#define USE_DMIC_R			2
+#define USE_DMIC_STEREO		3
+#define USE_AMIC			4
 
 #define CONFIG_MIC_TYPE USE_AMIC
 
-void example_audio_loop();
+void example_audio_loop(void);
 
 #endif

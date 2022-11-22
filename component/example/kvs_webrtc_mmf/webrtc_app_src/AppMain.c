@@ -38,7 +38,7 @@ INT32 WebRTCAppMain(PAppMediaSrc pAppMediaSrc)
 	}
 	endTime = GETTIME();
 
-	DLOGD("The bootup time of webrtc is %"PRIu64" ms", (endTime - startTime) / HUNDREDS_OF_NANOS_IN_A_MILLISECOND);
+	DLOGI("The bootup time of webrtc is %"PRIu64" ms", (endTime - startTime) / HUNDREDS_OF_NANOS_IN_A_MILLISECOND);
 
 	// Checking for termination
 	retStatus = pollApp(pAppConfiguration);

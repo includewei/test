@@ -8,4 +8,5 @@
 void app_example(void)
 {
 	example_ssl_server();
+	//example_ssl_server_mebdtls_dtls();
 }

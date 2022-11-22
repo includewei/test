@@ -138,6 +138,9 @@ at the top of this file. */
 .extern uxTimerIncrementsForOneTick /* size_t type so 32-bit on 32-bit core and 64-bits on 64-bit core. */
 .extern xISRStackTop
 .extern portasmHANDLE_INTERRUPT
+#if( configENABLE_FPU == 1 )
+.extern prvSetupFPU
+#endif
 #if( portUSING_MPU_WRAPPERS == 1 )
 	.extern vPortPmpSwitch
 	.extern xPmpInfo
@@ -288,7 +291,8 @@ at the top of this file. */
 	csrr    t0, mstatus
 	li      t1, 0x6000 /* get mstatus.FS */
 	and     t0,t0,t1
-	bne     t0,t1,1f /* save float point registers if dirty*/
+	li      t1, 0x2000
+	beq     t0,t1,1f /* save fpu if it's not in init state */
 	frcsr   t0
 	store_f f0, 32 * portWORD_SIZE( sp )
 	store_f f1, 33 * portWORD_SIZE( sp )
@@ -332,9 +336,10 @@ at the top of this file. */
 .macro portRESTORE_BaseReg
 #if defined( __riscv_flen )
 	csrr    t0, mstatus
-	li      t1, 0x6000
-	and     t0,t0,t1      /* get mstatus.FS bit */
-	bne     t0, t1, 1f    /* FS = 0x3, dirty status, restore fpu*/
+	li      t1, 0x6000 /* get mstatus.FS */
+	and     t0,t0,t1
+	li      t1, 0x2000
+	beq     t0,t1,1f /* restore fpu if it's not in init state */
 	load_f f0, 32 * portWORD_SIZE( sp )
 	load_f f1, 33 * portWORD_SIZE( sp )
 	load_f f2, 34 * portWORD_SIZE( sp )
@@ -575,9 +580,9 @@ clint_7:
 	li   t0, 23
 	j    vector_handler
 clint_8:
-        csrrw t0, mscratch, t0
-        li   t0, 24
-        j    vector_handler
+	csrrw t0, mscratch, t0
+	li   t0, 24
+	j    vector_handler
 clint_9:
 	csrrw t0, mscratch, t0
 	li   t0, 25
@@ -624,13 +629,13 @@ machine_timer_handler:
 	store_x a1, 0( sp )                             /* Asynch so save unmodified exception return address. */
 
 #if defined(configNESTED_IRQ) && (configNESTED_IRQ == 1)
-        load_x  t1, Nested_IRQ_LEVEL
-        beqz    t1, store_to_tcb                 /* Store sp to TCB if it is the first level */
-        slli    t1, t1, 0x02                     /* t1 = t1 << 2 */
-        la      t0, NestedIRQ_Context
-        add     t0, t0, t1
-        store_x sp, -4( t0 )                     /* Store sp to NestedIRQ_Context */
-        j vec_timer_handle
+	load_x  t1, Nested_IRQ_LEVEL
+	beqz    t1, store_to_tcb                 /* Store sp to TCB if it is the first level */
+	slli    t1, t1, 0x02                     /* t1 = t1 << 2 */
+	la      t0, NestedIRQ_Context
+	add     t0, t0, t1
+	store_x sp, -4( t0 )                     /* Store sp to NestedIRQ_Context */
+	j vec_timer_handle
 store_to_tcb:
 #endif /* configNESTED_IRQ */
 
@@ -663,18 +668,18 @@ vector_handler:
 	store_x a1, 0( sp )                             /* Asynch so save unmodified exception return address. */
 
 #if defined(configNESTED_IRQ) && (configNESTED_IRQ == 1)
-        load_x  t1, Nested_IRQ_LEVEL
-        beqz    t1, vec_store_to_tcb             /* Store sp to TCB if it is the first level */
-        slli    t1, t1, 0x02                     /* t1 = t1 << 2 */
-        la      t0, NestedIRQ_Context
-        add     t0, t0, t1
-        store_x sp, -4( t0 )                     /* Store sp to NestedIRQ_Context */
-        j vec_handle
+	load_x  t1, Nested_IRQ_LEVEL
+	beqz    t1, vec_store_to_tcb             /* Store sp to TCB if it is the first level */
+	slli    t1, t1, 0x02                     /* t1 = t1 << 2 */
+	la      t0, NestedIRQ_Context
+	add     t0, t0, t1
+	store_x sp, -4( t0 )                     /* Store sp to NestedIRQ_Context */
+	j vec_handle
 vec_store_to_tcb:
 #endif /* configNESTED_IRQ */
 
-        load_x  t0, pxCurrentTCB                 /* Load pxCurrentTCB. */
-        store_x  sp, 0( t0 )                     /* Write sp to first TCB member. */
+	load_x  t0, pxCurrentTCB                 /* Load pxCurrentTCB. */
+	store_x  sp, 0( t0 )                     /* Write sp to first TCB member. */
 	load_x  sp, xISRStackTop                 /* Switch to ISR stack before function call. */
 
 vec_handle:
@@ -801,7 +806,7 @@ is_exception:
 	csrr a1, mepc						/* For viewing in the debugger only */
 	csrr a2, mstatus
 	csrr a3, mtval
-        load_x sp, xISRStackTop
+	load_x sp, xISRStackTop
 	j vPortMExceptionHanler
 #else
 _crash_dump:
@@ -815,8 +820,8 @@ _crash_dump:
 	store_x gp, 3*4(sp)      // gp -> x3
 	store_x tp, 4*4(sp)      // tp -> x4
 
-        load_x sp, xISRStackTop
-	jal  crash_dump
+	load_x sp, xISRStackTop
+	jal crash_dump
 	// do crash dump again and again for user can see it anytime
 	//j _exit
 
@@ -858,18 +863,18 @@ handle_asynchronous:
 	store_x a1, 0( sp )					/* Asynch so save unmodified exception return address. */
 
 #if defined(configNESTED_IRQ) && (configNESTED_IRQ == 1)
-        load_x  t1, Nested_IRQ_LEVEL
-        beqz    t1, nonvec_store_to_tcb          /* Store sp to TCB if it is the first level */
-        slli    t1, t1, 0x02                     /* t1 = t1 << 2 */
-        la      t0, NestedIRQ_Context
-        add     t0, t0, t1
-        store_x sp, -4( t0 )                     /* Store sp to NestedIRQ_Context */
-        j nonvec_handle
+	load_x  t1, Nested_IRQ_LEVEL
+	beqz    t1, nonvec_store_to_tcb          /* Store sp to TCB if it is the first level */
+	slli    t1, t1, 0x02                     /* t1 = t1 << 2 */
+	la      t0, NestedIRQ_Context
+	add     t0, t0, t1
+	store_x sp, -4( t0 )                     /* Store sp to NestedIRQ_Context */
+	j nonvec_handle
 nonvec_store_to_tcb:
 #endif /* configNESTED_IRQ */
 
-        load_x  t0, pxCurrentTCB                 /* Load pxCurrentTCB. */
-        store_x sp, 0( t0 )                     /* Write sp to first TCB member. */
+	load_x  t0, pxCurrentTCB                 /* Load pxCurrentTCB. */
+	store_x sp, 0( t0 )                     /* Write sp to first TCB member. */
 	load_x sp, xISRStackTop			/* Switch to ISR stack before function call. */
 
 nonvec_handle:
@@ -884,7 +889,7 @@ nonvec_handle:
 		addi t1, t0, 7					/* 0x8000[]0007 == machine timer interrupt. */
 		bne a0, t1, test_if_external_interrupt
 
-                jal machine_timer_update
+		jal machine_timer_update
 
 		jal xTaskIncrementTick
 		beqz a0, processed_source		/* Don't switch context if incrementing tick didn't unblock a task. */
@@ -908,8 +913,8 @@ as_yet_unhandled:
 processed_source:
 #if defined(configNESTED_IRQ) && (configNESTED_IRQ == 1)
 	load_x  t1, Nested_IRQ_LEVEL
-        beqz    t1, restore_sp_from_tcb
-        slli    t1, t1, 0x02                            /* t1 = t1 << 2 */
+	beqz    t1, restore_sp_from_tcb
+	slli    t1, t1, 0x02                            /* t1 = t1 << 2 */
 	la      t0, NestedIRQ_Context
 	add     t1, t0, t1
 	load_x  sp, -4(t1)
@@ -1035,7 +1040,7 @@ vPortHandleInterrupt:
      and  t2, t1, t2                 // t2 = mcause & 0x7FFFFFFF
 #endif
      add  a0, t2, x0
-     la   a5, plic_interrupt_handler
+     la   a5, plic_interrupt_handler_ram
      jalr a5
 
 vPortHandleInterrupt_Exit:
@@ -1083,15 +1088,15 @@ xPortStartFirstTask:
 	jal vPortPmpSwitch
 # endif
 
-	load_x  x1, 0( sp ) /* Note for starting the scheduler the exception return address is used as the function return address. */
-
 	portasmRESTORE_ADDITIONAL_REGISTERS	/* Defined in freertos_risc_v_chip_specific_extensions.h to restore any registers unique to the RISC-V implementation. */
 
-	load_x  t0, portMStatus_OFFSET( sp )	/* mstatus */
-	ori    t0, t0, 0x08
-	csrrw  x0, mstatus, t0					/* Interrupts enabled from here! */
-
 	portRESTORE_BaseReg
+
+	load_x  t0, portMStatus_OFFSET( sp )    /* mstatus */
+	ori    t0, t0, 0x08
+	csrrw  x0, mstatus, t0                                  /* Interrupts enabled from here! */
+	load_x  t0, 5 * portWORD_SIZE( sp )
+
 	load_x  x1, 0( sp ) /* Note for starting the scheduler the exception return address is used as the function return address. */
 	addi	sp, sp, portCONTEXT_SIZE
 	ret
@@ -1167,8 +1172,9 @@ xPortStartFirstTask:
 .align 3
 .type pxPortInitialiseStack, "function"
 pxPortInitialiseStack:
-
 	csrr t0, mstatus					/* Obtain current mstatus value. */
+	andi t0, t0, ~0x8					/* Ensure interrupts are disabled when the stack is restored within an ISR.  Required when a task is
+											created after the schedulre has been started, otherwise interrupts would be disabled anyway. */
 	addi t1, x0, 0x188					/* Generate the value 0x1880, which are the MPIE and MPP bits to set in mstatus. */
 	slli t1, t1, 4
 	or t0, t0, t1						/* Set MPIE and MPP bits in mstatus value. */
@@ -1187,9 +1193,9 @@ pxPortInitialiseStack:
 	addi a0, a0, -(55 * portWORD_SIZE)
 #else
 #if defined( __riscv_32e ) && ( __riscv_32e == 1 )
-		addi a0, a0, -(6 * portWORD_SIZE)	/* Skip Space for registers x11-x15 to make a0 = stack for X10(a0) */
+	addi a0, a0, -(6 * portWORD_SIZE)	/* Skip Space for registers x11-x15 to make a0 = stack for X10(a0) */
 #else
-		addi a0, a0, -(22 * portWORD_SIZE)	/* Skip Space for registers x11-x31 to make a0 = stack for X10(a0) */
+	addi a0, a0, -(22 * portWORD_SIZE)	/* Skip Space for registers x11-x31 to make a0 = stack for X10(a0) */
 #endif
 #endif
 	store_x a2, 0(a0)					/* Task parameters (pvParameters parameter) goes into register X10/a0 on the stack. */
@@ -1261,6 +1267,52 @@ vPortBackupRegs:
 	store_x ra, 3 * portWORD_SIZE( a1 )
 	jr ra
 
+#if ( configENABLE_FPU == 1 )
+.global vPortBackupfloatRegs
+.type   vPortBackupfloatRegs, %function
+vPortBackupfloatRegs:
+	csrr    t0, mstatus
+	li      t1, 0x6000 /* get mstatus.FS */
+	and     t0,t0,t1
+	bne     t0,t1,1f /* save float point registers if dirty */
+	store_f f0, 0 * portWORD_SIZE( a0 )
+	store_f f1, 1 * portWORD_SIZE( a0 )
+	store_f f2, 2 * portWORD_SIZE( a0 )
+	store_f f3, 3 * portWORD_SIZE( a0 )
+	store_f f4, 4 * portWORD_SIZE( a0 )
+	store_f f5, 5 * portWORD_SIZE( a0 )
+	store_f f6, 6 * portWORD_SIZE( a0 )
+	store_f f7, 7 * portWORD_SIZE( a0 )
+	store_f f8, 8 * portWORD_SIZE( a0 )
+	store_f f9, 9 * portWORD_SIZE( a0 )
+	store_f f10, 10 * portWORD_SIZE( a0 )
+	store_f f11, 11 * portWORD_SIZE( a0 )
+	store_f f12, 12 * portWORD_SIZE( a0 )
+	store_f f13, 13 * portWORD_SIZE( a0 )
+	store_f f14, 14 * portWORD_SIZE( a0 )
+	store_f f15, 15 * portWORD_SIZE( a0 )
+	store_f f16, 16 * portWORD_SIZE( a0 )
+	store_f f17, 17 * portWORD_SIZE( a0 )
+	store_f f18, 18 * portWORD_SIZE( a0 )
+	store_f f19, 19 * portWORD_SIZE( a0 )
+	store_f f20, 20 * portWORD_SIZE( a0 )
+	store_f f21, 21 * portWORD_SIZE( a0 )
+	store_f f22, 22 * portWORD_SIZE( a0 )
+	store_f f23, 23 * portWORD_SIZE( a0 )
+	store_f f24, 24 * portWORD_SIZE( a0 )
+	store_f f25, 25 * portWORD_SIZE( a0 )
+	store_f f26, 26 * portWORD_SIZE( a0 )
+	store_f f27, 27 * portWORD_SIZE( a0 )
+	store_f f28, 28 * portWORD_SIZE( a0 )
+	store_f f29, 29 * portWORD_SIZE( a0 )
+	store_f f30, 30 * portWORD_SIZE( a0 )
+	store_f f31, 31 * portWORD_SIZE( a0 )
+	frcsr   t0
+	store_x t0, 0 * portWORD_SIZE( a1 )
+1:
+	jr ra
+#endif
+
 /*-----------------------------------------------------------*/
 
 /* void vPortBackupRegs( BaseType_t *pxGPRBaseAddr, BaseType_t *pxCSRBaseAddr )
@@ -1314,6 +1366,52 @@ vPortRestoreRegs:
 	load_x ra, 3 * portWORD_SIZE( a1 )
 	jr ra
 
+#if ( configENABLE_FPU == 1 )
+.global vPortRestorefloatRegs
+.type   vPortfloatRestorefloatRegs, %function
+vPortRestorefloatRegs:
+	load_x  t0, 0 * portWORD_SIZE( a2 )        /* get mstatus */
+	li      t1, 0x6000                         /* mstatus.FS */
+	and     t0,t0,t1
+	bne     t0,t1,1f /* restore float point registers if dirty */
+	load_f f0, 0 * portWORD_SIZE( a0 )
+	load_f f1, 1 * portWORD_SIZE( a0 )
+	load_f f2, 2 * portWORD_SIZE( a0 )
+	load_f f3, 3 * portWORD_SIZE( a0 )
+	load_f f4, 4 * portWORD_SIZE( a0 )
+	load_f f5, 5 * portWORD_SIZE( a0 )
+	load_f f6, 6 * portWORD_SIZE( a0 )
+	load_f f7, 7 * portWORD_SIZE( a0 )
+	load_f f8, 8 * portWORD_SIZE( a0 )
+	load_f f9, 9 * portWORD_SIZE( a0 )
+	load_f f10, 10 * portWORD_SIZE( a0 )
+	load_f f11, 11 * portWORD_SIZE( a0 )
+	load_f f12, 12 * portWORD_SIZE( a0 )
+	load_f f13, 13 * portWORD_SIZE( a0 )
+	load_f f14, 14 * portWORD_SIZE( a0 )
+	load_f f15, 15 * portWORD_SIZE( a0 )
+	load_f f16, 16 * portWORD_SIZE( a0 )
+	load_f f17, 17 * portWORD_SIZE( a0 )
+	load_f f18, 18 * portWORD_SIZE( a0 )
+	load_f f19, 19 * portWORD_SIZE( a0 )
+	load_f f20, 20 * portWORD_SIZE( a0 )
+	load_f f21, 21 * portWORD_SIZE( a0 )
+	load_f f22, 22 * portWORD_SIZE( a0 )
+	load_f f23, 23 * portWORD_SIZE( a0 )
+	load_f f24, 24 * portWORD_SIZE( a0 )
+	load_f f25, 25 * portWORD_SIZE( a0 )
+	load_f f26, 26 * portWORD_SIZE( a0 )
+	load_f f27, 27 * portWORD_SIZE( a0 )
+	load_f f28, 28 * portWORD_SIZE( a0 )
+	load_f f29, 29 * portWORD_SIZE( a0 )
+	load_f f30, 30 * portWORD_SIZE( a0 )
+	load_f f31, 31 * portWORD_SIZE( a0 )
+	load_x t0, 0 * portWORD_SIZE( a1 )
+	fscsr t0
+1:
+	jr ra
+#endif
+
 /*-----------------------------------------------------------*/
 
 /* void vPortBackupPmp( BaseType_t *pxPmpBaseAddr )
@@ -1364,7 +1462,7 @@ vPortBackupPmp:
 	csrr t0, pmpcfg3
 	store_x t0, 19 * portWORD_SIZE( a0 )       /* pmpcfg3 */
 #endif
-        jr ra
+	jr ra
 /*-----------------------------------------------------------*/
 
 /* void vPortRestorePmp( BaseType_t *pxPmpBaseAddr )
@@ -1415,4 +1513,4 @@ vPortRestorePmp:
 	load_x t0, 19 * portWORD_SIZE( a0 )        /* pmpcfg3 */
 	csrw pmpcfg3, t0
 #endif
-        jr ra
+	jr ra

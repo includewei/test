@@ -181,7 +181,7 @@ mmf2_video_example_h264_pcmu_array_mp4_init_fail:
 	return;
 }
 
-static char *example = "mmf2_video_example_h264_pcmu_array_mp4_init";
+static const char *example = "mmf2_video_example_h264_pcmu_array_mp4_init";
 static void example_deinit(void)
 {
 	//Pause Linker

@@ -5,6 +5,7 @@
 ******************************************************************************/
 #include "mmf2_link.h"
 #include "mmf2_siso.h"
+#include "mmf2_simo.h"
 #include "mmf2_mimo.h"
 #include "module_video.h"
 #include "module_vipnn.h"
@@ -13,15 +14,19 @@
 #include "module_aac.h"
 #include "module_aad.h"
 #include "module_rtp.h"
+#include "module_md.h"
 #include "module_mp4.h"
+#include "module_facerecog.h"
 #include "mmf2_pro2_video_config.h"
 #include "video_example_media_framework.h"
 #include "log_service.h"
 #include "avcodec.h"
 
-#include "input_image_640x360x3.h"
-#include "model_mbnetssd.h"
-#include "model_yolov3t.h"
+#include "model_yolo.h"
+#include "model_yamnet_s.h"
+#include "model_yamnet.h"
+#include "model_mobilefacenet.h"
+#include "model_scrfd.h"
 
 #include "hal_video.h"
 #include "hal_isp.h"
@@ -37,16 +42,16 @@
 #define V1_FPS 15
 #define V1_GOP 15
 #else
-#define V1_RESOLUTION VIDEO_HD
+#define V1_RESOLUTION VIDEO_FHD
 #define V1_FPS 30
 #define V1_GOP 30
 #endif
-#define V1_BPS 1024*1024
+#define V1_BPS 2*1024*1024
 #define V1_RCMODE 2 // 1: CBR, 2: VBR
 
 //For rtsp
 #define RTSP_CHANNEL 1
-#define RTSP_RESOLUTION VIDEO_FHD
+#define RTSP_RESOLUTION VIDEO_HD
 #define RTSP_FPS 30
 #define RTSP_GOP 30
 #define RTSP_BPS 1*1024*1024
@@ -136,24 +141,13 @@ static rtsp2_params_t rtsp2_a_params = {
 		.a = {
 			.codec_id   = AV_CODEC_ID_MP4A_LATM,
 			.channel    = 1,
-			.samplerate = 8000
+			.samplerate = 16000
 		}
 	}
 };
 
-static audio_params_t audio_params = {
-	.sample_rate = ASR_8KHZ,
-	.word_length = WL_16BIT,
-	.mic_gain    = MIC_0DB,
-	.dmic_l_gain    = DMIC_BOOST_24DB,
-	.dmic_r_gain    = DMIC_BOOST_24DB,
-	.use_mic_type   = USE_AUDIO_AMIC,
-	.channel     = 1,
-	.enable_aec  = 0//1
-};
-
 static aac_params_t aac_params = {
-	.sample_rate = 8000,
+	.sample_rate = 16000,
 	.channel = 1,
 	.bit_length = FAAC_INPUT_16BIT,
 	.output_format = 1,
@@ -164,7 +158,7 @@ static aac_params_t aac_params = {
 };
 
 static aad_params_t aad_rtp_params = {
-	.sample_rate = 8000,
+	.sample_rate = 16000,
 	.channel = 1,
 	.type = TYPE_RTP_RAW
 };
@@ -181,7 +175,7 @@ static mp4_params_t mp4_v1_params = {
 	.gop            = V1_GOP,
 	.width = V1_WIDTH,
 	.height = V1_HEIGHT,
-	.sample_rate = 8000,
+	.sample_rate = 16000,
 	.channel = 1,
 
 	.record_length = 30, //seconds
@@ -192,9 +186,28 @@ static mp4_params_t mp4_v1_params = {
 };
 
 // NN model selction //
-#define MOBILENET_SSD_MODEL     1
-#define YOLO_MODEL              2
-#define USE_NN_MODEL            YOLO_MODEL
+#define ENABLE_NN_FACERECOG   	0   /* fix here: enable NN face detection/recognition */
+#define ENABLE_NN_YOLO       	1   /* fix here: enable NN yolo */
+#define ENABLE_NN_YAMNET       	1   /* fix here: enable NN audio classification */
+#define ENABLE_MD       		0   /* fix here: enable MD */
+
+#if (ENABLE_MD && ENABLE_NN_YOLO)
+#define ENABLE_MD_TRIGGER_YOLO	1
+#else
+#define ENABLE_MD_TRIGGER_YOLO	0
+#endif
+
+#define NN_MODEL_OBJ   	scrfd_fwfs
+#define NN_MODEL2_OBJ   mbfacenet_fwfs
+#define NN_MODEL3_OBJ   yolov4_tiny
+
+#if ENABLE_NN_FACERECOG
+#define NN_WIDTH	576
+#define NN_HEIGHT	320
+#else
+#define NN_WIDTH	416
+#define NN_HEIGHT	416
+#endif
 
 #define NN_CHANNEL 4
 #define NN_RESOLUTION VIDEO_VGA //don't care for NN
@@ -203,20 +216,29 @@ static mp4_params_t mp4_v1_params = {
 #define NN_BPS 1024*1024 //don't care for NN
 #define NN_TYPE VIDEO_RGB
 
-#if (USE_NN_MODEL==MOBILENET_SSD_MODEL)
-#define NN_MODEL_OBJ   mbnetssd_fwfs
-#define NN_WIDTH	300
-#define NN_HEIGHT	300
-static float nn_confidence_thresh = 0.75;
+static float nn_confidence_thresh = 0.5;
 static float nn_nms_thresh = 0.3;
-#elif (USE_NN_MODEL==YOLO_MODEL)
-#define NN_MODEL_OBJ   yolov3_tiny_fwfs
-#define NN_WIDTH	416
-#define NN_HEIGHT	416
-static float nn_confidence_thresh = 0.4;
-static float nn_nms_thresh = 0.3;
+static int desired_class_num = 4;
+static int desired_class_list[] = {0, 2, 5, 7};
+static const char *tag[80] = {"person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light",
+							  "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
+							  "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+							  "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle",
+							  "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
+							  "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed",
+							  "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven",
+							  "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
+							 };
+
+#if USE_SENSOR == SENSOR_GC4653
+#define SENSOR_MAX_WIDTH 2560
+#define SENSOR_MAX_HEIGHT 1440
+#elif USE_SENSOR == SENSOR_JXF51
+#define SENSOR_MAX_WIDTH 1536
+#define SENSOR_MAX_HEIGHT 1536
 #else
-#error Please set model correctly. (YOLO_MODEL, MOBILENET_SSD_MODEL)
+#define SENSOR_MAX_WIDTH 1920
+#define SENSOR_MAX_HEIGHT 1080
 #endif
 
 static video_params_t video_v4_params = {
@@ -229,7 +251,21 @@ static video_params_t video_v4_params = {
 	.fps 			= NN_FPS,
 	.gop 			= NN_GOP,
 	.direct_output 	= 0,
-	.use_static_addr = 1
+	.use_static_addr = 1,
+#if !ENABLE_NN_FACERECOG
+	.use_roi = 1,
+	.roi = {
+		.xmin = 0,
+		.ymin = 0,
+		.xmax = SENSOR_MAX_WIDTH,
+		.ymax = SENSOR_MAX_HEIGHT,
+	}
+#endif
+};
+
+static md_param_t md_param = {
+	.width = NN_WIDTH,
+	.height = NN_HEIGHT
 };
 
 static nn_data_param_t roi_nn = {
@@ -246,8 +282,16 @@ static nn_data_param_t roi_nn = {
 	}
 };
 
+static nn_data_param_t aud_info = {
+	.aud = {
+		.bit_pre_sample = 16,
+		.channel = 1,
+		.sample_rate = 16000
+	}
+};
 
 static void atcmd_userctrl_init(void);
+static void atcmd_frc_init(void *ctx);
 static mm_context_t *video_v1_ctx			= NULL;
 static mm_context_t *video_v2_ctx			= NULL;
 static mm_context_t *rtsp2_v2_ctx			= NULL;
@@ -256,37 +300,57 @@ static mm_context_t *aac_ctx				= NULL;
 static mm_context_t *rtp_ctx				= NULL;
 static mm_context_t *aad_ctx				= NULL;
 static mm_context_t *mp4_ctx				= NULL;
+static mm_context_t *facedet_ctx            = NULL;
+static mm_context_t *facenet_ctx            = NULL;
+static mm_context_t *facerecog_ctx          = NULL;
 
-static mm_siso_t *siso_audio_aac			= NULL;
+static mm_siso_t *siso_audio_aac            = NULL;
+static mm_simo_t *simo_audio_aac_audclas    = NULL;
 static mm_mimo_t *mimo_2v_1a_rtsp_mp4		= NULL;
 static mm_siso_t *siso_rtp_aad				= NULL;
 static mm_siso_t *siso_aad_audio			= NULL;
 
 static mm_context_t *video_rgb_ctx			= NULL;
-static mm_context_t *vipnn_ctx            	= NULL;
+static mm_context_t *objdet_ctx            	= NULL;
+static mm_context_t *md_ctx            		= NULL;
+static mm_context_t *audclas_ctx           	= NULL;
 
 static mm_siso_t *siso_video_vipnn         	= NULL;
+static mm_siso_t *siso_md_nn         		= NULL;
+static mm_siso_t *siso_facedet_facenet      = NULL;
+static mm_siso_t *siso_facenet_facerecog    = NULL;
+static mm_simo_t *simo_video_yolo_facedet   = NULL;
 
-
+static audio_params_t audio_params;
+static TX_cfg_t audio_tx_cfg;
+static RX_cfg_t audio_rx_cfg;
+static void audio_params_customized_setting(void)
+{
+	memcpy(&audio_params, &default_audio_params, sizeof(audio_params_t));
+	audio_params.sample_rate = ASR_16KHZ;  // NN audio classification require 16K
+	mm_module_ctrl(audio_ctx, CMD_AUDIO_GET_TXASP_PARAM, (int)&audio_tx_cfg);
+	mm_module_ctrl(audio_ctx, CMD_AUDIO_GET_RXASP_PARAM, (int)&audio_rx_cfg);
+	audio_rx_cfg.aec_cfg.AEC_EN = 1;    // enable AEC, NS, AGC for Ameba-->Peer
+	audio_rx_cfg.ns_cfg.NS_EN = 0;      // enable AEC, NS, AGC for Ameba-->Peer
+	audio_tx_cfg.agc_cfg.AGC_EN = 1;    // enable AGC/DRC for Peer-->Ameba
+	mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_TXASP_PARAM, (int)&audio_tx_cfg);
+	mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_RXASP_PARAM, (int)&audio_rx_cfg);
+	//audio_params.enable_aec = 1;  // enable AEC, NS, AGC for Ameba-->Peer
+	//audio_params.enable_ns = 0;   // disable MS for Peer-->Ameba
+	//audio_params.enable_agc = 1;  // enable AGC/DRC for Peer-->Ameba
+}
 
 //--------------------------------------------
 // Draw Rect
 //--------------------------------------------
-#include "../../../../component/video/osd2/isp_osd_example.h"
-
-static struct result_frame g_results;
-static obj_ctrl_s sw_object;
-static int nn_class[10] = {0};
-static int nn_score[10] = {0};
-static int desired_class_num = 4;
-static int desired_class_list[] = {1, 57, 63, 68};
-static char *tag[4] = { "person", "chair", "tv", "cell phone"};
+#include "osd_render.h"
+#define LIMIT(x, lower, upper) if(x<lower) x=lower; else if(x>upper) x=upper;
 
 static int check_in_list(int class_indx)
 {
 	for (int i = 0; i < desired_class_num; i++) {
 		if (class_indx == desired_class_list[i]) {
-			return i;
+			return class_indx;
 		}
 	}
 	return -1;
@@ -305,104 +369,84 @@ static void nn_set_object(void *p, void *img_param)
 	int im_h = RTSP_HEIGHT;
 	int im_w = RTSP_WIDTH;
 
-	// float ratio_h = (float)im_h / (float)im->img.height;
-	// float ratio_w = (float)im_w / (float)im->img.width;
-	// int roi_h = (int)((im->img.roi.ymax - im->img.roi.ymin) * ratio_h);
-	// int roi_w = (int)((im->img.roi.xmax - im->img.roi.xmin) * ratio_w);
-	// int roi_x = (int)(im->img.roi.xmin * ratio_w);	// 0
-	// int roi_y = (int)(im->img.roi.ymin * ratio_h);	// 0
-
+#if !ENABLE_NN_FACERECOG
 	float ratio_h = (float)im_h / (float)im->img.height;
+	float ratio_w = (float)im_w / (float)im->img.width;
 	int roi_h = (int)((im->img.roi.ymax - im->img.roi.ymin) * ratio_h);
-	int roi_w = (int)((im->img.roi.xmax - im->img.roi.xmin) * ratio_h);
-	int roi_x = (int)(im->img.roi.xmin * ratio_h + (im_w - roi_w) / 2);
+	int roi_w = (int)((im->img.roi.xmax - im->img.roi.xmin) * ratio_w);
+	int roi_x = (int)(im->img.roi.xmin * ratio_w);
 	int roi_y = (int)(im->img.roi.ymin * ratio_h);
+#else
+	float ratio_w = (float)im_w / (float)im->img.width;
+	int roi_h = (int)((im->img.roi.ymax - im->img.roi.ymin) * ratio_w);
+	int roi_w = (int)((im->img.roi.xmax - im->img.roi.xmin) * ratio_w);
+	int roi_x = (int)(im->img.roi.xmin * ratio_w);
+	int roi_y = (int)(im->img.roi.ymin * ratio_w + (im_h - roi_h) / 2);
+#endif
 
-	printf("object num = %d\r\n", res->obj_num);
-	if (res->obj_num > 0) {
-		sw_object.objDetectNumber = 0;
-		for (i = 0; i < res->obj_num; i++) {
-			int obj_class = (int)res->result[6 * i ];
-			if (sw_object.objDetectNumber == 10) {
-				break;
-			}
-			//printf("obj_class = %d\r\n",obj_class);
+	// printf("object num = %d\r\n", res->obj_num);
+	canvas_clean_all(RTSP_CHANNEL, 0);
+	for (i = 0; i < res->obj_num; i++) {
+		int obj_class = (int)res->result[6 * i ];
 
-			int class_id = check_in_list(obj_class + 1); //show class in desired_class_list
-			//int class_id = obj_class; //coco label
-			if (class_id != -1) {
-				int ind = sw_object.objDetectNumber;
-				sw_object.objTopY[ind] = (int)(res->result[6 * i + 3] * roi_h) + roi_y;
-				if (sw_object.objTopY[ind] < 0) {
-					sw_object.objTopY[ind] = 0;
-				} else if (sw_object.objTopY[ind] >= im_h) {
-					sw_object.objTopY[ind] = im_h - 1;
-				}
+		//printf("obj_class = %d\r\n",obj_class);
 
-				sw_object.objTopX[ind] = (int)(res->result[6 * i + 2] * roi_w) + roi_x;
-				if (sw_object.objTopX[ind] < 0) {
-					sw_object.objTopX[ind] = 0;
-				} else if (sw_object.objTopX[ind] >= im_w) {
-					sw_object.objTopX[ind] = im_w - 1;
-				}
+		int class_id = check_in_list(obj_class); //show class in desired_class_list
+		//int class_id = obj_class; //coco label
+		if (class_id != -1) {
+			int xmin = (int)(res->result[6 * i + 2] * roi_w) + roi_x;
+			int ymin = (int)(res->result[6 * i + 3] * roi_h) + roi_y;
+			int xmax = (int)(res->result[6 * i + 4] * roi_w) + roi_x;
+			int ymax = (int)(res->result[6 * i + 5] * roi_h) + roi_y;
+			LIMIT(xmin, 0, im_w)
+			LIMIT(xmax, 0, im_w)
+			LIMIT(ymin, 0, im_h)
+			LIMIT(ymax, 0, im_h)
+			printf("%d,c%d:%d %d %d %d\n\r", i, class_id, xmin, ymin, xmax, ymax);
+			canvas_set_rect(RTSP_CHANNEL, 0, xmin, ymin, xmax, ymax, 3, COLOR_WHITE);
+			char text_str[20];
+			snprintf(text_str, sizeof(text_str), "%s %d", tag[class_id], (int)(res->result[6 * i + 1 ] * 100));
+			canvas_set_text(RTSP_CHANNEL, 0, xmin, ymin - 32, text_str, COLOR_CYAN);
+		}
+	}
+	canvas_update(RTSP_CHANNEL, 0);
 
-				sw_object.objBottomY[ind] = (int)(res->result[6 * i + 5] * roi_h) + roi_y;
-				if (sw_object.objBottomY[ind] < 0) {
-					sw_object.objBottomY[ind] = 0;
-				} else if (sw_object.objBottomY[ind] >= im_h) {
-					sw_object.objBottomY[ind] = im_h - 1;
-				}
+}
+#if ENABLE_MD_TRIGGER_YOLO
+static int no_motion_count = 0;
+static void md_process(void *md_result)
+{
+	return;
+	int *md_res = (int *) md_result;
 
-				sw_object.objBottomX[ind] = (int)(res->result[6 * i + 4] * roi_w) + roi_x;
-				if (sw_object.objBottomX[ind] < 0) {
-					sw_object.objBottomX[ind] = 0;
-				} else if (sw_object.objBottomX[ind] >= im_w) {
-					sw_object.objBottomX[ind] = im_w - 1;
-				}
-				nn_class[ind] = class_id;
-				nn_score[ind] = (int)(res->result[6 * i + 1 ] * 100);
-				sw_object.objDetectNumber++;
-				printf("%d,c%d:%d %d %d %d\n\r", i, (int)res->result[6 * i ], (int)sw_object.objTopX[ind], (int)sw_object.objTopY[ind], (int)sw_object.objBottomX[ind],
-					   (int)sw_object.objBottomY[ind]);
+	int motion = 0, j, k;
+	for (j = 0; j < md_row; j++) {
+		for (k = 0; k < md_col; k++) {
+			//printf("%d ", md_res[j * col + k]);
+			if (md_res[j * md_col + k]) {
+				motion = 1;
 			}
 		}
+		//printf("\r\n");
+	}
+	//printf("\r\n");
+	//printf("\r\n");
+
+	if (motion) {
+		printf("Motion Detected\r\n");
+		no_motion_count = 0;
 	} else {
-		sw_object.objDetectNumber = 0;
+		no_motion_count++;
 	}
 
-	int osd_ready2draw = osd_get_status();
-	if (osd_ready2draw == 1) {
-		//printf("sw_object.objDetectNumber = %d\r\n", sw_object.objDetectNumber);
-		g_results.num = sw_object.objDetectNumber;
-		if (sw_object.objDetectNumber > RECT_NUM) {
-			g_results.num = RECT_NUM;
-		}
-
-		for (i = 0; i < RECT_NUM; i++) {
-			if (i < g_results.num) {
-				g_results.obj[i].idx = i;
-				g_results.obj[i].class = nn_class[i];
-				g_results.obj[i].score = nn_score[i];
-				g_results.obj[i].left = sw_object.objTopX[i];
-				g_results.obj[i].top = sw_object.objTopY[i];
-				g_results.obj[i].right = sw_object.objBottomX[i];
-				g_results.obj[i].bottom = sw_object.objBottomY[i];
-
-			} else {
-				g_results.obj[i].idx = i;
-				g_results.obj[i].class = 0;
-				g_results.obj[i].score = 0;
-				g_results.obj[i].left = 0;
-				g_results.obj[i].top = 0;
-				g_results.obj[i].right = 0;
-				g_results.obj[i].bottom = 0;
-			}
-			//printf("num=%d  %d, %d, %d, %d.\r\n", g_results.num, g_results.obj[i].left, g_results.obj[i].right, g_results.obj[i].top, g_results.obj[i].bottom);
-		}
-		osd_update_rect_result(g_results);
+	//clear nn result when no motion
+	if (no_motion_count > 2) {
+		canvas_clean_all(RTSP_CHANNEL, 0);
+		canvas_update(RTSP_CHANNEL, 0);
 	}
 
 }
+#endif
 
 void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 {
@@ -419,7 +463,7 @@ void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 	video_v1_ctx = mm_module_open(&video_module);
 	if (video_v1_ctx) {
 		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v1_params);
-		mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, V1_FPS);
+		mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, V1_FPS * 8);
 		mm_module_ctrl(video_v1_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
 	} else {
 		printf("video open fail\n\r");
@@ -430,10 +474,10 @@ void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 	video_v2_ctx = mm_module_open(&video_module);
 	if (video_v2_ctx) {
 		mm_module_ctrl(video_v2_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v2_params);
-		mm_module_ctrl(video_v2_ctx, MM_CMD_SET_QUEUE_LEN, RTSP_FPS);
+		mm_module_ctrl(video_v2_ctx, MM_CMD_SET_QUEUE_LEN, RTSP_FPS * 8);
 		mm_module_ctrl(video_v2_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
 	} else {
-		rt_printf("video open fail\n\r");
+		printf("video open fail\n\r");
 		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
 	}
 
@@ -444,7 +488,7 @@ void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 		mm_module_ctrl(mp4_ctx, CMD_MP4_LOOP_MODE, 0);
 		mm_module_ctrl(mp4_ctx, CMD_MP4_START, mp4_v1_params.record_file_num);
 	} else {
-		rt_printf("MP4 open fail\n\r");
+		printf("MP4 open fail\n\r");
 		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
 	}
 
@@ -452,12 +496,13 @@ void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 	//--------------Audio --------------
 	audio_ctx = mm_module_open(&audio_module);
 	if (audio_ctx) {
+		audio_params_customized_setting();
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_PARAMS, (int)&audio_params);
 		mm_module_ctrl(audio_ctx, MM_CMD_SET_QUEUE_LEN, 6);
 		mm_module_ctrl(audio_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_APPLY, 0);
 	} else {
-		rt_printf("audio open fail\n\r");
+		printf("audio open fail\n\r");
 		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
 	}
 
@@ -470,7 +515,7 @@ void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 		mm_module_ctrl(aac_ctx, CMD_AAC_INIT_MEM_POOL, 0);
 		mm_module_ctrl(aac_ctx, CMD_AAC_APPLY, 0);
 	} else {
-		rt_printf("AAC open fail\n\r");
+		printf("AAC open fail\n\r");
 		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
 	}
 
@@ -486,7 +531,7 @@ void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 		mm_module_ctrl(rtsp2_v2_ctx, CMD_RTSP2_SET_APPLY, 0);
 		mm_module_ctrl(rtsp2_v2_ctx, CMD_RTSP2_SET_STREAMMING, ON);
 	} else {
-		rt_printf("RTSP2 open fail\n\r");
+		printf("RTSP2 open fail\n\r");
 		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
 	}
 
@@ -499,33 +544,157 @@ void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 		printf("video open fail\n\r");
 		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
 	}
+#if ENABLE_NN_YOLO
+	// VIPNN - YOLO
+	objdet_ctx = mm_module_open(&vipnn_module);
+	if (objdet_ctx) {
+		mm_module_ctrl(objdet_ctx, CMD_VIPNN_SET_MODEL, (int)&NN_MODEL3_OBJ);
+		mm_module_ctrl(objdet_ctx, CMD_VIPNN_SET_IN_PARAMS, (int)&roi_nn);
+		mm_module_ctrl(objdet_ctx, CMD_VIPNN_SET_DISPPOST, (int)nn_set_object);
+		mm_module_ctrl(objdet_ctx, CMD_VIPNN_SET_CONFIDENCE_THRES, (int)&nn_confidence_thresh);
+		mm_module_ctrl(objdet_ctx, CMD_VIPNN_SET_NMS_THRES, (int)&nn_nms_thresh);
+		//mm_module_ctrl(objdet_ctx, MM_CMD_SET_DATAGROUP, MM_GROUP_END);
+		mm_module_ctrl(objdet_ctx, CMD_VIPNN_APPLY, 0);
+	} else {
+		printf("VIPNN_OBJDET open fail\n\r");
+		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
+	}
+	printf("VIPNN_OBJDET opened\n\r");
+#endif
 
-	// VIPNN
-	vipnn_ctx = mm_module_open(&vipnn_module);
-	if (vipnn_ctx) {
-		mm_module_ctrl(vipnn_ctx, CMD_VIPNN_SET_MODEL, (int)&NN_MODEL_OBJ);
-		mm_module_ctrl(vipnn_ctx, CMD_VIPNN_SET_IN_PARAMS, (int)&roi_nn);
-		mm_module_ctrl(vipnn_ctx, CMD_VIPNN_SET_DISPPOST, (int)nn_set_object);
-		mm_module_ctrl(vipnn_ctx, CMD_VIPNN_SET_CONFIDENCE_THRES, (int)&nn_confidence_thresh);
-		mm_module_ctrl(vipnn_ctx, CMD_VIPNN_SET_NMS_THRES, (int)&nn_nms_thresh);
-		mm_module_ctrl(vipnn_ctx, CMD_VIPNN_APPLY, 0);
+#if ENABLE_MD
+
+	motion_detect_threshold_t md_thr = {
+		.Tbase = 2,
+		.Tlum = 3
+	};
+	/*
+	int md_mask [16 * 16] = {
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+	};*/
+
+	md_ctx  = mm_module_open(&md_module);
+	if (md_ctx) {
+		mm_module_ctrl(md_ctx, CMD_MD_SET_PARAMS, (int)&md_param);
+		mm_module_ctrl(md_ctx, CMD_MD_SET_MD_THRESHOLD, (int)&md_thr);
+		//mm_module_ctrl(md_ctx, CMD_MD_SET_MD_MASK, (int)&md_mask);
+#if ENABLE_MD_TRIGGER_YOLO
+		mm_module_ctrl(md_ctx, CMD_MD_SET_DISPPOST, (int)md_process);
+		mm_module_ctrl(md_ctx, CMD_MD_SET_TRIG_BLK, -1); //md always trigger nn
+		mm_module_ctrl(md_ctx, CMD_MD_SET_OUTPUT, 1);  //enable module output
+		//mm_module_ctrl(md_ctx, MM_CMD_SET_DATAGROUP, MM_GROUP_START);
+		mm_module_ctrl(md_ctx, MM_CMD_SET_QUEUE_LEN, 1);
+		mm_module_ctrl(md_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
+#endif
+	} else {
+		printf("md_ctx open fail\n\r");
+		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
+	}
+#endif
+
+#if ENABLE_NN_YAMNET
+	// VIPNN - YAMNET
+	audclas_ctx = mm_module_open(&vipnn_module);
+	if (audclas_ctx) {
+		mm_module_ctrl(audclas_ctx, CMD_VIPNN_SET_MODEL, (int)&yamnet_s);
+		mm_module_ctrl(audclas_ctx, CMD_VIPNN_SET_IN_PARAMS, (int)&aud_info);
+		mm_module_ctrl(audclas_ctx, CMD_VIPNN_SET_DISPPOST, (int)0);
+		mm_module_ctrl(audclas_ctx, CMD_VIPNN_APPLY, 0);
+	} else {
+		printf("VIPNN_AUD open fail\n\r");
+		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
+	}
+	printf("VIPNN_AUD opened\n\r");
+#endif
+
+#if ENABLE_NN_FACERECOG
+	// VIPNN - FACE DETECTION MODEL
+	facedet_ctx = mm_module_open(&vipnn_module);
+	if (facedet_ctx) {
+		mm_module_ctrl(facedet_ctx, CMD_VIPNN_SET_MODEL, (int)&NN_MODEL_OBJ);
+		mm_module_ctrl(facedet_ctx, CMD_VIPNN_SET_IN_PARAMS, (int)&roi_nn);
+		mm_module_ctrl(facedet_ctx, CMD_VIPNN_SET_OUTPUT, 1);		// output
+		mm_module_ctrl(facedet_ctx, MM_CMD_SET_QUEUE_LEN, 1);
+		mm_module_ctrl(facedet_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
+
+		mm_module_ctrl(facedet_ctx, CMD_VIPNN_APPLY, 0);
 	} else {
 		printf("VIPNN open fail\n\r");
 		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
 	}
 	printf("VIPNN opened\n\r");
 
+	// VIPNN - FACE RECOGNITION MODEL
+	facenet_ctx = mm_module_open(&vipnn_module);
+	if (facenet_ctx) {
+		mm_module_ctrl(facenet_ctx, CMD_VIPNN_SET_MODEL, (int)&NN_MODEL2_OBJ);
+		mm_module_ctrl(facenet_ctx, CMD_VIPNN_SET_CASCADE, 2);		// this module is cascade mode
+
+		mm_module_ctrl(facenet_ctx, CMD_VIPNN_SET_OUTPUT, 1);		// output
+		mm_module_ctrl(facenet_ctx, MM_CMD_SET_QUEUE_LEN, 1);
+		mm_module_ctrl(facenet_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
+
+		mm_module_ctrl(facenet_ctx, CMD_VIPNN_APPLY, 0);
+	} else {
+		printf("VIPNN2 open fail\n\r");
+		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
+	}
+	printf("VIPNN2 opened\n\r");
+
+	// FACERECOG
+	facerecog_ctx = mm_module_open(&facerecog_module);
+	if (facerecog_ctx) {
+		mm_module_ctrl(facerecog_ctx, CMD_FRC_SET_THRES100, 99);  // 99/100 = 0.99 --> set a value to get lowest FP rate
+		mm_module_ctrl(facerecog_ctx, CMD_FRC_SET_OSD_DRAW, (int)NULL);  //face_draw_object
+	} else {
+		printf("FACERECOG open fail\n\r");
+		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
+	}
+	printf("FACERECOG opened\n\r");
+
+	atcmd_frc_init(facerecog_ctx);
+#endif
+
 	//--------------Link---------------------------
+#if ENABLE_NN_YAMNET
+	simo_audio_aac_audclas = simo_create();
+	if (simo_audio_aac_audclas) {
+		simo_ctrl(simo_audio_aac_audclas, MMIC_CMD_ADD_INPUT, (uint32_t)audio_ctx, 0);
+		simo_ctrl(simo_audio_aac_audclas, MMIC_CMD_ADD_OUTPUT0, (uint32_t)aac_ctx, 0);
+		simo_ctrl(simo_audio_aac_audclas, MMIC_CMD_ADD_OUTPUT1, (uint32_t)audclas_ctx, 0);
+		simo_start(simo_audio_aac_audclas);
+	} else {
+		printf("simo_audio_aac_audclas open fail\n\r");
+		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
+	}
+	printf("simo_audio_aac_audclas started\n\r");
+#else
 	siso_audio_aac = siso_create();
 	if (siso_audio_aac) {
 		siso_ctrl(siso_audio_aac, MMIC_CMD_ADD_INPUT, (uint32_t)audio_ctx, 0);
 		siso_ctrl(siso_audio_aac, MMIC_CMD_ADD_OUTPUT, (uint32_t)aac_ctx, 0);
 		siso_start(siso_audio_aac);
 	} else {
-		rt_printf("siso1 open fail\n\r");
+		printf("siso_audio_aac open fail\n\r");
 		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
 	}
-	rt_printf("siso started\n\r");
+	printf("siso_audio_aac started\n\r");
+#endif
 
 	mimo_2v_1a_rtsp_mp4 = mimo_create();
 	if (mimo_2v_1a_rtsp_mp4) {
@@ -539,12 +708,67 @@ void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 		mimo_ctrl(mimo_2v_1a_rtsp_mp4, MMIC_CMD_ADD_OUTPUT1, (uint32_t)rtsp2_v2_ctx, MMIC_DEP_INPUT1 | MMIC_DEP_INPUT2);
 		mimo_start(mimo_2v_1a_rtsp_mp4);
 	} else {
-		rt_printf("mimo open fail\n\r");
+		printf("mimo open fail\n\r");
 		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
 	}
-	rt_printf("mimo started\n\r");
+	printf("mimo started\n\r");
 	mm_module_ctrl(video_v1_ctx, CMD_VIDEO_APPLY, V1_CHANNEL);	// start channel 0
 	mm_module_ctrl(video_v2_ctx, CMD_VIDEO_APPLY, RTSP_CHANNEL);// start channel 1
+
+#if (ENABLE_NN_FACERECOG && (ENABLE_NN_YOLO || ENABLE_MD))
+	siso_facenet_facerecog = siso_create();
+	if (siso_facenet_facerecog) {
+#if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
+		siso_ctrl(siso_facenet_facerecog, MMIC_CMD_SET_SECURE_CONTEXT, 1, 0);
+#endif
+		siso_ctrl(siso_facenet_facerecog, MMIC_CMD_ADD_INPUT, (uint32_t)facenet_ctx, 0);
+		siso_ctrl(siso_facenet_facerecog, MMIC_CMD_ADD_OUTPUT, (uint32_t)facerecog_ctx, 0);
+		siso_ctrl(siso_facenet_facerecog, MMIC_CMD_SET_TASKNANE, (uint32_t)"ss_fn_fr", 0);
+		siso_start(siso_facenet_facerecog);
+	} else {
+		printf("siso_facenet_facerecog open fail\n\r");
+		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
+	}
+	printf("siso_facenet_facerecog started\n\r");
+
+	siso_facedet_facenet = siso_create();
+	if (siso_facedet_facenet) {
+#if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
+		siso_ctrl(siso_facedet_facenet, MMIC_CMD_SET_SECURE_CONTEXT, 1, 0);
+#endif
+		siso_ctrl(siso_facedet_facenet, MMIC_CMD_ADD_INPUT, (uint32_t)facedet_ctx, 0);
+		siso_ctrl(siso_facedet_facenet, MMIC_CMD_ADD_OUTPUT, (uint32_t)facenet_ctx, 0);
+		siso_ctrl(siso_facedet_facenet, MMIC_CMD_SET_TASKNANE, (uint32_t)"ss_fd_fn", 0);
+		siso_start(siso_facedet_facenet);
+	} else {
+		printf("siso_facedet_facenet open fail\n\r");
+		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
+	}
+	printf("siso_facedet_facenet started\n\r");
+
+	simo_video_yolo_facedet = simo_create();
+	if (simo_video_yolo_facedet) {
+
+#if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
+		simo_ctrl(simo_video_yolo_facedet, MMIC_CMD_SET_SECURE_CONTEXT, 1, 0);
+#endif
+		simo_ctrl(simo_video_yolo_facedet, MMIC_CMD_ADD_INPUT, (uint32_t)video_rgb_ctx, 0);
+		simo_ctrl(simo_video_yolo_facedet, MMIC_CMD_SET_STACKSIZE, (uint32_t)1024 * 64, 0);
+		simo_ctrl(simo_video_yolo_facedet, MMIC_CMD_SET_TASKPRIORITY, 3, 0);
+		simo_ctrl(simo_video_yolo_facedet, MMIC_CMD_ADD_OUTPUT0, (uint32_t)facedet_ctx, 0);
+#if ENABLE_MD
+		simo_ctrl(simo_video_yolo_facedet, MMIC_CMD_ADD_OUTPUT1, (uint32_t)md_ctx, 0);
+#else
+		simo_ctrl(simo_video_yolo_facedet, MMIC_CMD_ADD_OUTPUT1, (uint32_t)objdet_ctx, 0);
+#endif
+		simo_start(simo_video_yolo_facedet);
+	} else {
+		printf("simo_video_yolo_facedet open fail\n\r");
+		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
+	}
+	printf("simo_video_yolo_facedet started\n\r");
+
+#elif (ENABLE_NN_YOLO || ENABLE_MD)
 
 	siso_video_vipnn = siso_create();
 	if (siso_video_vipnn) {
@@ -554,22 +778,43 @@ void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 		siso_ctrl(siso_video_vipnn, MMIC_CMD_ADD_INPUT, (uint32_t)video_rgb_ctx, 0);
 		siso_ctrl(siso_video_vipnn, MMIC_CMD_SET_STACKSIZE, (uint32_t)1024 * 64, 0);
 		siso_ctrl(siso_video_vipnn, MMIC_CMD_SET_TASKPRIORITY, 3, 0);
-		siso_ctrl(siso_video_vipnn, MMIC_CMD_ADD_OUTPUT, (uint32_t)vipnn_ctx, 0);
+#if ENABLE_MD
+		siso_ctrl(siso_video_vipnn, MMIC_CMD_SET_TASKNANE, (uint32_t)"ss_v4_md", 0);
+		siso_ctrl(siso_video_vipnn, MMIC_CMD_ADD_OUTPUT, (uint32_t)md_ctx, 0);
+#else
+		siso_ctrl(siso_video_vipnn, MMIC_CMD_SET_TASKNANE, (uint32_t)"ss_v4_yolo", 0);
+		siso_ctrl(siso_video_vipnn, MMIC_CMD_ADD_OUTPUT, (uint32_t)objdet_ctx, 0);
+#endif
+		siso_ctrl(siso_video_vipnn, MMIC_CMD_SET_TASKPRIORITY, 3, 0);
 		siso_start(siso_video_vipnn);
 	} else {
 		printf("siso_video_vipnn open fail\n\r");
 		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
 	}
+	printf("siso_video_vipnn started\n\r");
+#endif //(ENABLE_NN_FACERECOG && (ENABLE_NN_YOLO || ENABLE_MD))
 
 	mm_module_ctrl(video_rgb_ctx, CMD_VIDEO_APPLY, NN_CHANNEL);
 	mm_module_ctrl(video_rgb_ctx, CMD_VIDEO_YUV, 2);
 
-
-	printf("siso_video_vipnn started\n\r");
-
-	osd_set_tag(desired_class_num, tag);
-	example_isp_osd(1, RTSP_CHANNEL, 16, 32);
-
+#if ENABLE_MD_TRIGGER_YOLO
+	siso_md_nn = siso_create();
+	if (siso_md_nn) {
+#if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
+		siso_ctrl(siso_md_nn, MMIC_CMD_SET_SECURE_CONTEXT, 1, 0);
+#endif
+		siso_ctrl(siso_md_nn, MMIC_CMD_SET_TASKNANE, (uint32_t)"ss_md_yolo", 0);
+		siso_ctrl(siso_md_nn, MMIC_CMD_ADD_INPUT, (uint32_t)md_ctx, 0);
+		siso_ctrl(siso_md_nn, MMIC_CMD_SET_STACKSIZE, (uint32_t)1024 * 64, 0);
+		siso_ctrl(siso_md_nn, MMIC_CMD_SET_TASKPRIORITY, 3, 0);
+		siso_ctrl(siso_md_nn, MMIC_CMD_ADD_OUTPUT, (uint32_t)objdet_ctx, 0);
+		siso_start(siso_md_nn);
+	} else {
+		printf("siso_md_nn open fail\n\r");
+		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
+	}
+	printf("siso_md_nn started\n\r");
+#endif
 	// RTP audio
 	rtp_ctx = mm_module_open(&rtp_module);
 	if (rtp_ctx) {
@@ -579,7 +824,7 @@ void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 		mm_module_ctrl(rtp_ctx, CMD_RTP_APPLY, 0);
 		mm_module_ctrl(rtp_ctx, CMD_RTP_STREAMING, 1);	// streamming on
 	} else {
-		rt_printf("RTP open fail\n\r");
+		printf("RTP open fail\n\r");
 		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
 	}
 
@@ -590,30 +835,40 @@ void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 		mm_module_ctrl(aad_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
 		mm_module_ctrl(aad_ctx, CMD_AAD_APPLY, 0);
 	} else {
-		rt_printf("AAD open fail\n\r");
+		printf("AAD open fail\n\r");
 		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
 	}
 
 	siso_rtp_aad = siso_create();
 	if (siso_rtp_aad) {
+		siso_ctrl(siso_rtp_aad, MMIC_CMD_SET_TASKNANE, (uint32_t)"ss_rtp_aad", 0);
 		siso_ctrl(siso_rtp_aad, MMIC_CMD_ADD_INPUT, (uint32_t)rtp_ctx, 0);
 		siso_ctrl(siso_rtp_aad, MMIC_CMD_ADD_OUTPUT, (uint32_t)aad_ctx, 0);
 		siso_start(siso_rtp_aad);
 	} else {
-		rt_printf("siso1 open fail\n\r");
+		printf("siso1 open fail\n\r");
 		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
 	}
 
-	rt_printf("siso3 started\n\r");
+	printf("siso3 started\n\r");
 
 	siso_aad_audio = siso_create();
 	if (siso_aad_audio) {
+		siso_ctrl(siso_aad_audio, MMIC_CMD_SET_TASKNANE, (uint32_t)"ss_aad_audio", 0);
 		siso_ctrl(siso_aad_audio, MMIC_CMD_ADD_INPUT, (uint32_t)aad_ctx, 0);
 		siso_ctrl(siso_aad_audio, MMIC_CMD_ADD_OUTPUT, (uint32_t)audio_ctx, 0);
 		siso_start(siso_aad_audio);
 	} else {
-		rt_printf("siso2 open fail\n\r");
+		printf("siso2 open fail\n\r");
 		goto mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail;
+	}
+
+	if (objdet_ctx != NULL && ((vipnn_ctx_t *)objdet_ctx->priv)->disp_postproc != NULL) {
+		int ch_enable[3] = {0, 1, 0};
+		int char_resize_w[3] = {0, 16, 0}, char_resize_h[3] = {0, 32, 0};
+		int ch_width[3] = {0, RTSP_WIDTH, 0}, ch_height[3] = {0, RTSP_HEIGHT, 0};
+		osd_render_dev_init(ch_enable, char_resize_w, char_resize_h);
+		osd_render_task_start(ch_enable, ch_width, ch_height);
 	}
 
 	return;
@@ -622,15 +877,28 @@ mmf2_video_example_joint_test_vipnn_rtsp_mp4_fail:
 	return;
 }
 
-static char *example = "mmf2_video_example_joint_test_vipnn_rtsp_mp4";
+static const char *example = "mmf2_video_example_joint_test_vipnn_rtsp_mp4";
 static void example_deinit(void)
 {
 	//Pause Linker
 	siso_pause(siso_rtp_aad);
 	siso_pause(siso_aad_audio);
-	siso_pause(siso_video_vipnn);
 	mimo_pause(mimo_2v_1a_rtsp_mp4, MM_OUTPUT0 | MM_OUTPUT1);
+#if !ENABLE_NN_YAMNET
 	siso_pause(siso_audio_aac);
+#else
+	simo_pause(simo_audio_aac_audclas, MM_OUTPUT0 | MM_OUTPUT1);
+#endif
+#if (ENABLE_NN_FACERECOG && (ENABLE_NN_YOLO || ENABLE_MD))
+	simo_pause(simo_video_yolo_facedet, MM_OUTPUT0 | MM_OUTPUT1);
+	siso_pause(siso_facedet_facenet);
+	siso_pause(siso_facenet_facerecog);
+#elif (ENABLE_NN_YOLO || ENABLE_MD)
+	siso_pause(siso_video_vipnn);
+#endif
+#if ENABLE_MD_TRIGGER_YOLO
+	siso_pause(siso_md_nn);
+#endif
 
 
 	//Stop module
@@ -646,21 +914,47 @@ static void example_deinit(void)
 	//Delete linker
 	siso_delete(siso_rtp_aad);
 	siso_delete(siso_aad_audio);
-	siso_delete(siso_video_vipnn);
 	mimo_delete(mimo_2v_1a_rtsp_mp4);
+#if !ENABLE_NN_YAMNET
 	siso_delete(siso_audio_aac);
+#else
+	simo_delete(simo_audio_aac_audclas);
+#endif
+#if (ENABLE_NN_FACERECOG && (ENABLE_NN_YOLO || ENABLE_MD))
+	simo_delete(simo_video_yolo_facedet);
+	siso_delete(siso_facedet_facenet);
+	siso_delete(siso_facenet_facerecog);
+#elif (ENABLE_NN_YOLO || ENABLE_MD)
+	siso_delete(siso_video_vipnn);
+#endif
 
+#if ENABLE_MD_TRIGGER_YOLO
+	siso_delete(siso_md_nn);
+#endif
 	//Close module
 	mm_module_close(aad_ctx);
 	mm_module_close(rtp_ctx);
 	mm_module_close(aac_ctx);
 	mm_module_close(audio_ctx);
 	mm_module_close(mp4_ctx);
-	mm_module_close(vipnn_ctx);
+#if ENABLE_NN_YOLO
+	mm_module_close(objdet_ctx);
+#endif
+#if ENABLE_MD
+	mm_module_close(md_ctx);
+#endif
+#if ENABLE_NN_YAMNET
+	mm_module_close(audclas_ctx);
+#endif
 	mm_module_close(rtsp2_v2_ctx);
 	mm_module_close(video_v1_ctx);
 	mm_module_close(video_v2_ctx);
 	mm_module_close(video_rgb_ctx);
+#if ENABLE_NN_FACERECOG
+	mm_module_close(facedet_ctx);
+	mm_module_close(facenet_ctx);
+	mm_module_close(facerecog_ctx);
+#endif
 
 	//Video Deinit
 	video_deinit();
@@ -699,4 +993,74 @@ static log_item_t userctrl_items[] = {
 static void atcmd_userctrl_init(void)
 {
 	log_service_add_table(userctrl_items, sizeof(userctrl_items) / sizeof(userctrl_items[0]));
+}
+
+//-------- Face recognition command --------------------------------------------------------
+
+static void *g_frc_ctx = NULL;
+static void fFREG(void *arg)
+{
+	int argc = 0;
+	char *argv[MAX_ARGC] = {0};
+	argc = parse_param(arg, argv);
+
+	if (!g_frc_ctx)	{
+		return;
+	}
+	printf("enter register mode\n\r");
+	mm_module_ctrl(g_frc_ctx, CMD_FRC_REGISTER_MODE, (int)argv[1]);
+}
+
+static void fFRRM(void *arg)
+{
+	if (!g_frc_ctx)	{
+		return;
+	}
+	printf("enter recognition mode\n\r");
+	mm_module_ctrl(g_frc_ctx, CMD_FRC_RECOGNITION_MODE, 0);
+}
+
+
+static void fFRFL(void *arg)
+{
+	if (!g_frc_ctx)	{
+		return;
+	}
+	printf("load feature\n\r");
+	mm_module_ctrl(g_frc_ctx, CMD_FRC_LOAD_FEATURES, 0);
+}
+
+
+static void fFRFS(void *arg)
+{
+	if (!g_frc_ctx)	{
+		return;
+	}
+	printf("save feature\n\r");
+	mm_module_ctrl(g_frc_ctx, CMD_FRC_SAVE_FEATURES, 0);
+}
+
+
+static void fFRFR(void *arg)
+{
+	if (!g_frc_ctx)	{
+		return;
+	}
+	printf("reset features\n\r");
+	mm_module_ctrl(g_frc_ctx, CMD_FRC_RESET_FEATURES, 0);
+}
+
+
+static log_item_t nn_frc_items[] = {
+	{"FREG", fFREG,},
+	{"FRRM", fFRRM,},
+	{"FRFL", fFRFL,},
+	{"FRFS", fFRFS,},
+	{"FRFR", fFRFR,}
+};
+
+static void atcmd_frc_init(void *ctx)
+{
+	g_frc_ctx = ctx;
+	log_service_add_table(nn_frc_items, sizeof(nn_frc_items) / sizeof(nn_frc_items[0]));
 }

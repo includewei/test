@@ -1,20 +1,17 @@
-
 #include <platform_opts.h>
-
 #include "FreeRTOS.h"
-#include "task.h"
-#include "diag.h"
 #include "stdlib.h"
+#include "stdio.h"
 
 #if !defined(MBEDTLS_CONFIG_FILE)
 #include "mbedtls/config.h"
 #else
 #include MBEDTLS_CONFIG_FILE
 #endif
+#include "mbedtls/platform.h"
 
 #if !defined(configSUPPORT_STATIC_ALLOCATION) || (configSUPPORT_STATIC_ALLOCATION != 1)
-/* #define configSUPPORT_STATIC_ALLOCATION 1 */
-#error configSUPPORT_STATIC_ALLOCATION must be defined in FreeRTOSConfig.h as 1.
+#error configSUPPORT_STATIC_ALLOCATION must be defined as 1 in FreeRTOSConfig.h.
 #endif
 
 #if !defined(CONFIG_USE_MBEDTLS) || (CONFIG_USE_MBEDTLS != 1)

@@ -180,7 +180,6 @@ audio_params_t audio_params = {
 	.word_length = WL_16BIT,
 	.mic_gain    = MIC_40DB,
 	.channel     = 1,
-	.enable_aec  = 0
 };
 
 #else
@@ -189,7 +188,6 @@ audio_params_t audio_params = {
 	.word_length = WL_16BIT,
 	.mic_gain    = MIC_40DB,
 	.channel     = 1,
-	.enable_aec  = 1
 };
 #endif
 

@@ -19,12 +19,12 @@
 #define V3_CHANNEL 2
 #if USE_SENSOR == SENSOR_GC4653
 #define V3_RESOLUTION VIDEO_FHD //max resolution: FHD
-#define V3_FPS 15
-#define V3_GOP 15
+#define V3_FPS 5
+#define V3_GOP 5
 #else
 #define V3_RESOLUTION VIDEO_FHD
-#define V3_FPS 30
-#define V3_GOP 30
+#define V3_FPS 5
+#define V3_GOP 5
 #endif
 #define V3_BPS 2*1024*1024
 #define V3_RCMODE 2 // 1: CBR, 2: VBR
@@ -81,7 +81,7 @@ void mmf2_video_example_v3_init(void)
 	video_v3_ctx = mm_module_open(&video_module);
 	if (video_v3_ctx) {
 		mm_module_ctrl(video_v3_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v3_params);
-		mm_module_ctrl(video_v3_ctx, MM_CMD_SET_QUEUE_LEN, V3_FPS*3);
+		mm_module_ctrl(video_v3_ctx, MM_CMD_SET_QUEUE_LEN, V3_FPS * 3);
 		mm_module_ctrl(video_v3_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
 	} else {
 		rt_printf("video open fail\n\r");
@@ -122,7 +122,7 @@ mmf2_video_exmaple_v3_fail:
 	return;
 }
 
-char *example = "mmf2_video_example_v3";
+static const char *example = "mmf2_video_example_v3";
 
 static void example_deinit(void)
 {

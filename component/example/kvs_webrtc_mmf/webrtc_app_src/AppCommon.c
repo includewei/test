@@ -135,7 +135,7 @@ static STATUS app_common_onSignalingClientStateChanged(UINT64 userData, SIGNALIN
 	PCHAR pStateStr;
 
 	signaling_client_getStateString(state, &pStateStr);
-	DLOGD("Signaling client state changed to %d - '%s'", state, pStateStr);
+	DLOGI("Signaling client state changed to %d - '%s'", state, pStateStr);
 
 	// Return success to continue
 	return retStatus;
@@ -710,8 +710,9 @@ STATUS app_common_freeStreamingSession(PStreamingSession *ppStreamingSession)
 	PStreamingSession pStreamingSession = NULL;
 	PAppConfiguration pAppConfiguration;
 
+	CHK(ppStreamingSession != NULL, STATUS_APP_COMMON_NULL_ARG);
 	pStreamingSession = *ppStreamingSession;
-	CHK(pStreamingSession->pAppConfiguration != NULL, STATUS_APP_COMMON_NULL_ARG);
+	CHK(pStreamingSession != NULL && pStreamingSession->pAppConfiguration != NULL, STATUS_APP_COMMON_NULL_ARG);
 	pAppConfiguration = pStreamingSession->pAppConfiguration;
 
 	DLOGD("Freeing streaming session with peer id: %s ", pStreamingSession->peerId);
@@ -722,7 +723,8 @@ STATUS app_common_freeStreamingSession(PStreamingSession *ppStreamingSession)
 	// NOTE: we need to perform this under the lock which might be acquired by
 	// the running thread but it's OK as it's re-entrant
 	MUTEX_LOCK(pAppConfiguration->appConfigurationObjLock);
-	if (pAppConfiguration->iceCandidatePairStatsTimerId != MAX_UINT32 && pAppConfiguration->streamingSessionCount == 0) {
+	if (pAppConfiguration->iceCandidatePairStatsTimerId != MAX_UINT32 && pAppConfiguration->streamingSessionCount == 0 &&
+		pAppConfiguration->iceCandidatePairStatsTimerId != MAX_UINT32 && IS_VALID_TIMER_QUEUE_HANDLE(pAppConfiguration->timerQueueHandle)) {
 		//#TBD. this may causes deadlock.
 
 		CHK_LOG_ERR(
@@ -733,7 +735,7 @@ STATUS app_common_freeStreamingSession(PStreamingSession *ppStreamingSession)
 
 	CHK_LOG_ERR((pc_close(pStreamingSession->pPeerConnection)));
 	CHK_LOG_ERR((pc_free(&pStreamingSession->pPeerConnection)));
-	MEMFREE(pStreamingSession);
+	SAFE_MEMFREE(pStreamingSession);
 
 CleanUp:
 
@@ -765,6 +767,7 @@ STATUS initApp(BOOL trickleIce, BOOL useTurn, PAppMediaSrc pAppMediaSrc, PAppCon
 	PCHAR pChannel = NULL;
 
 	SET_LOGGER_LOG_LEVEL(getLogLevel());
+	//SET_THREAD_PRIORITY(3);
 
 	CHK(ppAppConfiguration != NULL, STATUS_APP_COMMON_NULL_ARG);
 	CHK(pAppMediaSrc != NULL, STATUS_APP_COMMON_NULL_ARG);
@@ -1062,6 +1065,7 @@ STATUS pollApp(PAppConfiguration pAppConfiguration)
 		CVAR_WAIT(pAppConfiguration->cvar, pAppConfiguration->appConfigurationObjLock, APP_CLEANUP_WAIT_PERIOD);
 		MUTEX_UNLOCK(pAppConfiguration->appConfigurationObjLock);
 		locked = FALSE;
+		taskYIELD(); //TBD
 	}
 
 CleanUp:
@@ -1097,6 +1101,19 @@ STATUS quitApp(VOID)
 	if (counter >= 100) {
 		DLOGE("Failed to quit app.");
 		retStatus = STATUS_APP_COMMON_QUIT_APP;
+	}
+
+	LEAVES();
+	return retStatus;
+}
+
+STATUS getApp(PAppConfiguration *ppAppConfiguration)
+{
+	ENTERS();
+	STATUS retStatus = STATUS_SUCCESS;
+
+	if (ppAppConfiguration != NULL) {
+		*ppAppConfiguration = gAppConfiguration;
 	}
 
 	LEAVES();

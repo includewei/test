@@ -13,9 +13,8 @@
 #include "log_service.h"
 #include "avcodec.h"
 
-#include "input_image_640x360x3.h"
-#include "model_mbnetssd.h"
-#include "model_yolov3t.h"
+#include "img_sample/input_image_640x360x3.h"
+#include "model_yolo.h"
 
 #include "hal_video.h"
 #include "hal_isp.h"
@@ -80,8 +79,7 @@ static rtsp2_params_t rtsp2_v1_params = {
 };
 
 // NN model selction //
-#define MOBILENET_SSD_MODEL     1
-#define YOLO_MODEL              2
+#define YOLO_MODEL              1
 #define USE_NN_MODEL            YOLO_MODEL
 
 #define NN_CHANNEL 4
@@ -91,20 +89,36 @@ static rtsp2_params_t rtsp2_v1_params = {
 #define NN_BPS 1024*1024 //don't care for NN
 #define NN_TYPE VIDEO_RGB
 
-#if (USE_NN_MODEL==MOBILENET_SSD_MODEL)
-#define NN_MODEL_OBJ   mbnetssd_fwfs
-#define NN_WIDTH	300
-#define NN_HEIGHT	300
-static float nn_confidence_thresh = 0.75;
-static float nn_nms_thresh = 0.3;
-#elif (USE_NN_MODEL==YOLO_MODEL)
-#define NN_MODEL_OBJ   yolov3_tiny_fwfs
+#if (USE_NN_MODEL==YOLO_MODEL)
+#define NN_MODEL_OBJ   yolov4_tiny  // yolov7_tiny
 #define NN_WIDTH	416
 #define NN_HEIGHT	416
-static float nn_confidence_thresh = 0.4;
+static float nn_confidence_thresh = 0.5;
 static float nn_nms_thresh = 0.3;
+static int desired_class_num = 4;
+static int desired_class_list[] = {0, 2, 5, 7};
+static const char *tag[80] = {"person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light",
+							  "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
+							  "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+							  "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle",
+							  "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
+							  "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed",
+							  "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven",
+							  "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
+							 };
 #else
-#error Please set model correctly. (YOLO_MODEL, MOBILENET_SSD_MODEL)
+#error Please set model correctly. (YOLO_MODEL)
+#endif
+
+#if USE_SENSOR == SENSOR_GC4653
+#define SENSOR_MAX_WIDTH 2560
+#define SENSOR_MAX_HEIGHT 1440
+#elif USE_SENSOR == SENSOR_JXF51
+#define SENSOR_MAX_WIDTH 1536
+#define SENSOR_MAX_HEIGHT 1536
+#else
+#define SENSOR_MAX_WIDTH 1920
+#define SENSOR_MAX_HEIGHT 1080
 #endif
 
 static video_params_t video_v4_params = {
@@ -122,8 +136,8 @@ static video_params_t video_v4_params = {
 	.roi = {
 		.xmin = 0,
 		.ymin = 0,
-		.xmax = 1920, //ORIGIN WIDTH
-		.ymax = 1080, //ORIGIN WIDTH
+		.xmax = SENSOR_MAX_WIDTH,
+		.ymax = SENSOR_MAX_HEIGHT,
 	}
 };
 
@@ -171,21 +185,14 @@ static mm_siso_t *siso_array_vipnn         = NULL;
 //--------------------------------------------
 // Draw Rect
 //--------------------------------------------
-#include "../../../../component/video/osd2/isp_osd_example.h"
-
-static struct result_frame g_results;
-static obj_ctrl_s sw_object;
-static int nn_class[10] = {0};
-static int nn_score[10] = {0};
-static int desired_class_num = 4;
-static int desired_class_list[] = {1, 57, 63, 68};
-static char *tag[4] = { "person", "chair", "tv", "cell phone"};
+#include "osd_render.h"
+#define LIMIT(x, lower, upper) if(x<lower) x=lower; else if(x>upper) x=upper;
 
 static int check_in_list(int class_indx)
 {
 	for (int i = 0; i < desired_class_num; i++) {
 		if (class_indx == desired_class_list[i]) {
-			return i;
+			return class_indx;
 		}
 	}
 	return -1;
@@ -204,102 +211,47 @@ static void nn_set_object(void *p, void *img_param)
 	int im_h = RTSP_HEIGHT;
 	int im_w = RTSP_WIDTH;
 
-	float ratio_h = (float)im_h / (float)im->img.height;
 	float ratio_w = (float)im_w / (float)im->img.width;
-	int roi_h = (int)((im->img.roi.ymax - im->img.roi.ymin) * ratio_h);
-	int roi_w = (int)((im->img.roi.xmax - im->img.roi.xmin) * ratio_w);
-	int roi_x = (int)(im->img.roi.xmin * ratio_w);
-	int roi_y = (int)(im->img.roi.ymin * ratio_h);
-
-	// float ratio_h = (float)im_h / (float)im->img.height;
-	// int roi_h = (int)((im->img.roi.ymax - im->img.roi.ymin) * ratio_h);
-	// int roi_w = (int)((im->img.roi.xmax - im->img.roi.xmin) * ratio_h);
-	// int roi_x = (int)(im->img.roi.xmin * ratio_h + (im_w - roi_w) / 2);
-	// int roi_y = (int)(im->img.roi.ymin * ratio_h);
+	float ratio_h = (float)im_h / (float)im->img.height;
+	int roi_h, roi_w, roi_x, roi_y;
+	if (video_v4_params.use_roi == 1) { //resize
+		roi_w = (int)((im->img.roi.xmax - im->img.roi.xmin) * ratio_w);
+		roi_h = (int)((im->img.roi.ymax - im->img.roi.ymin) * ratio_h);
+		roi_x = (int)(im->img.roi.xmin * ratio_w);
+		roi_y = (int)(im->img.roi.ymin * ratio_h);
+	} else {  //crop
+		float ratio = ratio_h < ratio_w ? ratio_h : ratio_w;
+		roi_w = (int)((im->img.roi.xmax - im->img.roi.xmin) * ratio);
+		roi_h = (int)((im->img.roi.ymax - im->img.roi.ymin) * ratio);
+		roi_x = (int)(im->img.roi.xmin * ratio + (im_w - roi_w) / 2);
+		roi_y = (int)(im->img.roi.ymin * ratio + (im_h - roi_h) / 2);
+	}
 
 	printf("object num = %d\r\n", res->obj_num);
+	canvas_clean_all(RTSP_CHANNEL, 0);
 	if (res->obj_num > 0) {
-		sw_object.objDetectNumber = 0;
 		for (i = 0; i < res->obj_num; i++) {
 			int obj_class = (int)res->result[6 * i ];
-			if (sw_object.objDetectNumber == 10) {
-				break;
-			}
-			//printf("obj_class = %d\r\n",obj_class);
-
-			int class_id = check_in_list(obj_class + 1); //show class in desired_class_list
+			int class_id = check_in_list(obj_class); //show class in desired_class_list
 			//int class_id = obj_class; //coco label
 			if (class_id != -1) {
-				int ind = sw_object.objDetectNumber;
-				sw_object.objTopY[ind] = (int)(res->result[6 * i + 3] * roi_h) + roi_y;
-				if (sw_object.objTopY[ind] < 0) {
-					sw_object.objTopY[ind] = 0;
-				} else if (sw_object.objTopY[ind] >= im_h) {
-					sw_object.objTopY[ind] = im_h - 1;
-				}
-
-				sw_object.objTopX[ind] = (int)(res->result[6 * i + 2] * roi_w) + roi_x;
-				if (sw_object.objTopX[ind] < 0) {
-					sw_object.objTopX[ind] = 0;
-				} else if (sw_object.objTopX[ind] >= im_w) {
-					sw_object.objTopX[ind] = im_w - 1;
-				}
-
-				sw_object.objBottomY[ind] = (int)(res->result[6 * i + 5] * roi_h) + roi_y;
-				if (sw_object.objBottomY[ind] < 0) {
-					sw_object.objBottomY[ind] = 0;
-				} else if (sw_object.objBottomY[ind] >= im_h) {
-					sw_object.objBottomY[ind] = im_h - 1;
-				}
-
-				sw_object.objBottomX[ind] = (int)(res->result[6 * i + 4] * roi_w) + roi_x;
-				if (sw_object.objBottomX[ind] < 0) {
-					sw_object.objBottomX[ind] = 0;
-				} else if (sw_object.objBottomX[ind] >= im_w) {
-					sw_object.objBottomX[ind] = im_w - 1;
-				}
-				nn_class[ind] = class_id;
-				nn_score[ind] = (int)(res->result[6 * i + 1 ] * 100);
-				sw_object.objDetectNumber++;
-				printf("%d,c%d:%d %d %d %d\n\r", i, (int)res->result[6 * i ], (int)sw_object.objTopX[ind], (int)sw_object.objTopY[ind], (int)sw_object.objBottomX[ind],
-					   (int)sw_object.objBottomY[ind]);
+				int xmin = (int)(res->result[6 * i + 2] * roi_w) + roi_x;
+				int ymin = (int)(res->result[6 * i + 3] * roi_h) + roi_y;
+				int xmax = (int)(res->result[6 * i + 4] * roi_w) + roi_x;
+				int ymax = (int)(res->result[6 * i + 5] * roi_h) + roi_y;
+				LIMIT(xmin, 0, im_w)
+				LIMIT(xmax, 0, im_w)
+				LIMIT(ymin, 0, im_h)
+				LIMIT(ymax, 0, im_h)
+				printf("%d,c%d:%d %d %d %d\n\r", i, class_id, xmin, ymin, xmax, ymax);
+				canvas_set_rect(RTSP_CHANNEL, 0, xmin, ymin, xmax, ymax, 3, COLOR_WHITE);
+				char text_str[20];
+				snprintf(text_str, sizeof(text_str), "%s %d", tag[class_id], (int)(res->result[6 * i + 1 ] * 100));
+				canvas_set_text(RTSP_CHANNEL, 0, xmin, ymin - 32, text_str, COLOR_CYAN);
 			}
 		}
-	} else {
-		sw_object.objDetectNumber = 0;
 	}
-
-	int osd_ready2draw = osd_get_status();
-	if (osd_ready2draw == 1) {
-		//printf("sw_object.objDetectNumber = %d\r\n", sw_object.objDetectNumber);
-		g_results.num = sw_object.objDetectNumber;
-		if (sw_object.objDetectNumber > RECT_NUM) {
-			g_results.num = RECT_NUM;
-		}
-
-		for (i = 0; i < RECT_NUM; i++) {
-			if (i < g_results.num) {
-				g_results.obj[i].idx = i;
-				g_results.obj[i].class = nn_class[i];
-				g_results.obj[i].score = nn_score[i];
-				g_results.obj[i].left = sw_object.objTopX[i];
-				g_results.obj[i].top = sw_object.objTopY[i];
-				g_results.obj[i].right = sw_object.objBottomX[i];
-				g_results.obj[i].bottom = sw_object.objBottomY[i];
-
-			} else {
-				g_results.obj[i].idx = i;
-				g_results.obj[i].class = 0;
-				g_results.obj[i].score = 0;
-				g_results.obj[i].left = 0;
-				g_results.obj[i].top = 0;
-				g_results.obj[i].right = 0;
-				g_results.obj[i].bottom = 0;
-			}
-			//printf("num=%d  %d, %d, %d, %d.\r\n", g_results.num, g_results.obj[i].left, g_results.obj[i].right, g_results.obj[i].top, g_results.obj[i].bottom);
-		}
-		osd_update_rect_result(g_results);
-	}
+	canvas_update(RTSP_CHANNEL, 0);
 
 }
 
@@ -315,21 +267,15 @@ void mmf2_video_example_vipnn_rtsp_init(void)
 	printf("\r\n voe heap size = %d\r\n", voe_heap_size);
 
 #if V1_ENA
-
 	video_v1_ctx = mm_module_open(&video_module);
 	if (video_v1_ctx) {
 		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v1_params);
-		mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, RTSP_FPS*3);
+		mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, RTSP_FPS * 3);
 		mm_module_ctrl(video_v1_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
 	} else {
 		printf("video open fail\n\r");
 		goto mmf2_example_vnn_rtsp_fail;
 	}
-
-	// encode_rc_parm_t rc_parm;
-	// rc_parm.minQp = 28;
-	// rc_parm.maxQp = 45;
-	// mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SET_RCPARAM, (int)&rc_parm);
 
 	rtsp2_v1_ctx = mm_module_open(&rtsp2_module);
 	if (rtsp2_v1_ctx) {
@@ -342,6 +288,7 @@ void mmf2_video_example_vipnn_rtsp_init(void)
 		goto mmf2_example_vnn_rtsp_fail;
 	}
 #endif
+
 #if V4_ENA
 #if V4_SIM==0
 	video_rgb_ctx = mm_module_open(&video_module);
@@ -387,6 +334,7 @@ void mmf2_video_example_vipnn_rtsp_init(void)
 #endif
 
 	//--------------Link---------------------------
+
 #if V1_ENA
 	siso_video_rtsp_v1 = siso_create();
 	if (siso_video_rtsp_v1) {
@@ -433,8 +381,13 @@ void mmf2_video_example_vipnn_rtsp_init(void)
 	printf("siso_array_vipnn started\n\r");
 #endif
 
-	osd_set_tag(desired_class_num, tag);
-	example_isp_osd(1, RTSP_CHANNEL, 16, 32);
+#if V1_ENA && V4_ENA
+	int ch_enable[3] = {1, 0, 0};
+	int char_resize_w[3] = {16, 0, 0}, char_resize_h[3] = {32, 0, 0};
+	int ch_width[3] = {RTSP_WIDTH, 0, 0}, ch_height[3] = {RTSP_HEIGHT, 0, 0};
+	osd_render_dev_init(ch_enable, char_resize_w, char_resize_h);
+	osd_render_task_start(ch_enable, ch_width, ch_height);
+#endif
 
 	return;
 mmf2_example_vnn_rtsp_fail:
@@ -442,7 +395,7 @@ mmf2_example_vnn_rtsp_fail:
 	return;
 }
 
-static char *example = "mmf2_video_example_vipnn_rtsp";
+static const char *example = "mmf2_video_example_vipnn_rtsp";
 static void example_deinit(void)
 {
 	//Pause Linker

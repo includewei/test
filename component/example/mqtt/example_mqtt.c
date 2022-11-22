@@ -29,9 +29,9 @@ void prvMQTTEchoTask(void *pvParameters)
 	unsigned char sendbuf[512], readbuf[80];
 	int rc = 0, count = 0;
 	MQTTPacket_connectData connectData = MQTTPacket_connectData_initializer;
-	char *address = "gpssensor.ddns.net";
-	char *sub_topic = "LASS/Test/Pm25Ameba/#";
-	char *pub_topic = "LASS/Test/Pm25Ameba/FT1_018";
+	const char *address = "gpssensor.ddns.net";
+	const char *sub_topic = "LASS/Test/Pm25Ameba/#";
+	const char *pub_topic = "LASS/Test/Pm25Ameba/FT1_018";
 
 	memset(readbuf, 0x00, sizeof(readbuf));
 
@@ -45,14 +45,14 @@ void prvMQTTEchoTask(void *pvParameters)
 	mqtt_printf(MQTT_INFO, "Wi-Fi connected.");
 
 	mqtt_printf(MQTT_INFO, "Connect Network \"%s\"", address);
-	while ((rc = NetworkConnect(&network, address, 1883)) != 0) {
+	while ((rc = NetworkConnect(&network, (char *)address, 1883)) != 0) {
 		mqtt_printf(MQTT_INFO, "Return code from network connect is %d\n", rc);
 		vTaskDelay(1000 / portTICK_PERIOD_MS);
 	}
 	mqtt_printf(MQTT_INFO, "\"%s\" Connected", address);
 
 	connectData.MQTTVersion = 3;
-	connectData.clientID.cstring = "FT1_018";
+	connectData.clientID.cstring = (char *)"FT1_018";
 
 	mqtt_printf(MQTT_INFO, "Start MQTT connection");
 	while ((rc = MQTTConnect(&client, &connectData)) != 0) {
@@ -128,10 +128,13 @@ static void prvMQTTTask(void *pvParameters)
 	int rc = 0, mqtt_pub_count = 0;
 	MQTTPacket_connectData connectData = MQTTPacket_connectData_initializer;
 	connectData.MQTTVersion = 3;
-	connectData.clientID.cstring = "FT1_018";
-	char *address = "gpssensor.ddns.net";
-	char *sub_topic = "LASS/Test/Pm25Ameba/#";
-	char *pub_topic = "LASS/Test/Pm25Ameba/FT1_018";
+	connectData.clientID.cstring = (char *)"FT1_018";
+	const char *address = "gpssensor.ddns.net";
+	char *sub_topic[1];
+	char topic1[32] = "LASS/Test/Pm25Ameba/#";
+	sub_topic[0] = topic1;
+
+	const char *pub_topic = "LASS/Test/Pm25Ameba/FT1_018";
 
 	NetworkInit(&network);
 	MQTTClientInit(&client, &network, 30000, sendbuf, sizeof(sendbuf), readbuf, sizeof(readbuf));
@@ -161,12 +164,13 @@ static void prvMQTTTask(void *pvParameters)
 				MQTTSetStatus(&client, MQTT_START); //my_socket will be close and reopen in MQTTDataHandle if STATUS set to MQTT_START
 			} else if (rc == 0) { //select timeout
 				if (++mqtt_pub_count == 5) { //Send MQTT publish message every 5 seconds
-					MQTTPublishMessage(&client, pub_topic);
+					MQTTPublishMessage(&client, (char *)pub_topic);
 					mqtt_pub_count = 0;
 				}
 			}
 		}
-		MQTTDataHandle(&client, &read_fds, &connectData, messageArrived, address, sub_topic);
+		MQTTDataHandle(&client, &read_fds, &connectData, messageArrived, (char *)address, sub_topic, 1);
+
 	}
 }
 #endif
@@ -174,7 +178,7 @@ static void prvMQTTTask(void *pvParameters)
 void vStartMQTTTasks(uint16_t usTaskStackSize, UBaseType_t uxTaskPriority)
 {
 	BaseType_t x = 0L;
-
+	printf("\nExample: Mqtt \n");
 #if defined(MQTT_TASK)
 	xTaskCreate(prvMQTTTask,	/* The function that implements the task. */
 				"MQTTTask",			/* Just a text name for the task to aid debugging. */

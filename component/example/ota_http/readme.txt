@@ -24,6 +24,7 @@ Description
 
 Setup Guide
 ~~~~~~~~~~~
+[Ameba-1, Ameba-pro, Ameba-z2, AmebaD]
         1. Add ota_http example to SDK
         
         /component/common/example/ota_http
@@ -56,21 +57,23 @@ Setup Guide
             $PROJ_DIR$\..\..\..\component\common\example\ota_http\example_ota_http.c
         (b) For GCC project, add ota http example to example Makefile
             CSRC += $(DIR)/ota_http/example_ota_http.c
-
+[AmebaPro2]
+        1. cmake with -DEXAMPLE=ota_http
+        ex. cmake .. -G"Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=../toolchain.cmake -DEXAMPLE=ota_http
 
 Parameter Setting and Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         Modify PORT, HOST and RESOURCE based on your HTTP download server.
         eg: SERVER: http://m-apps.oss-cn-shenzhen.aliyuncs.com/051103061600.bin
         set:    #define PORT    80
-                #define HOST    "m-apps.oss-cn-shenzhen.aliyuncs.com"
-                #define RESOURCE    "051103061600.bin"
-        For local local network download, Set it with IP and OTA_ALL.bin
+                static const char *host = "m-apps.oss-cn-shenzhen.aliyuncs.com"
+                static const char *resource = "051103061600.bin"
+        For local local network download, Set it with IP and OTA bin
         e.g.    #define PORT    80
-                #define HOST    "192.168.1.100"
-                #define RESOURCE    "OTA_ALL.bin"
+                static const char *host = "192.168.1.100"
+                static const char *resource = "OTA_ALL.bin"
         Note: Remember to Set the server start.bat with the same PORT and RESOURCE.
-
+        Note: for AmebaPro2, ota.bin in sdk build folder should be used for this example.
 
 Result description
 ~~~~~~~~~~~~~~~~~~
@@ -83,6 +86,6 @@ Supported List
 ~~~~~~~~~~~~~~
 [Supported Lis]
         Supported IC:
-                Ameba-1, Ameba-pro, Ameba-z2, AmebaD, 
+                Ameba-1, Ameba-pro, Ameba-z2, AmebaD, AmebaPro2
         Source code not in project:
                 Ameba-z

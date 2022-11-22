@@ -6,12 +6,16 @@
 #include "task.h"
 #include "semphr.h"
 #include "queue.h"
+#include "example_audio_helix_mp3.h"
 
 #include "wifi_conf.h"
 #if defined(CONFIG_PLATFORM_8195BHP) || defined(CONFIG_PLATFORM_8735B)
 #if defined(CONFIG_PLATFORM_8735B)
 #include "wifi_conf.h"
 #include "lwip_netconf.h"
+#if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
+#include "osdep_service.h"
+#endif
 #endif
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
@@ -167,11 +171,20 @@ static void initialize_audio(int sample_rate)
 #else
 	audio_set_tx_dma_buffer(&g_taudio, dma_txdata, TX_PAGE_SIZE);
 #endif
+
+#if defined(CONFIG_PLATFORM_8735B)
+	//Init RX dma
+	audio_rx_irq_handler(&g_taudio, (audio_irq_handler)audio_rx_complete, (uint32_t *)&g_taudio);
+
+	//Init TX dma
+	audio_tx_irq_handler(&g_taudio, (audio_irq_handler)audio_tx_complete, (uint32_t *)&g_taudio);
+#else
 	//Init RX dma
 	audio_rx_irq_handler(&g_taudio, (audio_irq_handler)audio_rx_complete, (uint32_t)&g_taudio);
 
 	//Init TX dma
 	audio_tx_irq_handler(&g_taudio, (audio_irq_handler)audio_tx_complete, (uint32_t)&g_taudio);
+#endif
 
 #if UPSAMPLE_48K
 	smpl_rate_idx = ASR_48KHZ;
@@ -476,7 +489,7 @@ void file_download_thread(void *param)
 	vTaskDelete(NULL);
 }
 
-void audio_play_http_file()
+void audio_play_http_file(void)
 {
 	audio_pkt_t pkt;
 

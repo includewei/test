@@ -1,13 +1,6 @@
-#include "FreeRTOS.h"
-#include "task.h"
-#include "basic_types.h"
-#include "platform_opts.h"
-
-
 #include <cmsis.h>
 #include "FreeRTOS.h"
 #include "task.h"
-#include "basic_types.h"
 #include "platform_opts.h"
 #include "section_config.h"
 #include "flash_api.h" // Flash interface
@@ -16,6 +9,7 @@
 #include "lfs_nor_flash_api.h"
 #include "lfs_nand_flash_api.h"
 #include "ftl_common_api.h"
+#include "lfs_reent.h"
 
 
 #define NOR_BLOCK_COUNT  100
@@ -32,7 +26,8 @@ struct lfs_config ftl_cfg = {
 	.prog  = ftl_block_prog,
 	.erase = ftl_block_erase,
 	.sync  = ftl_block_sync,
-
+	.lock  =  lfs_system_lock,
+	.unlock = lfs_system_unlock,
 	// block device configuration
 	.read_size = 0,
 	.prog_size = 0,
@@ -64,9 +59,9 @@ int ftl_block_prog(const struct lfs_config *c, lfs_block_t block, lfs_off_t off,
 {
 	int ret = 0;
 	if (sys_get_boot_sel() == FTL_NAND_FLASH) {
-		ret = ftl_common_write(((NAND_APP_BASE / ftl_cfg.block_size) + block) * c->block_size + off, buffer, size);
+		ret = ftl_common_write(((NAND_APP_BASE / ftl_cfg.block_size) + block) * c->block_size + off, (unsigned char *)buffer, size);
 	} else {
-		ftl_common_write(block * c->block_size + FLASH_APP_BASE + off, buffer, size);
+		ftl_common_write(block * c->block_size + FLASH_APP_BASE + off, (unsigned char *)buffer, size);
 	}
 	if (ret == 0) {
 		ret = LFS_ERR_OK;
@@ -188,9 +183,9 @@ void example_littlefs_thread(void *param)
 	lfs_dir_t *dir = malloc(sizeof(lfs_dir_t));
 	struct lfs_info *info = malloc(sizeof(struct lfs_info));
 	int ret = 0;
-	char *str_content = "hello_world";
-	char *file_name = "hello.txt";
-	char *file_folder = "flash";
+	const char *str_content = "hello_world";
+	const char *file_name = "hello.txt";
+	const char *file_folder = "flash";
 	char r_buf[64];
 	memset(r_buf, 0, sizeof(r_buf));
 

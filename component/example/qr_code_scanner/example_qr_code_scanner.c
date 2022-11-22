@@ -10,6 +10,8 @@
 #include "module_video.h"
 #include "mmf2_pro2_video_config.h"
 #include "sensor.h"
+#include "lwip_netconf.h"
+#include "lwip_intf.h"
 
 #define QR_CODE_MAX_SCAN_COUNT	5
 
@@ -52,7 +54,7 @@ static void yuv_output_cb(void *param1, void  *param2, uint32_t arg)
 	} else if ((enc2out->codec & (CODEC_NV12 | CODEC_RGB | CODEC_NV16)) != 0) {
 		dcache_invalidate_by_addr((uint32_t *)enc2out->isp_addr, enc2out->enc_len);
 		if (yuv_ctx->snap_flag) {
-			yuv_ctx->isp_addr = (uint32_t *)enc2out->isp_addr;
+			yuv_ctx->isp_addr = (uint32_t)enc2out->isp_addr;
 			rtw_up_sema(&yuv_ctx->snapshot_sema);
 			yuv_ctx->snap_flag = 0;
 			yuv_ctx->isp_len = enc2out->width * enc2out->height * 3 / 2;;//enc2out->enc_len;
@@ -122,7 +124,7 @@ unsigned char *yuv_snapshot_get(void *ctx)
 	}
 }
 
-unsigned char *yuv_snapshot_release(void *ctx)
+void yuv_snapshot_release(void *ctx)
 {
 	struct yuv_snapshot_context *yuv_ctx = (struct yuv_snapshot_context *)ctx;
 	video_ispbuf_release(video_v1_params.stream_id, (uint32_t)yuv_ctx->isp_addr);
@@ -164,13 +166,13 @@ typedef enum {
 
 SemaphoreHandle_t g_qr_code_scanner_sema = NULL;
 
-void example_qr_code_scanner_done_event(unsigned char *buf, unsigned int buf_len)
+void example_qr_code_scanner_done_event(char *buf, unsigned int buf_len)
 {
 	unsigned int index;
 	unsigned int count;
-	unsigned char type_string[7] = {0};			//WEP WPA nopass, max: 6
+	char type_string[7] = {0};			//WEP WPA nopass, max: 6
 	unsigned char password_string[65] = {0};	//max: 64
-	unsigned char hidden_string[6] = {0};		//true false, max: 5
+	char hidden_string[6] = {0};		//true false, max: 5
 	unsigned int hidden_type = 0;
 	unsigned int error_flag = 0;
 	rtw_network_info_t connect_param = {0};
@@ -316,7 +318,7 @@ static void example_qr_code_scanner_thread(void *param)
 	int y_density;
 	qr_code_scanner_config_index index;
 	qr_code_scanner_result qr_code_result;
-	unsigned char *result_string;
+	char *result_string;
 	unsigned int result_length;
 	unsigned int total_scan_count;
 
@@ -346,7 +348,7 @@ static void example_qr_code_scanner_thread(void *param)
 		}
 		yuv_snapshot_start(yuv_ctx);
 		video_ctrl(video_v1_params.stream_id, VIDEO_NV12_OUTPUT, 0);
-		result_string = (unsigned char *)malloc(QR_CODE_MAX_RESULT_LENGTH);
+		result_string = (char *)malloc(QR_CODE_MAX_RESULT_LENGTH);
 		if (result_string == NULL) {
 			printf("%s: result_string malloc fail \r\n", __FUNCTION__);
 			break;

@@ -17,6 +17,7 @@
 #include "mmf2_pro2_video_config.h"
 #include "video_example_media_framework.h"
 #include "log_service.h"
+#include "fwfs.h"
 
 /*****************************************************************************
 * ISP channel : 0,1
@@ -54,10 +55,12 @@
 #include "sample_h265.h"
 #define VIDEO_TYPE VIDEO_HEVC
 #define VIDEO_CODEC AV_CODEC_ID_H265
+#define SHAPSHOT_TYPE VIDEO_HEVC_JPEG
 #else
 #include "sample_h264.h"
 #define VIDEO_TYPE VIDEO_H264
 #define VIDEO_CODEC AV_CODEC_ID_H264
+#define SHAPSHOT_TYPE VIDEO_H264_JPEG
 #endif
 
 #if V1_RESOLUTION == VIDEO_VGA
@@ -109,6 +112,8 @@ static mm_siso_t *siso_aad_audio			= NULL;
 #define USE_2K_SENSOR
 #endif
 
+//#define FCS_PARTITION //Use the FCS data to change the parameter from bootloader.If mark the marco, it will use the FTL config.
+
 static video_boot_stream_t video_boot_stream = {
 	.video_params[STREAM_V1].stream_id = STREAM_V1,
 	.video_params[STREAM_V1].type = CODEC_H264,
@@ -126,12 +131,13 @@ static video_boot_stream_t video_boot_stream = {
 	.video_params[STREAM_V1].rc_mode = 2,
 	.video_params[STREAM_V1].jpeg_qlevel = 0,
 	.video_params[STREAM_V1].rotation = 0,
-	.video_params[STREAM_V1].out_buf_size = 0,
+	.video_params[STREAM_V1].out_buf_size = V1_ENC_BUF_SIZE,
 	.video_params[STREAM_V1].out_rsvd_size = 0,
 	.video_params[STREAM_V1].direct_output = 0,
 	.video_params[STREAM_V1].use_static_addr = 0,
-	.video_snapshot[STREAM_V1] = 1,
-	.video_params[STREAM_V1].fcs = 1,
+	.video_snapshot[STREAM_V1] = 0,
+	.video_drop_frame[STREAM_V1] = 0,
+	.video_params[STREAM_V1].fcs = 1,//Enable the fcs for channel 1
 	.video_params[STREAM_V2].stream_id = STREAM_V2,
 	.video_params[STREAM_V2].type = CODEC_H264,
 	.video_params[STREAM_V2].resolution = 0,
@@ -143,12 +149,13 @@ static video_boot_stream_t video_boot_stream = {
 	.video_params[STREAM_V2].rc_mode = 0,
 	.video_params[STREAM_V2].jpeg_qlevel = 0,
 	.video_params[STREAM_V2].rotation = 0,
-	.video_params[STREAM_V2].out_buf_size = 0,
+	.video_params[STREAM_V2].out_buf_size = V2_ENC_BUF_SIZE,
 	.video_params[STREAM_V2].out_rsvd_size = 0,
 	.video_params[STREAM_V2].direct_output = 0,
 	.video_params[STREAM_V2].use_static_addr = 0,
 	.video_params[STREAM_V2].fcs = 0,
 	.video_snapshot[STREAM_V2] = 0,
+	.video_drop_frame[STREAM_V2] = 0,
 	.video_params[STREAM_V3].stream_id = STREAM_V3,
 	.video_params[STREAM_V3].type = CODEC_H264,
 	.video_params[STREAM_V3].resolution = 0,
@@ -160,13 +167,14 @@ static video_boot_stream_t video_boot_stream = {
 	.video_params[STREAM_V3].rc_mode = 0,
 	.video_params[STREAM_V3].jpeg_qlevel = 0,
 	.video_params[STREAM_V3].rotation = 0,
-	.video_params[STREAM_V3].out_buf_size = 0,
+	.video_params[STREAM_V3].out_buf_size = V3_ENC_BUF_SIZE,
 	.video_params[STREAM_V3].out_rsvd_size = 0,
 	.video_params[STREAM_V3].direct_output = 0,
 	.video_params[STREAM_V3].use_static_addr = 0,
-	.video_params[STREAM_V3].fcs = 0,//Don't support
+	.video_params[STREAM_V3].fcs = 0,
 	.video_snapshot[STREAM_V3] = 0,
-	.video_params[STREAM_V4].stream_id = STREAM_V4,//Don't support
+	.video_drop_frame[STREAM_V3] = 0,
+	.video_params[STREAM_V4].stream_id = STREAM_V4,
 	.video_params[STREAM_V4].type = 0,
 	.video_params[STREAM_V4].resolution = 0,
 	.video_params[STREAM_V4].width = 640,
@@ -192,6 +200,7 @@ static video_boot_stream_t video_boot_stream = {
 	.fcs_isp_awb_enable = 0,
 	.fcs_isp_awb_init_rgain = 0,
 	.fcs_isp_awb_init_bgain = 0,
+	.fcs_isp_init_daynight_mode = 0,
 	.voe_heap_size = 0,
 	.voe_heap_addr = 0,
 #ifdef USE_2K_SENSOR
@@ -204,9 +213,10 @@ static video_boot_stream_t video_boot_stream = {
 	.isp_info.md_enable = 1,
 	.isp_info.hdr_enable = 1,
 	.isp_info.osd_enable = 1,
-	.fcs_channel = 1,
+	.fcs_channel = 1,//FCS_TOTAL_NUMBER
 	.fcs_status = 0,
-	.fcs_setting_done = 0
+	.fcs_setting_done = 0,
+	.fcs_isp_iq_id = 0,
 };
 
 static video_params_t video_v1_params = {
@@ -235,16 +245,7 @@ static video_params_t video_v2_params = {
 	.use_static_addr = 1
 };
 
-static audio_params_t audio_params = {
-	.sample_rate = ASR_8KHZ,
-	.word_length = WL_16BIT,
-	.mic_gain    = MIC_0DB,
-	.dmic_l_gain    = DMIC_BOOST_24DB,
-	.dmic_r_gain    = DMIC_BOOST_24DB,
-	.use_mic_type   = USE_AUDIO_AMIC,
-	.channel     = 1,
-	.enable_aec  = 1
-};
+static audio_params_t audio_params;
 
 static aac_params_t aac_params = {
 	.sample_rate = 8000,
@@ -317,21 +318,79 @@ static mp4_params_t mp4_v1_params = {
 	.record_file_name = "AmebaPro_recording",
 	.fatfs_buf_size = 224 * 1024, /* 32kb multiple */
 };
+#ifdef FCS_PARTITION
+void voe_fcs_change_parameters(int ch, int width, int height, int iq_id)
+{
+	pfw_init();
 
-#define NOR_FLASH_BASE 0x08000000
-void voe_fcs_change_parameters(int ch, int width, int height, int flash_addr) //Setup the tag and modify the parameters.
+	void *fp = pfw_open("FCSDATA", M_RAW | M_CREATE);
+	unsigned char *ptr = (unsigned char *)&video_boot_stream;
+	unsigned char *fcs_buf = malloc(4096);
+	unsigned char *fcs_verify = malloc(4096);
+	unsigned int checksum_tag = 0;
+	int i = 0;
+	if (fcs_buf == NULL || fcs_verify == NULL) {
+		printf("It can't allocate buffer\r\n");
+		return;
+	}
+	video_boot_stream.video_params[ch].width  = width;
+	video_boot_stream.video_params[ch].height = height;
+	video_boot_stream.fcs_isp_iq_id = iq_id;
+	printf("ch %d width %d height %d iq_id %d\r\n", ch, width, height, iq_id);
+	memset(fcs_buf, 0x00, 4096);
+	memset(fcs_verify, 0x00, 4096);
+	fcs_buf[0] = 'F';
+	fcs_buf[1] = 'C';
+	fcs_buf[2] = 'S';
+	fcs_buf[3] = 'D';
+	for (i = 0; i < sizeof(video_boot_stream_t); i++) {
+		checksum_tag += ptr[i];
+	}
+	fcs_buf[4] = (checksum_tag) & 0xff;
+	fcs_buf[5] = (checksum_tag >> 8) & 0xff;
+	fcs_buf[6] = (checksum_tag >> 16) & 0xff;
+	fcs_buf[7] = (checksum_tag >> 24) & 0xff;
+	memcpy(fcs_buf + 8, &video_boot_stream, sizeof(video_boot_stream_t));
+	pfw_seek(fp, 0, SEEK_SET);
+	pfw_write(fp, fcs_buf, 4096);
+	pfw_seek(fp, 0, SEEK_SET);
+	pfw_read(fp, fcs_verify, 4096);
+	for (i = 0; i < 4096; i++) {
+		if (fcs_buf[i] != fcs_verify[i]) {
+			printf("wrong %d %x %x\r\n", i, fcs_buf[i], fcs_verify[i]);
+		}
+	}
+	pfw_seek(fp, 0, SEEK_SET);
+	pfw_close(fp);
+	if (fcs_buf) {
+		free(fcs_buf);
+	}
+	if (fcs_verify) {
+		free(fcs_verify);
+	}
+}
+#else
+void voe_fcs_change_parameters(int ch, int width, int height, int iq_id) //Setup the tag and modify the parameters.
 {
 	video_boot_stream_t *fcs_data = NULL;// = (video_boot_stream_t *)malloc(sizeof(video_boot_stream_t));
 	unsigned char *fcs_buf = malloc(2048);
 	int i = 0;
 	unsigned int checksum_tag = 0;
 	unsigned char *ptr = (unsigned char *)&video_boot_stream;
+	unsigned int flash_addr = 0;
+	if (sys_get_boot_sel() == 0) {
+		flash_addr = NOR_FLASH_FCS;
+	} else {
+		flash_addr = NAND_FLASH_FCS;
+	}
 	if (fcs_buf == NULL) {
 		printf("It can't get the buffer\r\n");
 		return;
 	}
 	video_boot_stream.video_params[ch].width  = width;
 	video_boot_stream.video_params[ch].height = height;
+	video_boot_stream.fcs_isp_iq_id = iq_id;
+	printf("ch %d width %d height %d iq_id %d\r\n", ch, width, height, iq_id);
 	memset(fcs_buf, 0x00, 2048);
 	fcs_buf[0] = 'F';
 	fcs_buf[1] = 'C';
@@ -349,9 +408,19 @@ void voe_fcs_change_parameters(int ch, int width, int height, int flash_addr) //
 	memset(fcs_buf, 0xff, 2048);
 	ftl_common_read(flash_addr, fcs_buf, 2048);
 	fcs_data = (video_boot_stream_t *)(fcs_buf + 8);
-	printf("ch %d ->width %d ->height %d\r\n", ch, fcs_data->video_params[ch].width, fcs_data->video_params[ch].height);
+	printf("ch %d ->width %d ->height %d iq_id %d\r\n", ch, fcs_data->video_params[ch].width, fcs_data->video_params[ch].height, fcs_data->fcs_isp_iq_id);
 	if (fcs_buf) {
 		free(fcs_buf);
+	}
+}
+#endif
+
+static inline unsigned int str_to_value(const unsigned char *str)
+{
+	if (str[0] == '0' && (str[1] == 'x' || str[1] == 'X')) {
+		return strtol((char const *)str, NULL, 16);
+	} else {
+		return atoi((char const *)str);
 	}
 }
 
@@ -365,24 +434,25 @@ void fcs_change(void *arg)
 	int page_size = 0;
 	int block_size = 0;
 	int block_cnt = 0;
-	int ch, width, height = 0;
+	int ch, width, height, iq_id = 0;
 
 	argc = parse_param(arg, argv);
 
 	ftl_common_info(&type, &page_size, &block_size, &block_cnt);
 	printf("type %d page_size %d block_size %d block_cnt %d\r\n", type, page_size, block_size, block_cnt);
-	if (argc != 4) {
-		printf("FCST=ch,width,height\r\n");//FCST=0,1280,720
+	if (argc != 5) {
+		printf("FCST=ch,width,height,iq_id\r\n");//FCST=0,1280,720,IQ_ID
 		return;
 	}
 	ch = str_to_value((unsigned char const *)argv[1]);
 	width = str_to_value((unsigned char const *)argv[2]);
 	height = str_to_value((unsigned char const *)argv[3]);
-	printf("ch %d width %d height %d\r\n", ch, width, height);
+	iq_id = str_to_value((unsigned char const *)argv[4]);
+	printf("ch %d width %d height %d iq_id %d\r\n", ch, width, height, iq_id);
 	if (type == 1) {
-		voe_fcs_change_parameters(ch, width, height, NAND_FLASH_FCS);
+		voe_fcs_change_parameters(ch, width, height, iq_id);
 	} else {
-		voe_fcs_change_parameters(ch, width, height, NOR_FLASH_FCS);
+		voe_fcs_change_parameters(ch, width, height, iq_id);
 	}
 }
 
@@ -397,19 +467,47 @@ void fcs_info(void *arg)
 int fcs_snapshot_cb(uint32_t jpeg_addr, uint32_t jpeg_len)
 {
 	printf("snapshot size=%d\n\r", jpeg_len);
+	return 0;
 }
 
+#define FCS_AV_SYNC 1
+void fcs_avsync(bool enable)
+{
+	memcpy((void *)&audio_params, (void *)&default_audio_params, sizeof(audio_params_t));
+	if (enable) {
+		//get the fcs time need to what video first frame
+		int fcs_video_starttime = 0;
+		int fcs_video_endtime = 0;
+		int audio_framesize_ms = 0;
+		while (!fcs_video_starttime) {
+			vTaskDelay(1);
+			video_get_fcs_queue_info(&fcs_video_starttime, &fcs_video_endtime);
+		}
+
+		audio_params.fcs_avsync_en = 1;
+		audio_params.fcs_avsync_vtime = fcs_video_starttime;
+	}
+}
+
+#define MODULE_TIMESTAMP_OFFSET 2000
 void mmf2_video_example_joint_test_rtsp_mp4_init_fcs(void)
 {
-	int voe_heap_size = video_voe_presetting(1, V1_WIDTH, V1_HEIGHT, V1_BPS, 0,
-						1, V2_WIDTH, V2_HEIGHT, V2_BPS, 0,
+	int voe_heap_size = video_voe_presetting(1, V1_WIDTH, V1_HEIGHT, V1_BPS, 1,
+						1, V2_WIDTH, V2_HEIGHT, V2_BPS, 1,
 						0, 0, 0, 0, 0,
 						0, 0, 0);
 
 	//printf("\r\n voe heap size = %d\r\n", voe_heap_size);
-	video_boot_stream_t *isp_fcs_info;//Get the fcs info
-	video_get_fcs_info(&isp_fcs_info);//Get the
+	video_boot_stream_t *isp_fcs_info;
+	video_get_fcs_info(&isp_fcs_info);//Get the fcs info
+	int fcs_start_ch = -1;//Get the first start fcs channel
 	if (isp_fcs_info->fcs_status) {
+		for (int i = 0; i < 2; i++) { //Maximum two channel
+			if (fcs_start_ch == -1 && isp_fcs_info->video_params[i].fcs == 1) {
+				fcs_start_ch = i;
+				printf("fcs_start_ch %d\r\n", fcs_start_ch);
+			}
+		}
 		if ((video_boot_stream.isp_info.sensor_width == isp_fcs_info->isp_info.sensor_width) &&
 			(video_boot_stream.isp_info.sensor_height == isp_fcs_info->isp_info.sensor_height)) {
 			if (isp_fcs_info->video_params[STREAM_V1].fcs) {
@@ -426,28 +524,93 @@ void mmf2_video_example_joint_test_rtsp_mp4_init_fcs(void)
 			}
 		}
 	}
-	// ------ Channel 1--------------
-	video_v1_ctx = mm_module_open(&video_module);
-	if (video_v1_ctx) {
-		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v1_params);
-		mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, V1_FPS * 10); //Add the queue buffer to avoid to lost data.
-		mm_module_ctrl(video_v1_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
-		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SNAPSHOT_CB, (int)fcs_snapshot_cb);
-		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_APPLY, V1_CHANNEL);	// start channel 0
+	if (isp_fcs_info->fcs_status == 1 && fcs_start_ch == 1) { //It need to change the order if the fcs channel is not zero
+		// ------ Channel 2--------------
+		video_v2_ctx = mm_module_open(&video_module);
+		if (video_v2_ctx) {
+			video_v2_params.type = SHAPSHOT_TYPE;
+			mm_module_ctrl(video_v2_ctx, CMD_VIDEO_SET_TIMESTAMP_OFFSET, MODULE_TIMESTAMP_OFFSET);
+			mm_module_ctrl(video_v2_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v2_params);
+			mm_module_ctrl(video_v2_ctx, MM_CMD_SET_QUEUE_LEN, V2_FPS * 10); //Add the queue buffer to avoid to lost data.
+			mm_module_ctrl(video_v2_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
+			mm_module_ctrl(video_v2_ctx, CMD_VIDEO_SNAPSHOT_CB, (int)fcs_snapshot_cb);
+			mm_module_ctrl(video_v2_ctx, CMD_VIDEO_APPLY, V2_CHANNEL);	// start channel 1
+		} else {
+			rt_printf("video open fail\n\r");
+			goto mmf2_video_exmaple_joint_test_rtsp_mp4_fail;
+		}
+		// ------ Channel 1--------------
+		video_v1_ctx = mm_module_open(&video_module);
+		if (video_v1_ctx) {
+			mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SET_TIMESTAMP_OFFSET, MODULE_TIMESTAMP_OFFSET);
+			mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v1_params);
+			mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, V1_FPS * 10); //Add the queue buffer to avoid to lost data.
+			mm_module_ctrl(video_v1_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
+			mm_module_ctrl(video_v1_ctx, CMD_VIDEO_APPLY, V1_CHANNEL);	// start channel 0
+		} else {
+			rt_printf("video open fail\n\r");
+			goto mmf2_video_exmaple_joint_test_rtsp_mp4_fail;
+		}
 	} else {
-		rt_printf("video open fail\n\r");
+		// ------ Channel 1--------------
+		video_v1_ctx = mm_module_open(&video_module);
+		if (video_v1_ctx) {
+			video_v1_params.type = SHAPSHOT_TYPE;
+			mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SET_TIMESTAMP_OFFSET, MODULE_TIMESTAMP_OFFSET);
+			mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v1_params);
+			mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, V1_FPS * 10); //Add the queue buffer to avoid to lost data.
+			mm_module_ctrl(video_v1_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
+			mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SNAPSHOT_CB, (int)fcs_snapshot_cb);
+			mm_module_ctrl(video_v1_ctx, CMD_VIDEO_APPLY, V1_CHANNEL);	// start channel 0
+		} else {
+			rt_printf("video open fail\n\r");
+			goto mmf2_video_exmaple_joint_test_rtsp_mp4_fail;
+		}
+		// ------ Channel 2--------------
+		video_v2_ctx = mm_module_open(&video_module);
+		if (video_v2_ctx) {
+			mm_module_ctrl(video_v2_ctx, CMD_VIDEO_SET_TIMESTAMP_OFFSET, MODULE_TIMESTAMP_OFFSET);
+			mm_module_ctrl(video_v2_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v2_params);
+			mm_module_ctrl(video_v2_ctx, MM_CMD_SET_QUEUE_LEN, V2_FPS * 10); //Add the queue buffer to avoid to lost data.
+			mm_module_ctrl(video_v2_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
+			mm_module_ctrl(video_v2_ctx, CMD_VIDEO_APPLY, V2_CHANNEL);	// start channel 1
+		} else {
+			rt_printf("video open fail\n\r");
+			goto mmf2_video_exmaple_joint_test_rtsp_mp4_fail;
+		}
+	}
+
+	if (isp_fcs_info->fcs_status) {
+		//enable the setting of fcs avsync
+		fcs_avsync(FCS_AV_SYNC);
+	}
+
+	//--------------Audio --------------
+	audio_ctx = mm_module_open(&audio_module);
+	if (audio_ctx) {
+		mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_TIMESTAMP_OFFSET, MODULE_TIMESTAMP_OFFSET);
+#if FCS_AV_SYNC
+		mm_module_ctrl(audio_ctx, MM_CMD_SET_QUEUE_LEN, 30); //Add the queue buffer to avoid to lost data.
+#else
+		mm_module_ctrl(audio_ctx, MM_CMD_SET_QUEUE_LEN, 6); //queue size can be smaller
+#endif
+		mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_PARAMS, (int)&audio_params);
+		mm_module_ctrl(audio_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
+		mm_module_ctrl(audio_ctx, CMD_AUDIO_APPLY, 0);
+	} else {
+		rt_printf("audio open fail\n\r");
 		goto mmf2_video_exmaple_joint_test_rtsp_mp4_fail;
 	}
 
-	// ------ Channel 2--------------
-	video_v2_ctx = mm_module_open(&video_module);
-	if (video_v2_ctx) {
-		mm_module_ctrl(video_v2_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v2_params);
-		mm_module_ctrl(video_v2_ctx, MM_CMD_SET_QUEUE_LEN, V2_FPS * 10); //Add the queue buffer to avoid to lost data.
-		mm_module_ctrl(video_v2_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
-		mm_module_ctrl(video_v2_ctx, CMD_VIDEO_APPLY, V2_CHANNEL);	// start channel 1
+	aac_ctx = mm_module_open(&aac_module);
+	if (aac_ctx) {
+		mm_module_ctrl(aac_ctx, CMD_AAC_SET_PARAMS, (int)&aac_params);
+		mm_module_ctrl(aac_ctx, MM_CMD_SET_QUEUE_LEN, 30);
+		mm_module_ctrl(aac_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
+		mm_module_ctrl(aac_ctx, CMD_AAC_INIT_MEM_POOL, 0);
+		mm_module_ctrl(aac_ctx, CMD_AAC_APPLY, 0);
 	} else {
-		rt_printf("video open fail\n\r");
+		rt_printf("AAC open fail\n\r");
 		goto mmf2_video_exmaple_joint_test_rtsp_mp4_fail;
 	}
 
@@ -461,32 +624,6 @@ void mmf2_video_example_joint_test_rtsp_mp4_init_fcs(void)
 		rt_printf("MP4 open fail\n\r");
 		goto mmf2_video_exmaple_joint_test_rtsp_mp4_fail;
 	}
-
-
-	//--------------Audio --------------
-	audio_ctx = mm_module_open(&audio_module);
-	if (audio_ctx) {
-		mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_PARAMS, (int)&audio_params);
-		mm_module_ctrl(audio_ctx, MM_CMD_SET_QUEUE_LEN, 6);
-		mm_module_ctrl(audio_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
-		mm_module_ctrl(audio_ctx, CMD_AUDIO_APPLY, 0);
-	} else {
-		rt_printf("audio open fail\n\r");
-		goto mmf2_video_exmaple_joint_test_rtsp_mp4_fail;
-	}
-
-	aac_ctx = mm_module_open(&aac_module);
-	if (aac_ctx) {
-		mm_module_ctrl(aac_ctx, CMD_AAC_SET_PARAMS, (int)&aac_params);
-		mm_module_ctrl(aac_ctx, MM_CMD_SET_QUEUE_LEN, 16);
-		mm_module_ctrl(aac_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
-		mm_module_ctrl(aac_ctx, CMD_AAC_INIT_MEM_POOL, 0);
-		mm_module_ctrl(aac_ctx, CMD_AAC_APPLY, 0);
-	} else {
-		rt_printf("AAC open fail\n\r");
-		goto mmf2_video_exmaple_joint_test_rtsp_mp4_fail;
-	}
-
 
 	//--------------RTSP---------------
 	rtsp2_v2_ctx = mm_module_open(&rtsp2_module);
@@ -514,8 +651,7 @@ void mmf2_video_example_joint_test_rtsp_mp4_init_fcs(void)
 		rt_printf("siso1 open fail\n\r");
 		goto mmf2_video_exmaple_joint_test_rtsp_mp4_fail;
 	}
-
-
+	//vTaskDelay(300);
 	//rt_printf("siso started\n\r");
 
 	mimo_2v_1a_rtsp_mp4 = mimo_create();
@@ -589,7 +725,7 @@ mmf2_video_exmaple_joint_test_rtsp_mp4_fail:
 	return;
 }
 
-static char *example = "mmf2_video_example_joint_test_rtsp_mp4_init_fcs";
+static const char *example = "mmf2_video_example_joint_test_rtsp_mp4_init_fcs";
 static void example_deinit(int need_pause)
 {
 	//Pause Linker

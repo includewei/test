@@ -92,6 +92,7 @@ TaskHandle_t snapshot_thread = NULL;
 int v1_snapshot_cb(uint32_t jpeg_addr, uint32_t jpeg_len)
 {
 	printf("snapshot size=%d\n\r", jpeg_len);
+	return 0;
 }
 
 void snapshot_control_thread(void *param)
@@ -104,6 +105,7 @@ void snapshot_control_thread(void *param)
 		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SNAPSHOT, 1);
 	}
 }
+
 
 void mmf2_video_example_v1_shapshot_init(void)
 {
@@ -166,7 +168,7 @@ mmf2_video_exmaple_v1_shapshot_fail:
 	return;
 }
 
-static char *example = "mmf2_video_example_v1_shapshot";
+static const char *example = "mmf2_video_example_v1_shapshot";
 static void example_deinit(void)
 {
 	//Pause Linker

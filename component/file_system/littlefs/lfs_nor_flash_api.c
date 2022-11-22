@@ -1,19 +1,14 @@
-#include "FreeRTOS.h"
-#include "task.h"
-#include "basic_types.h"
-#include "platform_opts.h"
-
-
 #include <cmsis.h>
 #include "FreeRTOS.h"
 #include "task.h"
-#include "basic_types.h"
+#include <stdint.h>
 #include "platform_opts.h"
 #include "section_config.h"
 #include "flash_api.h" // Flash interface
 #include "lfs.h"
 #include "lfs_util.h"
 #include "ftl_common_api.h"
+#include "lfs_reent.h"
 
 #define NOR_BLOCK_OFFSET 1088
 #define NOR_PAGE_SIZE       4096 //SECTOR SIZE
@@ -51,6 +46,8 @@ struct lfs_config nor_cfg = {
 	.prog  = nor_block_prog,
 	.erase = nor_block_erase,
 	.sync  = nor_block_sync,
+	.lock  =  lfs_system_lock,
+	.unlock = lfs_system_unlock,
 
 	// block device configuration
 	.read_size = NOR_PAGE_SIZE,

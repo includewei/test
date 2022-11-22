@@ -61,6 +61,11 @@ list(
 
     ${sdk_root}/component/example/amazon_freertos/example_amazon_freertos.c
     ${prj_root}/src/aws_iot_freertos_lts/vendors/realtek/boards/amebaPro2/aws_demos/application_code/aws_main.c
+)
+
+### add aws-iot demo source file ###
+list(
+    APPEND out_sources
 
 ##amazon_freertos_LTS - demos
     #common

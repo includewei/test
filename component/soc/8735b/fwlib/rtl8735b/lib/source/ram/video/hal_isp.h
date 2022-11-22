@@ -159,6 +159,7 @@ typedef struct {
 	uint32_t sensor_pwdn_pin;
 	uint32_t sensor_pwrctrl_pin;
 	uint32_t i2c_id;
+	uint32_t daynight_mode;
 
 
 } __attribute__((aligned(32))) hal_isp_adapter_t;
@@ -255,5 +256,7 @@ int hal_isp_set_init_awb(int init_r_gain, int init_b_gain);
 void hal_isp_set_drop_frame_num(uint32_t num);
 int hal_isp_set_init_dn_mode(int dn_mode);
 void hal_isp_set_direct_i2c_mode(uint32_t direct_i2c_mode);
+int hal_isp_set_init_gray_mode(int gray_mode);
+int hal_isp_get_real_fps(int ch, int *fps100);
 
 #endif /* HAL_RTL8735B_LIB_SOURCE_RAM_VIDEO_ISP_HAL_ISP_H_ */

@@ -218,6 +218,74 @@ void vPortEndScheduler(void)
 }
 
 
+#include "diag.h"
+void vApplicationTickHook(void)
+{
+	return;
+}
 
+void vApplicationIdleHook(void)
+{
+	volatile size_t xFreeStackSpace;
 
+	/* The idle task hook is enabled by setting configUSE_IDLE_HOOK to 1 in
+	FreeRTOSConfig.h.
+
+	This function is called on each cycle of the idle task.  In this case it
+	does nothing useful, other than report the amount of FreeRTOS heap that
+	remains unallocated. */
+	xFreeStackSpace = xPortGetFreeHeapSize();
+#if defined (CONFIG_FW_DRIVER_COEXIST) && CONFIG_FW_DRIVER_COEXIST
+#if defined (CONFIG_WLAN)
+	extern void wlan_driver_check_and_suspend(void);
+	wlan_driver_check_and_suspend();
+#endif
+#endif
+#if defined(CONFIG_WIFI_FW_EN) && CONFIG_WIFI_FW_EN
+	extern void Wifi_FW_TaskIdle(void);
+	Wifi_FW_TaskIdle();
+#endif
+
+	if (xFreeStackSpace > 100) {
+		/* By now, the kernel has allocated everything it is going to, so
+		if there is a lot of heap remaining unallocated then
+		the value of configTOTAL_HEAP_SIZE in FreeRTOSConfig.h can be
+		reduced accordingly. */
+	}
+}
+
+void vApplicationMallocFailedHook(void)
+{
+	/* The malloc failed hook is enabled by setting
+	configUSE_MALLOC_FAILED_HOOK to 1 in FreeRTOSConfig.h.
+
+	Called if a call to pvPortMalloc() fails because there is insufficient
+	free memory available in the FreeRTOS heap.  pvPortMalloc() is called
+	internally by FreeRTOS API functions that create tasks, queues, software
+	timers, and semaphores.  The size of the FreeRTOS heap is set by the
+	configTOTAL_HEAP_SIZE configuration constant in FreeRTOSConfig.h. */
+	char *pcCurrentTask = "NoTsk";
+	if( xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED )
+	{
+	    pcCurrentTask = pcTaskGetName( NULL );
+	}
+	DiagPrintf( "[%s]Malloc failed [free heap size: %d]\r\n",  pcCurrentTask, xPortGetFreeHeapSize() );
+	taskDISABLE_INTERRUPTS();
+	for( ;; );
+}
+
+/*-----------------------------------------------------------*/
+void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName )
+{
+	/* To avoid gcc warnings */
+	( void ) pxTask;
+
+	/* This function will be called if a task overflows its stack, if
+	configCHECK_FOR_STACK_OVERFLOW != 0.  It might be that the function
+	parameters have been corrupted, depending on the severity of the stack
+	overflow.  When this is the case pxCurrentTCB can be inspected in the
+	debugger to find the offending task. */
+	DiagPrintf("\n\r[%s] STACK OVERFLOW - TaskName(%s)\n\r", __FUNCTION__, pcTaskName);
+	for( ;; );
+}
 

@@ -16,7 +16,7 @@
 #include "wifi_conf.h"
 #include "lwip_netconf.h"
 
-static void wifi_common_init()
+static void wifi_common_init(void)
 {
 	uint32_t wifi_wait_count = 0;
 
@@ -34,7 +34,7 @@ static void wifi_common_init()
 //------------------------------------------------------------------------------
 // video support examples
 //------------------------------------------------------------------------------
-static void example_mmf2_video_surport()
+static void example_mmf2_video_surport(void)
 {
 
 	// CH1 Video -> H264/HEVC -> RTSP
@@ -102,27 +102,54 @@ static void example_mmf2_video_surport()
 	// V1 parameter change
 	//mmf2_video_example_v1_param_change_init();
 
+	//HTTP File Server
+	//mmf2_video_example_av_mp4_httpfs_init();
+
+	// H264 -> RTSP (V1)
+	// RGB  -> NN object detect (V4)
 	//mmf2_video_example_vipnn_rtsp_init();
 
+	// H264 -> RTSP (V1)
+	// RGB  -> NN face detect (V4) -> NN face recognition
+	//mmf2_video_example_face_rtsp_init();
+
+	// H264 -> RTSP (V1)
+	// RGB  -> NN object detect (V4)
+	// RGB  -> NN face detect (V4) -> NN face recognition
+	// AUDIO -> NN audio classification
+	//mmf2_video_example_joint_test_all_nn_rtsp_init();
+
+	// MP4 -> RTSP (V1)
 	//mmf2_video_example_demuxer_rtsp_init();
 
+	// ARRAY (H264, G711) -> MP4
 	//mmf2_video_example_h264_pcmu_array_mp4_init();
 
+	// AUDIO -> NN audio classification
 	//mmf2_video_example_audio_vipnn_init();
 
+	// H264 -> RTSP (V1)
+	// RGB  -> motion detection (V4)
 	//mmf2_video_example_md_rtsp_init();
 
+	// H264 -> RTSP (V1)
+	// RGB  -> motion detection (V4) -> NN object detect
 	//mmf2_video_example_md_nn_rtsp_init();
 
-	//mmf2_video_example_vipnn_face_recog_init();
-
+	// Joint test RTSP MP4 with fast camera start
 	//mmf2_video_example_joint_test_rtsp_mp4_init_fcs();
+
+	// H264 -> RTSP (V1)
+	// RGB  -> NN face detect (V4)
+	//mmf2_video_example_vipnn_facedet_init();
 
 	// Joint test RTSP MP4 with NN
 	// H264 -> MP4  (V1)
 	// H264 -> RTSP (V2)
-	// RGB  -> NN   (V4)
+	// RGB  -> NN object detect (V4)
+	// RGB  -> NN face detect (V4) -> NN face recognition (optional)
 	// AUDIO -> AAC  -> RTSP and mp4
+	// AUDIO -> NN audio classification
 	// RTP   -> AAD  -> AUDIO
 	//mmf2_video_example_joint_test_vipnn_rtsp_mp4_init();
 }
@@ -137,10 +164,6 @@ void video_example_main(void *param)
 	}
 
 	example_mmf2_video_surport();
-
-	// Disable video log
-	vTaskDelay(1000);
-	video_ctrl(0, VIDEO_DEBUG, 0);
 
 	// TODO: exit condition or signal
 	while (1) {

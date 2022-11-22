@@ -64,16 +64,42 @@ list (
 	APPEND app_example_inc_path
 	"${prj_root}/src/amazon_kvs/lib_amazon/gcc_include"
 	"${prj_root}/src/mmfv2_video_example"
+	"${sdk_root}/component/example/kvs_webrtc_mmf"
 	"${sdk_root}/component/example/kvs_webrtc_mmf/webrtc_app_src/include"
+
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/include"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/api_call"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/credential"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/crypto"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/ice"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/Json"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/Metrics"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/net"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/PeerConnection"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/Rtcp"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/Rtp"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/sctp"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/Sdp"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/signaling"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/srtp"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/state_machine"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/stun"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/utils"
+	"${prj_root}/src/amazon_kvs/lib_amazon/amazon-kinesis-video-streams-webrtc-sdk-c/src/source/Rtp/Codecs"
 )
 
 ### add source file ###
 list(
 	APPEND app_example_sources
 	${sdk_root}/component/example/kvs_webrtc_mmf/app_example.c
-	${sdk_root}/component/example/kvs_webrtc_mmf/module_kvs_webrtc.c
 	${sdk_root}/component/example/kvs_webrtc_mmf/example_kvs_webrtc_mmf.c
 	${sdk_root}/component/example/kvs_webrtc_mmf/example_kvs_webrtc_playback_mmf.c
+	${sdk_root}/component/example/kvs_webrtc_mmf/example_kvs_webrtc_joint_test_mmf.c
+)
+
+list(
+	APPEND out_sources
+	${sdk_root}/component/example/kvs_webrtc_mmf/module_kvs_webrtc.c
 
 	${sdk_root}/component/example/kvs_webrtc_mmf/webrtc_app_src/AppCommon.c
 	${sdk_root}/component/example/kvs_webrtc_mmf/webrtc_app_src/AppCredential.c

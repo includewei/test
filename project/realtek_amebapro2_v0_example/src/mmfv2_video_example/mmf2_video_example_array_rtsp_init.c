@@ -68,7 +68,7 @@ void mmf2_video_example_array_rtsp_init(void)
 	atcmd_userctrl_init();
 
 	for (i = 0; i < 16; i++) {
-		memcpy(&tempchar, array.data_addr + i, 1);
+		memcpy(&tempchar, (void *)(array.data_addr + i), 1);
 		printf("%02X", tempchar);
 	}
 	printf("\r\n");
@@ -119,7 +119,7 @@ mmf2_video_example_array_rtsp_fail:
 	return;
 }
 
-static char *example = "mmf2_video_example_array_rtsp";
+static const char *example = "mmf2_video_example_array_rtsp";
 static void example_deinit(void)
 {
 	siso_pause(siso_array_rtsp);

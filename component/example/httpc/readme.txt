@@ -4,8 +4,6 @@
 #                                                                                #
 ##################################################################################
 
-Date: 2018-06-11
-
 Table of Contents
 ~~~~~~~~~~~~~~~~~
  - Description
@@ -21,9 +19,8 @@ Description
 	
 Setup Guide
 ~~~~~~~~~~~
-        In platform_opts.h, please set #define CONFIG_EXAMPLE_HTTPC 1
-		For AmebaD2 :Amebad2 Changes how example is compiled, and Removed macro controls (CONFIG_EXAMPLE_XXX)in platform_opts.h
-			GCC:use CMD "make xip EXAMPLE=httpc" to compile httpc example.
+        GCC:use CMD "make all EXAMPLE=httpc" to compile httpc example.
+        
 Parameter Setting and Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         Can make automatical Wi-Fi connection when booting by using wlan fast connect example.
@@ -39,7 +36,7 @@ Supported List
 ~~~~~~~~~~~~~~
 [Supported List]
         Supported IC :
-                Ameba-pro, Ameba-z2, AmebaD, Ameba-D2
+                RTL8730A, RTL872XE
  
 Trouble Shooting
 ~~~~~~~~~~~~~~

@@ -4,14 +4,17 @@
 #include "task.h"
 #include "diag.h"
 #include "hal.h"
+#include "osdep_service.h"
 #include "log_service.h"
 #include "snand_api.h"
-#include "log_service.h"
 #include "ftl_nand_api.h"
 #include "device_lock.h"
 #include "sys_api.h"
 #include "hal_sys_ctrl.h"
 #include "ftl_common_api.h"
+#include "ftl_nor_api.h"
+#include "ftl_nand_api.h"
+
 _mutex *ftl_mutex = NULL;
 _mutex _ftl_mutex;
 _mutex *snand_mutex = NULL;

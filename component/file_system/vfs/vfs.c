@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "osdep_service.h"
 #include "freertos_service.h"
 #include "time.h"
 #include "vfs.h"
@@ -99,7 +100,7 @@ int vfs_scan_vfs(int vfs_type)
 	return vfs_num;
 }
 
-int vfs_user_register(char *prefix, int vfs_type, int interface)
+int vfs_user_register(const char *prefix, int vfs_type, int interface)
 {
 	int vfs_num = 0;
 	int ret = -1;
@@ -136,7 +137,7 @@ EXIT:
 	return ret;
 }
 
-int vfs_user_unregister(char *prefix, int vfs_type, int interface)
+int vfs_user_unregister(const char *prefix, int vfs_type, int interface)
 {
 	int user_id = 0;
 	int vfs_id = 0;

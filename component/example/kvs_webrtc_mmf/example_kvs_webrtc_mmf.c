@@ -31,9 +31,9 @@
 #define V1_CHANNEL 0
 #define V1_RESOLUTION VIDEO_HD
 #define V1_FPS 30
-#define V1_GOP 30
+#define V1_GOP 5
 #define V1_BPS 512*1024
-#define V1_RCMODE 1 // 1: CBR, 2: VBR
+#define V1_RCMODE 2 // 1: CBR, 2: VBR
 
 #define USE_H265 0
 
@@ -82,6 +82,7 @@ static video_params_t video_v1_params = {
 	.use_static_addr = 1
 };
 
+#if !USE_DEFAULT_AUDIO_SET
 static audio_params_t audio_params = {
 	.sample_rate = ASR_8KHZ,
 	.word_length = WL_16BIT,
@@ -93,6 +94,7 @@ static audio_params_t audio_params = {
 	.mix_mode = 0,
 	.enable_aec  = 0
 };
+#endif
 
 static g711_params_t g711e_params = {
 	.codec_id = AV_CODEC_ID_PCMU,
@@ -155,12 +157,23 @@ void example_kvs_webrtc_mmf_thread(void *param)
 	rtw_create_secure_context(2048);
 #endif
 
+	atcmd_kvsWebrtc_init();
+	kvsWebrtc_stop_sem = xSemaphoreCreateBinary();
+
 	if (!voe_boot_fsc_status()) {
 		wifi_common_init();
 	}
+	sntp_init();
 
-	atcmd_kvsWebrtc_init();
-	kvsWebrtc_stop_sem = xSemaphoreCreateBinary();
+	kvs_webrtc_v1_a1_ctx = mm_module_open(&kvs_webrtc_module);
+	if (kvs_webrtc_v1_a1_ctx) {
+		mm_module_ctrl(kvs_webrtc_v1_a1_ctx, MM_CMD_SET_QUEUE_LEN, 6);
+		mm_module_ctrl(kvs_webrtc_v1_a1_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
+		mm_module_ctrl(kvs_webrtc_v1_a1_ctx, CMD_KVS_WEBRTC_SET_APPLY, 0);
+	} else {
+		printf("KVS open fail\n\r");
+		goto example_kvs_webrtc_cleanup;
+	}
 
 	int voe_heap_size = video_voe_presetting(1, V1_WIDTH, V1_HEIGHT, V1_BPS, 0,
 						0, 0, 0, 0, 0,
@@ -172,7 +185,7 @@ void example_kvs_webrtc_mmf_thread(void *param)
 	video_v1_ctx = mm_module_open(&video_module);
 	if (video_v1_ctx) {
 		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v1_params);
-		mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, V1_FPS);
+		mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, V1_FPS * 3);
 		mm_module_ctrl(video_v1_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
 		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_APPLY, V1_CHANNEL);	// start channel 0
 	} else {
@@ -182,7 +195,9 @@ void example_kvs_webrtc_mmf_thread(void *param)
 
 	audio_ctx = mm_module_open(&audio_module);
 	if (audio_ctx) {
+#if !USE_DEFAULT_AUDIO_SET
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_PARAMS, (int)&audio_params);
+#endif
 		mm_module_ctrl(audio_ctx, MM_CMD_SET_QUEUE_LEN, 6);
 		mm_module_ctrl(audio_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
 		mm_module_ctrl(audio_ctx, CMD_AUDIO_APPLY, 0);
@@ -214,16 +229,6 @@ void example_kvs_webrtc_mmf_thread(void *param)
 		goto example_kvs_webrtc_cleanup;
 	}
 #endif
-
-	kvs_webrtc_v1_a1_ctx = mm_module_open(&kvs_webrtc_module);
-	if (kvs_webrtc_v1_a1_ctx) {
-		mm_module_ctrl(kvs_webrtc_v1_a1_ctx, MM_CMD_SET_QUEUE_LEN, 6);
-		mm_module_ctrl(kvs_webrtc_v1_a1_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
-		mm_module_ctrl(kvs_webrtc_v1_a1_ctx, CMD_KVS_WEBRTC_SET_APPLY, 0);
-	} else {
-		printf("KVS open fail\n\r");
-		goto example_kvs_webrtc_cleanup;
-	}
 
 	siso_audio_a1 = siso_create();
 	if (siso_audio_a1) {
@@ -314,70 +319,42 @@ void example_kvs_webrtc_mmf_thread(void *param)
 	}
 #endif
 
-	// wait for termination
+	//wait for termination
 	xSemaphoreTake(kvsWebrtc_stop_sem, portMAX_DELAY);
 
 example_kvs_webrtc_cleanup:
 
-	// stop module
-	if (kvs_webrtc_v1_a1_ctx != NULL) {
-		printf("KVS webrtc module stop\n\r");
-		mm_module_ctrl(kvs_webrtc_v1_a1_ctx, CMD_KVS_WEBRTC_STOP, 0);
-	}
-	if (video_v1_ctx != NULL) {
-		printf("video module stream stop\n\r");
-		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_STREAM_STOP, 0);
-	}
-	if (audio_ctx != NULL) {
-		printf("audio module TRX stop\n\r");
-		mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_TRX, 0);
-	}
-	// stop linker and delete
-	if (siso_audio_a1 != NULL) {
-		printf("delete siso_audio_a1\n\r");
-		siso_delete(siso_audio_a1);
-	}
-	if (miso_kvs_webrtc_v1_a1 != NULL) {
-		printf("delete miso_kvs_webrtc_v1_a1\n\r");
-		miso_delete(miso_kvs_webrtc_v1_a1);
-	}
-	if (siso_webrtc_a2 != NULL) {
-		printf("delete siso_webrtc_a2\n\r");
-		siso_delete(siso_webrtc_a2);
-	}
-	if (siso_a2_audio != NULL) {
-		printf("delete siso_a2_audio\n\r");
-		siso_delete(siso_a2_audio);
-	}
-	// close module
-	if (kvs_webrtc_v1_a1_ctx != NULL) {
-		printf("KVS webrtc module close\n\r");
-		kvs_webrtc_v1_a1_ctx = mm_module_close(kvs_webrtc_v1_a1_ctx);
-	}
-	if (video_v1_ctx != NULL) {
-		printf("video module close\n\r");
-		video_v1_ctx = mm_module_close(video_v1_ctx);
-	}
-	if (audio_ctx != NULL) {
-		printf("audio module close\n\r");
-		audio_ctx = mm_module_close(audio_ctx);
-	}
-	if (g711e_ctx != NULL) {
-		printf("g711e module close\n\r");
-		g711e_ctx = mm_module_close(g711e_ctx);
-	}
-	if (opusc_ctx != NULL) {
-		printf("opusc module close\n\r");
-		opusc_ctx = mm_module_close(opusc_ctx);
-	}
-	if (g711d_ctx != NULL) {
-		printf("g711d module close\n\r");
-		g711d_ctx = mm_module_close(g711d_ctx);
-	}
-	if (opusd_ctx != NULL) {
-		printf("opusd module close\n\r");
-		opusd_ctx = mm_module_close(opusd_ctx);
-	}
+	//Pause Linker
+	siso_pause(siso_audio_a1);
+	miso_pause(miso_kvs_webrtc_v1_a1, MM_OUTPUT);
+	siso_pause(siso_webrtc_a2);
+	siso_pause(siso_a2_audio);
+
+	//Stop module
+	mm_module_ctrl(kvs_webrtc_v1_a1_ctx, CMD_KVS_WEBRTC_STOP, 0);
+	mm_module_ctrl(video_v1_ctx, CMD_VIDEO_STREAM_STOP, V1_CHANNEL);
+	mm_module_ctrl(audio_ctx, CMD_AUDIO_SET_TRX, 0);
+
+	//Delete linker
+	siso_audio_a1 = siso_delete(siso_audio_a1);
+	miso_kvs_webrtc_v1_a1 = miso_delete(miso_kvs_webrtc_v1_a1);
+	siso_webrtc_a2 = siso_delete(siso_webrtc_a2);
+	siso_a2_audio = siso_delete(siso_a2_audio);
+
+	//Close module
+	kvs_webrtc_v1_a1_ctx = mm_module_close(kvs_webrtc_v1_a1_ctx);
+	video_v1_ctx = mm_module_close(video_v1_ctx);
+	audio_ctx = mm_module_close(audio_ctx);
+#if (AUDIO_G711_MULAW || AUDIO_G711_ALAW)
+	g711e_ctx = mm_module_close(g711e_ctx);
+	g711d_ctx = mm_module_close(g711d_ctx);
+#elif AUDIO_OPUS
+	opusc_ctx = mm_module_close(opusc_ctx);
+	opusd_ctx = mm_module_close(opusd_ctx);
+#endif
+
+	//Video Deinit
+	video_deinit();
 
 	vSemaphoreDelete(kvsWebrtc_stop_sem);
 	kvsWebrtc_stop_sem = NULL;

@@ -25,24 +25,15 @@ extern "C" {
 #include "AppMediaSrc.h"
 #include "AppMediaSink.h"
 
-typedef struct {
-	uint8_t *output_buffer;
-	uint32_t output_buffer_size;
-	uint32_t output_size;
-	uint32_t timestamp;
-} webrtc_video_buf_t;
-
-typedef struct {
-	uint8_t *data_buf;
-	uint32_t size;
-	uint32_t timestamp;
-	uint32_t type;
-} webrtc_audio_buf_t;
-
-
-uint64_t getEpochTimestampInHundredsOfNanos(void *pTick);
+#include "module_kvs_webrtc.h"
 
 extern AppMediaSrc gAppMediaSrc;
+
+VOID app_media_sendMediaFrame(PVOID args, PVOID pFrame);
+
+int app_media_h264_is_i_frame(u8 *frame_buf);
+uint64_t getEpochTimestampInHundredsOfNanos(void *pTick);
+
 #ifdef __cplusplus
 }
 #endif

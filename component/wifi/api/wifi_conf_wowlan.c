@@ -4,6 +4,7 @@
 #include "main.h"
 #if CONFIG_LWIP_LAYER
 #include "lwipconf.h"
+#include "lwip_netconf.h"
 #endif
 #endif
 #include <platform_stdlib.h>
@@ -39,6 +40,10 @@ extern struct netif xnetif[NET_IF_NUM];
  ******************************************************/
 
 #if CONFIG_WLAN
+
+static struct eth_addr *dst_eth_ret = NULL;
+static struct eth_addr *dhcp_dst_eth_ret = NULL;
+static int local_lan = 0;
 
 #ifdef CONFIG_WOWLAN_TCP_KEEP_ALIVE
 #define IP_HDR_LEN   20
@@ -95,7 +100,27 @@ void wifi_set_publish_wakeup(void)
 	rtw_hal_set_publish_wakeup();
 }
 
+extern void rtw_hal_set_tcp_mode(void);
+void wifi_set_tcpssl_keepalive(void)
+{
+	rtw_hal_set_tcp_mode();
+}
 
+#endif
+
+#ifdef CONFIG_ARP_KEEP_ALIVE
+extern void rtw_set_arp_rsp_keep_alive(int enable, uint8_t *gw_ip);
+int wifi_wowlan_set_arp_rsp_keep_alive(int enable)
+{
+	int ret = 0;
+	uint8_t *gw_ip = NULL;
+
+	gw_ip = LwIP_GetGW(0);
+
+	rtw_set_arp_rsp_keep_alive(enable, gw_ip);
+
+	return ret;
+}
 #endif
 
 #ifdef CONFIG_WOWLAN_TCP_KEEP_ALIVE
@@ -183,6 +208,67 @@ int wifi_set_tcp_keep_alive_offload(int socket_fd, uint8_t *content, size_t len,
 	tcp_header[2] = (uint8_t)(peer_port >> 8);
 	tcp_header[3] = (uint8_t)(peer_port & 0xff);
 
+	// eth header
+	uint8_t eth_header[ETH_HDR_LEN] = {/*dstaddr*/ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 /*dstaddr*/,
+												   /*srcaddr*/ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 /*srcaddr*/, 0x08, 0x00
+									  };
+
+	ip4_addr_t *dst_ip, *dst_ip_ret = NULL;
+	ip4_addr_t *dhcp_dst_ip, *dhcp_dst_ip_ret = NULL;
+	uint8_t *mask = LwIP_GetMASK(0);
+	uint8_t *temp_ip = LwIP_GetIP(0);
+	dst_ip = (ip4_addr_t *) peer_ip;
+	if (!ip4_addr_netcmp(dst_ip, (ip4_addr_t *)temp_ip, (ip4_addr_t *)mask)) {
+		//outside local network
+		dst_ip = (ip4_addr_t *) LwIP_GetGW(0);
+	} else {
+		local_lan = 1;
+		dhcp_dst_ip = (ip4_addr_t *) LwIP_GetGW(0);
+		// dhcp addr
+		if (LwIP_etharp_find_addr(0, dhcp_dst_ip, &dhcp_dst_eth_ret, (const ip4_addr_t **)&dhcp_dst_ip_ret) >= 0) {
+			memcpy(eth_header, dhcp_dst_eth_ret->addr, ETH_ALEN);
+		} else {
+			LwIP_etharp_request(0, dhcp_dst_ip);
+			int retry_cnt = 0;
+			vTaskDelay(100);
+			while (LwIP_etharp_find_addr(0, dhcp_dst_ip, &dhcp_dst_eth_ret, (const ip4_addr_t **)&dhcp_dst_ip_ret) < 0) {
+				LwIP_etharp_request(0, dhcp_dst_ip);
+				vTaskDelay(100);
+				retry_cnt++;
+				if (retry_cnt > 500) {
+					break;
+				}
+			}
+
+			if (retry_cnt < 500) {
+				memcpy(eth_header, dhcp_dst_eth_ret->addr, ETH_ALEN);
+			}
+		}
+	}
+
+	// dst addr
+	if (LwIP_etharp_find_addr(0, dst_ip, &dst_eth_ret, (const ip4_addr_t **)&dst_ip_ret) >= 0) {
+		memcpy(eth_header, dst_eth_ret->addr, ETH_ALEN);
+	} else {
+		LwIP_etharp_request(0, dst_ip);
+		int retry_cnt = 0;
+		vTaskDelay(100);
+		while (LwIP_etharp_find_addr(0, dst_ip, &dst_eth_ret, (const ip4_addr_t **)&dst_ip_ret) < 0) {
+			LwIP_etharp_request(0, dst_ip);
+			vTaskDelay(100);
+			retry_cnt++;
+			if (retry_cnt > 500) {
+				break;
+			}
+		}
+
+		if (retry_cnt < 500) {
+			memcpy(eth_header, dst_eth_ret->addr, ETH_ALEN);
+		}
+	}
+	// src addr
+	memcpy(eth_header + ETH_ALEN, LwIP_GetMAC(0), ETH_ALEN);
+
 	uint32_t seqno = 0;
 	uint32_t ackno = 0;
 	uint16_t wnd = 0;
@@ -211,31 +297,7 @@ int wifi_set_tcp_keep_alive_offload(int socket_fd, uint8_t *content, size_t len,
 	tcp_header[16] = (uint8_t)(tcp_checksum16 >> 8);
 	tcp_header[17] = (uint8_t)(tcp_checksum16 & 0xff);
 
-	// eth header
-	uint8_t eth_header[ETH_HDR_LEN] = {/*dstaddr*/ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 /*dstaddr*/,
-												   /*srcaddr*/ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 /*srcaddr*/, 0x08, 0x00
-									  };
-	struct eth_addr *dst_eth_ret = NULL;
-	ip4_addr_t *dst_ip, *dst_ip_ret = NULL;
-	uint8_t *mask = LwIP_GetMASK(0);
-	uint8_t *temp_ip = LwIP_GetIP(0);
-	dst_ip = (ip4_addr_t *) peer_ip;
-	if (!ip4_addr_netcmp(dst_ip, (ip4_addr_t *)temp_ip, (ip4_addr_t *)mask)) {
-		//outside local network
-		dst_ip = (ip4_addr_t *) LwIP_GetGW(0);
-	}
-	// dst addr
-	if (LwIP_etharp_find_addr(0, dst_ip, &dst_eth_ret, (const ip4_addr_t **)&dst_ip_ret) >= 0) {
-		memcpy(eth_header, dst_eth_ret->addr, ETH_ALEN);
-	} else {
-		LwIP_etharp_request(0, dst_ip);
-		vTaskDelay(1000);
-		if (LwIP_etharp_find_addr(0, dst_ip, &dst_eth_ret, (const ip4_addr_t **)&dst_ip_ret) >= 0) {
-			memcpy(eth_header, dst_eth_ret->addr, ETH_ALEN);
-		}
-	}
-	// src addr
-	memcpy(eth_header + ETH_ALEN, LwIP_GetMAC(0), ETH_ALEN);
+	netif_set_link_down(&xnetif[0]); // simulate system enter sleep
 
 	// eth frame without FCS
 	uint32_t frame_len = sizeof(eth_header) + sizeof(ip_header) + sizeof(tcp_header) + len;
@@ -290,22 +352,33 @@ int wifi_set_tcp_keep_alive_offload(int socket_fd, uint8_t *content, size_t len,
 
 #endif
 
-#ifdef CONFIG_ARP_KEEP_ALIVE
-extern void rtw_set_arp_rsp_keep_alive(int enable, uint8_t *gw_ip);
-int wifi_wowlan_set_arp_rsp_keep_alive(int enable)
+#ifdef CONFIG_WOWLAN_PARAM
+extern void rtw_set_wowlan_param(u8  fwdis_period,
+								 u8  fwdis_trypktnum,
+								 u8  pno_enable,
+								 u8  pno_timeout,
+								 u8  l2_keepalive_period);
+int wifi_wowlan_set_fwdecision_param(u8  fwdis_period,
+									 u8  fwdis_trypktnum,
+									 u8  pno_enable,
+									 u8  pno_timeout,
+									 u8  l2_keepalive_period)
 {
 	int ret = 0;
-	uint8_t *gw_ip = NULL;
-
-	gw_ip = LwIP_GetGW(0);
-
-	rtw_set_arp_rsp_keep_alive(enable, gw_ip);
+	rtw_set_wowlan_param(fwdis_period,
+						 fwdis_trypktnum,
+						 pno_enable,
+						 pno_timeout,
+						 l2_keepalive_period);
 
 	return ret;
 }
 #endif
 
-
+#if defined(CONFIG_WOWLAN_DTIMTO) || defined(CONFIG_SMART_DTIM)
+extern void rtw_set_lps_dtim(uint8_t dtim);
+extern int wifi_get_ap_dtim(u8 *dtim_period);
+#endif
 
 #ifdef CONFIG_WOWLAN_DTIMTO
 extern void rtw_set_dtimto(uint8_t dtimto_enable, uint8_t retry_inc, uint8_t ack_timeout);
@@ -320,6 +393,74 @@ int wifi_wowlan_set_dtimto(uint8_t dtimto_enable, uint8_t retry_inc, uint8_t ack
 
 	rtw_set_dtimto(dtimto_enable, retry_inc, ack_timeout);
 
+	return ret;
+}
+#endif
+
+#ifdef CONFIG_SMART_DTIM
+extern void rtw_set_smartdtim(uint8_t check_period, uint8_t threshold, uint8_t change_dtim);
+int wifi_wowlan_set_smartdtim(uint8_t check_period, uint8_t threshold, uint8_t change_dtim, uint8_t dtim)
+{
+	int ret = 0;
+
+	//check ap dtim
+	uint8_t dtim_period = 0;
+	wifi_get_ap_dtim(&dtim_period);
+
+	if (dtim > 0) {
+		printf("dtim: %d\r\n", dtim);
+		uint8_t smartdtim = dtim_period;
+		if (dtim > dtim_period) {
+			smartdtim = (dtim / dtim_period) * dtim_period;
+		}
+
+		printf("smartdtim: %d\r\n", smartdtim);
+
+		rtw_set_lps_dtim(dtim);
+	}
+
+	//check check_period& threshold
+	if (threshold >=  check_period) {
+		printf("warning: threshold >= check_period\r\n");
+		threshold = check_period / 2;
+	}
+
+	//check change_dtim
+	if (change_dtim >= dtim) {
+		printf("warning: change_dtim >= dtim\r\n");
+		change_dtim = 1;
+	}
+
+	rtw_set_smartdtim(check_period, threshold, change_dtim);
+
+	return ret;
+}
+#endif
+
+#ifdef CONFIG_ARP_REQUEST_KEEP_ALIVE
+extern void rtw_set_arpreq_keepalive(u8  powerbit,
+									 u8  dtim1to);
+
+int wifi_wowlan_set_arpreq_keepalive(u8  powerbit,
+									 u8  dtim1to)
+{
+	int ret = 0;
+	rtw_set_arpreq_keepalive(powerbit, dtim1to);
+
+	return ret;
+}
+#endif
+
+#ifdef CONFIG_WOWLAN_IO_WDT
+extern void rtw_set_wdt(u8  gpio,
+						u8  interval);
+
+
+int wifi_wowlan_set_wdt(u8  gpio,
+						u8  interval)
+{
+	int ret = 0;
+	rtw_set_wdt(gpio, interval);
 	return ret;
 }
 #endif
@@ -353,11 +494,13 @@ struct dhcprenew_msg {
 	uint8_t options[64];   /* Optional parameters field. reference the RFC 2132 */
 };
 
+#if CONFIG_LWIP_LAYER==0
+/* REMOVE this, CONFIG_LWIP_LAYER cannot be turn off at this file */
 #define PP_HTONL(x) ((((x) & 0x000000ffUL) << 24) | \
                      (((x) & 0x0000ff00UL) <<  8) | \
                      (((x) & 0x00ff0000UL) >>  8) | \
                      (((x) & 0xff000000UL) >> 24))
-
+#endif
 
 int wifi_set_dhcp_offload(void)
 {
@@ -488,20 +631,17 @@ int wifi_set_dhcp_offload(void)
 	uint8_t eth_header[ETH_HDR_LEN] = {/*dstaddr*/ 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF /*dstaddr*/,
 												   /*srcaddr*/ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 /*srcaddr*/, 0x08, 0x00
 									  };
-	struct eth_addr *dst_eth_ret = NULL;
+
 	ip4_addr_t *dst_ip, *dst_ip_ret = NULL;
 	dst_ip = (ip4_addr_t *) gw_ip;
 
 	// dst addr
-	if (LwIP_etharp_find_addr(0, dst_ip, &dst_eth_ret, (const ip4_addr_t **)&dst_ip_ret) >= 0) {
-		memcpy(eth_header, dst_eth_ret->addr, ETH_ALEN);
+	if (local_lan == 1) {
+		memcpy(eth_header, dhcp_dst_eth_ret->addr, ETH_ALEN);
 	} else {
-		LwIP_etharp_request(0, dst_ip);
-		vTaskDelay(1000);
-		if (LwIP_etharp_find_addr(0, dst_ip, &dst_eth_ret, (const ip4_addr_t **)&dst_ip_ret) >= 0) {
-			memcpy(eth_header, dst_eth_ret->addr, ETH_ALEN);
-		}
+		memcpy(eth_header, dst_eth_ret->addr, ETH_ALEN);
 	}
+
 
 	printf("LwIP_GetMAC2\r\n");
 	// src addr
@@ -567,8 +707,22 @@ int wifi_wowlan_ctrl(int enable)
 extern void rtw_hal_set_ssl_pattern(char *pattern, uint8_t len, uint16_t prefix_len);
 void wifi_wowlan_set_ssl_pattern(char *pattern, uint8_t len, uint16_t prefix_len)
 {
+#ifdef CONFIG_WOWLAN_TCP_KEEP_ALIVE_TEST
+	extern void fw_set_ssl_pattern(char *pattern, uint8_t len, uint16_t prefix_len);
+	fw_set_ssl_pattern(pattern, len, prefix_len);
+#else
 	rtw_hal_set_ssl_pattern(pattern, len, prefix_len);
+#endif
 }
+
+#ifdef CONFIG_WOWLAN_SSL_SERVER_KEEP_ALIVE
+extern void rtw_hal_set_ssl_serverkeepalive(uint16_t timeout, char *pattern, uint8_t len, uint16_t prefix_len);
+void wifi_wowlan_set_serverkeepalive(uint16_t timeout, char *pattern, uint8_t len, uint16_t prefix_len)
+{
+	rtw_hal_set_ssl_serverkeepalive(timeout, pattern, len, prefix_len);
+}
+#endif
+
 #endif
 
 #ifdef CONFIG_WOWLAN_CUSTOM_PATTERN
