@@ -723,7 +723,7 @@ static rtw_result_t wps_scan_result_handler(unsigned int scanned_AP_num, void *u
 		if (((wps_arg->config_method == WPS_CONFIG_DISPLAY) || (wps_arg->config_method == WPS_CONFIG_KEYPAD))
 			&& (scaned_ap_info->wps_type == 0x07)) {
 
-			update_discovered_ssids(scaned_ap_info->SSID.val);
+			update_discovered_ssids((char *)scaned_ap_info->SSID.val);
 		}
 #endif
 	}
@@ -1191,6 +1191,8 @@ int wps_judge_staion_disconnect(void)
 		if (os_strlen((char *)setting.ssid) > 0) {
 			wifi_disconnect();
 		}
+	default:
+		break;
 	}
 	return 0;
 }

@@ -212,18 +212,16 @@ void set_bt_config_state(uint8_t state)
 	bt_config_state = state;
 }
 
+extern bool rtk_bt_pre_enable(void);
 int bt_config_app_init(void)
 {
 	int bt_stack_already_on = 0;
 	T_GAP_CONN_INFO conn_info;
 	T_GAP_DEV_STATE new_state;
-
-	/*Check WIFI init complete*/
-	if (!(wifi_is_running(WLAN0_IDX) || wifi_is_running(WLAN1_IDX))) {
-		BC_printf("WIFI is disabled\r\n");
+	if (rtk_bt_pre_enable() == false) {
+		printf("%s fail!\r\n", __func__);
 		return -1;
 	}
-
 	set_bt_config_state(BC_DEV_INIT); // BT Config on
 
 #if CONFIG_AUTO_RECONNECT

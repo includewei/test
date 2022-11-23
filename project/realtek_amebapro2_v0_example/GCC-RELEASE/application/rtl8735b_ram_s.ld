@@ -3,6 +3,12 @@
 /* !! the include symbole may failed if the symbol file name is too long!! */
 INCLUDE "romsym_s.so"
 
+/* unit - Mega byte */
+DDR_SIZE = 128;
+
+DDR_START = 0x70000000 + (DDR_SIZE - 2)*1024*1024;
+DDR_END   = 0x70000000 + (DDR_SIZE)*1024*1024;
+
 MEMORY
 {
   /* !!! These memory map configuration MUST match with the SAU setting !!! */
@@ -26,11 +32,11 @@ MEMORY
 
   /* DDR memory */
   /* DDR 64M */
-  VOE (rwx)             : ORIGIN = 0x70000000, LENGTH = 0x70100000 - 0x70000000		/*  1MB */
-  DDR (rwx)	            : ORIGIN = 0x73E00000, LENGTH = 0x74000000 - 0x73E00000		/*  2MB */
-  /* DDR 128M */
-  /* VOE (rwx)             : ORIGIN = 0x70000000, LENGTH = 0x70100000 - 0x70000000 */		/*  1MB */
-  /* DDR (rwx)	            : ORIGIN = 0x77E00000, LENGTH = 0x78000000 - 0x77E00000	*/	    /*  2MB */
+  /* VOE (rwx)           : ORIGIN = 0x70000000, LENGTH = 0x70100000 - 0x70000000*/		/*  1MB */
+  /* DDR (rwx)	         : ORIGIN = 0x73E00000, LENGTH = 0x74000000 - 0x73E00000*/		/*  2MB */
+  /* DDR */
+   VOE (rwx)             : ORIGIN = 0x70000000, LENGTH = 0x70100000 - 0x70000000  	    /*  1MB */
+   DDR (rwx)	         : ORIGIN =  DDR_START, LENGTH = DDR_END - DDR_START		    /*  2MB */
 }
 
 /* Library configurations */

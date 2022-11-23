@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.6)
 
-project(app_s C)
+project(app_s)
 
 enable_language(C CXX ASM)
 
@@ -21,7 +21,7 @@ SET_PROPERTY ( TARGET hal_pmc_lib PROPERTY IMPORTED_LOCATION ${sdk_root}/compone
 
 #HAL
 list(
-    APPEND app_s_sources
+    APPEND out_s_sources
 	
 	
 	${sdk_root}/component/soc/8735b/fwlib/rtl8735b/source/ram_s/hal_hkdf.c
@@ -76,7 +76,7 @@ list(
 
 #RTOS
 list(
-    APPEND app_s_sources
+    APPEND out_s_sources
 
 	${sdk_root}/component/os/freertos/${freertos}/Source/portable/GCC/ARM_CM33/secure/secure_context.c
 	${sdk_root}/component/os/freertos/${freertos}/Source/portable/GCC/ARM_CM33/secure/secure_context_port.c
@@ -87,7 +87,7 @@ list(
 
 #CMSIS
 list(
-    APPEND app_s_sources
+    APPEND out_s_sources
 	${sdk_root}/component/soc/8735b/cmsis/rtl8735b/source/ram/mpu_config.c
 )
 
@@ -102,14 +102,14 @@ list(
 list(
 	APPEND app_s_sources
 
-	${sdk_root}/component/soc/8735b/misc/driver/low_level_io.c
+	#${sdk_root}/component/soc/8735b/misc/driver/low_level_io.c
 	${sdk_root}/component/soc/8735b/misc/utilities/source/ram/libc_wrap.c
 	${sdk_root}/component/soc/8735b/app/shell/ram_s/consol_cmds.c
 )
 
 #BLUETOOTH
 list(
-	APPEND app_s_sources
+	APPEND out_s_sources
 
 	${sdk_root}/component/bluetooth/driver/platform/amebapro2/hci/hci_platform_s.c
 )
@@ -136,7 +136,7 @@ list(
 
 )
 
-
+add_library(outsrc_s ${out_s_sources})
 
 if(SIMULATION)
 	if(BUILD_PXP)
@@ -167,6 +167,7 @@ if(SIMULATION)
 		${app_s_sources}
 		#$<TARGET_OBJECTS:rom> 
 		#$<TARGET_OBJECTS:soc> 
+		$<TARGET_OBJECTS:outsrc_s>
 		rom.o
 		dtcm_rom.o
 		itcm_rom.o
@@ -178,6 +179,7 @@ else()
 	add_executable(
 		${app_s}
 		${app_s_sources}
+		$<TARGET_OBJECTS:outsrc_s>
 		#$<TARGET_OBJECTS:rom> 
 		#$<TARGET_OBJECTS:soc> 
 	)
@@ -198,16 +200,22 @@ list(
 )
 
 target_compile_definitions(${app_s} PRIVATE ${app_s_flags} )
+target_compile_definitions(outsrc_s PRIVATE ${app_s_flags} )
+
+target_compile_options(${app_s} PRIVATE $<$<COMPILE_LANGUAGE:C>:${WARN_ERR_FLAGS}>)
+target_compile_options(outsrc_s PRIVATE $<$<COMPILE_LANGUAGE:C>:${OUTSRC_WARN_ERR_FLAGS}>)
 
 include(../includepath.cmake)
-target_include_directories(
-	${app_s}
-	PUBLIC
+list(
 
+	APPEND app_s_inc_path
 	${inc_path}
 	${sdk_root}/component/os/freertos/${freertos}/Source/portable/GCC/ARM_CM33/non_secure
 	${sdk_root}/component/os/freertos/${freertos}/Source/portable/GCC/ARM_CM33/secure
 )
+
+target_include_directories(${app_s} PUBLIC ${app_s_inc_path})
+target_include_directories(outsrc_s PUBLIC ${app_s_inc_path})
 
 target_link_libraries(
 	${app_s} 
@@ -215,9 +223,11 @@ target_link_libraries(
 	-Wl,--whole-archive
 	soc_s
 	hal_pmc_lib
+	-Wl,--no-whole-archive
 	
 	c
 	gcc
+	nosys
 )
 
 target_link_options(
@@ -225,7 +235,7 @@ target_link_options(
 	PUBLIC
 	"LINKER:SHELL:--out-implib=${CMAKE_CURRENT_BINARY_DIR}/import_lib.o"
 	"LINKER:SHELL:--cmse-implib"
-	"LINKER:SHELL:-L ${CMAKE_CURRENT_SOURCE_DIR}/../ROM/GCC"
+	"LINKER:SHELL:-L ${sdk_root}/component/soc/8735b/cmsis/rtl8735b/source/GCC"
 	"LINKER:SHELL:-L ${CMAKE_CURRENT_BINARY_DIR}"
 	"LINKER:SHELL:-T ${ld_script}"
 	"LINKER:SHELL:-Map=${CMAKE_CURRENT_BINARY_DIR}/${app_s}.map"
@@ -241,13 +251,13 @@ add_custom_target(
 add_custom_command(TARGET ${app_s} POST_BUILD 
 	COMMAND ${CMAKE_NM} $<TARGET_FILE:${app_s}> | sort > ${app_s}.nm.map
 	COMMAND ${CMAKE_OBJEDUMP} -d $<TARGET_FILE:${app_s}> > ${app_s}.asm
-	COMMAND cp $<TARGET_FILE:${app_s}> ${app_s}.axf
+	COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${app_s}> ${app_s}.axf
 
-	COMMAND [ -d output ] || mkdir output
-	COMMAND cp -f ${app_s}.nm.map output
-	COMMAND cp -f ${app_s}.map output
-	COMMAND cp -f ${app_s}.asm output
-	COMMAND cp -f ${app_s}.axf output
+	COMMAND ${CMAKE_COMMAND} -E make_directory  output
+	COMMAND ${CMAKE_COMMAND} -E copy ${app_s}.nm.map output 
+	COMMAND ${CMAKE_COMMAND} -E copy ${app_s}.map output 
+	COMMAND ${CMAKE_COMMAND} -E copy ${app_s}.asm output 
+	COMMAND ${CMAKE_COMMAND} -E copy ${app_s}.axf output
 	
-	COMMAND cp -f *.a output || true
+	COMMAND ${PLAT_COPY} *.a output 
 )

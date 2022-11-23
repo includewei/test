@@ -3,8 +3,16 @@
 #include "diag.h"
 #include "hal.h"
 #include "log_service.h"
+#include "video_api.h"
 #include <platform_opts.h>
 #include <platform_opts_bt.h>
+
+#if CONFIG_WLAN
+#include <wifi_fast_connect.h>
+extern void wlan_network(void);
+#endif
+
+extern void console_init(void);
 
 #ifdef _PICOLIBC__
 int errno;

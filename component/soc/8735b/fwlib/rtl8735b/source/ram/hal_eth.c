@@ -30,7 +30,8 @@
 #include "hal_cache.h"
 #include "hal_sys_ctrl.h"
 
-#if 0
+
+
 #if defined(CONFIG_MII_EN) && (CONFIG_MII_EN == 1)
 /**
  * @addtogroup hs_hal_ethernet ETHERNET
@@ -44,38 +45,6 @@ extern hal_eth_func_stubs_t hal_eth_stubs;
   */
 hal_eth_adapter_t eth_adapter;
 
-
-u8 eth_pin_table_patch[] = {
-	PIN_B0, PIN_B1, PIN_B2, PIN_B3, PIN_B4, PIN_B5, PIN_C10, PIN_C11, PIN_E0, PIN_E1, PIN_E2, PIN_E3, PIN_E4, PIN_E5, 0xFF,                         // MII, S0
-	PIN_E0, PIN_E1, PIN_E2, PIN_E3, PIN_E4, PIN_E5, PIN_E6, PIN_E7, PIN_E8, PIN_E9, PIN_E10, PIN_E11, PIN_E12, PIN_E13, 0xFF,                       // MII, S1
-	PIN_B1, PIN_B2, PIN_B3, PIN_B5, PIN_C10, PIN_C11, PIN_E0, PIN_E1, PIN_E2, PIN_E5, PIN_LIST_END, PIN_LIST_END, PIN_LIST_END, PIN_LIST_END, 0xFF, // RMII, S0
-	PIN_E0, PIN_E1, PIN_E2, PIN_E5, PIN_E7, PIN_E8, PIN_E9, PIN_E11, PIN_E12, PIN_E13, PIN_LIST_END, PIN_LIST_END, PIN_LIST_END, PIN_LIST_END, 0xFF // RMII, S1
-};
-
-
-
-hal_status_t hal_eth_pin_ctrl(eth_pin_sel_t pin_sel, BOOL en)
-{
-	return hal_eth_stubs.hal_eth_pin_ctrl(pin_sel, en);
-}
-
-
-void hal_eth_set_interface(eth_if_sel_t if_sel)
-{
-	hal_eth_stubs.hal_eth_set_interface(if_sel);
-}
-
-
-void hal_eth_irq_handler(void)
-{
-	hal_eth_stubs.hal_eth_irq_handler();
-}
-
-
-void hal_eth_irq_reg(irq_handler_t irq_handler)
-{
-	hal_eth_stubs.hal_eth_irq_reg(irq_handler);
-}
 
 
 void hal_eth_irq_unreg(void)
@@ -153,43 +122,23 @@ void hal_eth_set_pkt_buf(u8 *tx_pkt_buf, u8 *rx_pkt_buf)
 
 
 /**
- *  @brief To initialize the Ethernet MAC controller.
+ *  @brief To initialize the Ethernet controller.
  *
- *  @param[in]  if_sel The interface between the MAC and PHY.
- *  @param[in]  pin_sel The pinmux selection.
+ *  @param[in]  N/A
  *
  *  @returns    The result.
  */
-hal_status_t hal_eth_init(eth_if_sel_t if_sel, eth_pin_sel_t pin_sel)
+hal_status_t hal_eth_init(void)
 {
-	hal_status_t ret;
-	io_pin_t *pin_list;
+	eth_adapter.dcache_invalidate_by_addr = hal_cache_stubs.dcache_invalidate_by_addr;
+	eth_adapter.dcache_clean_by_addr = hal_cache_stubs.dcache_clean_by_addr;
 
-
-	hal_dbg_port_disable();
-
-#if ((CHIP_VER <= CHIP_C_CUT) && (defined(CONFIG_BUILD_RAM)))
-	pin_list = (io_pin_t *)&eth_pin_table_patch[(if_sel * 30) + (pin_sel * 15)];
-#else
-	pin_list = (io_pin_t *)&hal_eth_stubs.eth_pin_table[(if_sel * 30) + (pin_sel * 15)];
-#endif
-	ret = hal_pinmux_register(pin_list, PID_ETH);
-	if (ret == HAL_OK) {
-		eth_adapter.dcache_invalidate_by_addr = hal_cache_stubs.dcache_invalidate_by_addr;
-		eth_adapter.dcache_clean_by_addr = hal_cache_stubs.dcache_clean_by_addr;
-#if ((CHIP_VER <= CHIP_C_CUT) && (defined(CONFIG_BUILD_RAM)))
-		return hal_eth_init_rtl8735b_patch(&eth_adapter, if_sel, pin_sel);
-#else
-		return hal_eth_stubs.hal_eth_init(&eth_adapter, if_sel, pin_sel);
-#endif
-	} else {
-		return ret;
-	}
+	return hal_eth_stubs.hal_eth_init(&eth_adapter);
 }
 
-
+#if 0
 /**
- *  @brief To initialize the Ethernet MAC controller with force speed mode (100Mbps/Full duplex).
+ *  @brief To initialize the Ethernet controller with force speed mode (100Mbps/Full duplex).
  *
  *  @param[in]  if_sel The interface between the MAC and PHY.
  *  @param[in]  pin_sel The pinmux selection.
@@ -218,10 +167,10 @@ hal_status_t hal_eth_init_force_spd(eth_if_sel_t if_sel, eth_pin_sel_t pin_sel)
 		return ret;
 	}
 }
-
+#endif
 
 /**
- *  @brief To de-initialize the Ethernet MAC controller.
+ *  @brief To de-initialize the Ethernet controller.
  *
  *  @param None
  *
@@ -229,18 +178,9 @@ hal_status_t hal_eth_init_force_spd(eth_if_sel_t if_sel, eth_pin_sel_t pin_sel)
  */
 void hal_eth_deinit(void)
 {
-	eth_if_sel_t if_sel;
-	eth_pin_sel_t pin_sel;
-	io_pin_t *pin_list;
-
-
 	eth_adapter.dcache_invalidate_by_addr = NULL;
 	eth_adapter.dcache_clean_by_addr = NULL;
 	hal_eth_stubs.hal_eth_deinit(&eth_adapter);
-	if_sel = eth_adapter.if_sel;
-	pin_sel = eth_adapter.pin_sel;
-	pin_list = (io_pin_t *)&hal_eth_stubs.eth_pin_table[(if_sel * 30) + (pin_sel * 15)];
-	hal_pinmux_unregister(pin_list, PID_ETH);
 }
 
 
@@ -254,11 +194,7 @@ void hal_eth_deinit(void)
  */
 s32 hal_eth_write_data(u8 *data, u32 size)
 {
-#if ((CHIP_VER <= CHIP_C_CUT) && (defined(CONFIG_BUILD_RAM)))
-	return hal_eth_write_data_rtl8735b_patch(&eth_adapter, data, size);
-#else
 	return hal_eth_stubs.hal_eth_write_data(&eth_adapter, data, size);
-#endif
 }
 
 
@@ -271,11 +207,7 @@ s32 hal_eth_write_data(u8 *data, u32 size)
  */
 u32 hal_eth_send_pkt(void)
 {
-#if ((CHIP_VER <= CHIP_C_CUT) && (defined(CONFIG_BUILD_RAM)))
-	return hal_eth_send_pkt_rtl8735b_patch(&eth_adapter);
-#else
 	return hal_eth_stubs.hal_eth_send_pkt(&eth_adapter);
-#endif
 }
 
 
@@ -288,11 +220,7 @@ u32 hal_eth_send_pkt(void)
  */
 u32 hal_eth_receive_pkt(void)
 {
-#if ((CHIP_VER <= CHIP_C_CUT) && (defined(CONFIG_BUILD_RAM)))
-	return hal_eth_receive_pkt_rtl8735b_patch(&eth_adapter);
-#else
 	return hal_eth_stubs.hal_eth_receive_pkt(&eth_adapter);
-#endif
 }
 
 
@@ -306,11 +234,7 @@ u32 hal_eth_receive_pkt(void)
  */
 u32 hal_eth_read_data(u8 *data, u32 size)
 {
-#if ((CHIP_VER <= CHIP_C_CUT) && (defined(CONFIG_BUILD_RAM)))
-	return hal_eth_read_data_rtl8735b_patch(&eth_adapter, data, size);
-#else
 	return hal_eth_stubs.hal_eth_read_data(&eth_adapter, data, size);
-#endif
 }
 
 
@@ -337,11 +261,7 @@ u32 hal_eth_get_link_status(void)
  */
 void hal_eth_set_link(s32 speed, s32 duplex)
 {
-#if ((CHIP_VER <= CHIP_C_CUT) && (defined(CONFIG_BUILD_RAM)))
-	hal_eth_set_link_rtl8735b_patch(&eth_adapter, speed, duplex);
-#else
 	hal_eth_stubs.hal_eth_set_link(&eth_adapter, speed, duplex);
-#endif
 }
 
 
@@ -370,9 +290,64 @@ void hal_eth_task_yield_hook(eth_task_yield task_yield)
 	hal_eth_stubs.hal_eth_task_yield_hook(&eth_adapter, task_yield);
 }
 
+
+/**
+ *  @brief To read the specified FEPHY register
+ *
+ *  @param[in]  page The specified page number.
+ *  @param[in]  reg_addr The specified register address.
+ *
+ *  @returns    The register value.
+ */
+u16 hal_eth_rd_phy_reg(u16 page, u16 reg_addr)
+{
+	return hal_eth_stubs.hal_eth_rd_phy_reg(&eth_adapter, page, reg_addr);
+}
+
+
+/**
+ *  @brief To write "data" value to the specified FEPHY register
+ *
+ *  @param[in]  page The specified page number.
+ *  @param[in]  reg_addr The specified register address.
+ *  @param[in]  data The specified data value.
+ *
+ *  @returns    0.
+ */
+u32 hal_eth_wr_phy_reg(u16 page, u16 reg_addr, u16 data)
+{
+	return hal_eth_stubs.hal_eth_wr_phy_reg(&eth_adapter, page, reg_addr, data);
+}
+
+
+/**
+ *  @brief To check the ethernet PHY's state.
+ *
+ *  @param[in]  void
+ *
+ *  @returns    void
+ */
+void hal_eth_detect_phy_state(void)
+{
+	hal_eth_stubs.hal_eth_detect_phy_state(&eth_adapter);
+}
+
+
+/**
+ *  @brief To enable/disable the EEE functionality of FEPHY
+ *
+ *  @param[in] en  Enable control: 0: disable, 1: enable.
+ *
+ *  @returns    void
+ */
+void hal_eth_phy_eee_ctrl(u8 en)
+{
+	hal_eth_stubs.hal_eth_phy_eee_ctrl(&eth_adapter, en);
+}
+
 /** @} */ /* End of group hs_hal_ethernet */
 
+
 #endif  // end of "#if defined(CONFIG_MII_EN) && (CONFIG_MII_EN == 1)"
-#endif
 
 

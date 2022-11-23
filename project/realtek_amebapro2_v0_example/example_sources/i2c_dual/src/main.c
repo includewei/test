@@ -1,10 +1,12 @@
 #include "PinNames.h"
 #include "basic_types.h"
 #include "diag.h"
+#include <string.h>
 
 #include "i2c_api.h"
 #include "pinmap.h"
 #include "ex_api.h"
+#include "wait_api.h"
 
 #define MBED_I2C_MTR_SDA PF_2 //3
 #define MBED_I2C_MTR_SCL PF_1 //2
@@ -58,8 +60,8 @@ char	i2cdatarddst[I2C_DATA_LENGTH];
 i2c_t   i2cmaster;
 i2c_t   i2cslave;
 #else
-volatile i2c_t   i2cmaster;
-volatile i2c_t   i2cslave;
+i2c_t   i2cmaster;
+i2c_t   i2cslave;
 #endif
 volatile int     masterTXC;
 volatile int     masterRXC;
@@ -116,7 +118,7 @@ void i2c_slave_rxc_callback(void *userdata)
 #endif
 
 	dbg_printf("\r\nSlave receive: Result is %s\r\n\r", (result) ? "success" : "fail");
-	rtw_memset(&i2cdatadst[0], 0x00, I2C_DATA_LENGTH);
+	memset(&i2cdatadst[0], 0x00, I2C_DATA_LENGTH);
 	SET_SLV_RXC_FLAG;
 	//i2c_enable_control(&i2cslave, 1);
 }
@@ -168,7 +170,7 @@ void i2c_slave_rd_req_callback(void *userdata)
 
 void demo_i2c_master_enable(void)
 {
-	rtw_memset(&i2cmaster, 0x00, sizeof(i2c_t));
+	memset(&i2cmaster, 0x00, sizeof(i2c_t));
 	i2c_init(&i2cmaster, MBED_I2C_MTR_SDA, MBED_I2C_MTR_SCL);
 	i2c_frequency(&i2cmaster, MBED_I2C_BUS_CLK);
 	i2c_set_user_callback(&i2cmaster, I2C_RX_COMPLETE, i2c_master_rxc_callback);
@@ -181,7 +183,7 @@ void demo_i2c_master_enable(void)
 
 void demo_i2c_slave_enable(void)
 {
-	rtw_memset(&i2cslave, 0x00, sizeof(i2c_t));
+	memset(&i2cslave, 0x00, sizeof(i2c_t));
 	i2c_init(&i2cslave, MBED_I2C_SLV_SDA, MBED_I2C_SLV_SCL);
 	i2c_frequency(&i2cslave, MBED_I2C_BUS_CLK);
 	i2c_slave_address(&i2cslave, 0, MBED_I2C_SLAVE_ADDR0, 0xFF);
@@ -264,10 +266,10 @@ void main(void)
 #endif
 
 	// prepare for transmission
-	rtw_memset(&i2cdatasrc[0], 0x00, I2C_DATA_LENGTH);
-	rtw_memset(&i2cdatadst[0], 0x00, I2C_DATA_LENGTH);
-	rtw_memset(&i2cdatardsrc[0], 0x00, I2C_DATA_LENGTH);
-	rtw_memset(&i2cdatarddst[0], 0x00, I2C_DATA_LENGTH);
+	memset(&i2cdatasrc[0], 0x00, I2C_DATA_LENGTH);
+	memset(&i2cdatadst[0], 0x00, I2C_DATA_LENGTH);
+	memset(&i2cdatardsrc[0], 0x00, I2C_DATA_LENGTH);
+	memset(&i2cdatarddst[0], 0x00, I2C_DATA_LENGTH);
 
 	for (i2clocalcnt = 0; i2clocalcnt < I2C_DATA_LENGTH; i2clocalcnt++) {
 		i2cdatasrc[i2clocalcnt] = i2clocalcnt + 0x2;

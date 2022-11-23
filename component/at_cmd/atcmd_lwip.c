@@ -2978,8 +2978,6 @@ extern char log_buf[LOG_SERVICE_BUFLEN];
 extern struct netif xnetif[NET_IF_NUM];
 extern int atcmd_sntp(char *hostname);
 
-static int select_check = 0;
-
 static unsigned char _tx_buffer[MAX_BUFFER];
 static unsigned char _rx_buffer[MAX_BUFFER];
 static unsigned char *tx_buffer = _tx_buffer;
@@ -3001,7 +2999,7 @@ int rx_buffer_size = MAX_BUFFER;
 node node_pool[NUM_NS];
 
 node *mainlist;
-
+static int select_check = 0;
 static int atcmd_lwip_auto_recv = FALSE;
 volatile int atcmd_lwip_tt_mode = FALSE; //transparent transmission mode
 xTaskHandle atcmd_lwip_tt_task = NULL;
@@ -3599,11 +3597,11 @@ exit:
 	return;
 }
 
+#if ATCMD_VER == ATVER_2 && ATCMD_SUPPORT_SSL
 static int auth_mode = 0;
 static int con_id, cert_type;
 static int sni = 0;
 static char hostname[64];
-#if ATCMD_VER == ATVER_2 && ATCMD_SUPPORT_SSL
 static int my_verify(void *data, mbedtls_x509_crt *crt, int depth, uint32_t *flags)
 {
 	char buf[1024];
@@ -3883,7 +3881,9 @@ static void client_start(void *param)
 	/* To avoid gcc warnings */
 	(void) param;
 
+#if (ATCMD_VER == ATVER_2)
 	int select_task_suspend = 0;
+#endif
 	int c_mode;
 	int c_remote_port;
 	char c_remote_addr[16];
@@ -4332,7 +4332,7 @@ void fATP3(void *arg)
 		printf("[ATP3]Usage: ATP3=REMOTE_IP\n\r");
 		goto exit;
 	}
-	strncpy((char *)remote_addr, (char *)arg, sizeof(remote_addr));
+	strncpy((char *)remote_addr, (char *)arg, sizeof(remote_addr) - 1);
 	printf("[ATP3]: _AT_TRANSPORT_REMOTE_IP_ [%s]\n\r", remote_addr);
 
 exit:

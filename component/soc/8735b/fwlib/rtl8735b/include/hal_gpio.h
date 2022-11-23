@@ -117,10 +117,13 @@ extern "C"
 		hal_gpio_stubs.hal_gpio_irq_disable(pgpio_irq_adapter);
 	}
 
-	__STATIC_INLINE hal_status_t hal_aon_gpio_debounce_enable(phal_gpio_adapter_t pgpio_adapter, uint32_t debounce_us)
+	// This static inline function has been moved to hal_gpio.c due to need for patching,to remove
+	// static inline attributes.
+
+	/*__STATIC_INLINE hal_status_t hal_aon_gpio_debounce_enable(phal_gpio_adapter_t pgpio_adapter, uint32_t debounce_us)
 	{
 		return hal_gpio_stubs.hal_gpio_debounce_enable(pgpio_adapter, debounce_us);
-	}
+	}*/
 
 	__STATIC_INLINE uint32_t hal_aon_gpio_read_debounce(phal_gpio_adapter_t pgpio_adapter)
 	{
@@ -132,11 +135,14 @@ extern "C"
 		hal_gpio_stubs.hal_gpio_debounce_disable(pgpio_adapter);
 	}
 
-	__STATIC_INLINE hal_status_t hal_aon_gpio_irq_debounce_enable(phal_gpio_irq_adapter_t pgpio_irq_adapter,
+	// This static inline function has been moved to hal_gpio.c due to need for patching,to remove
+	// static inline attributes.
+
+	/*__STATIC_INLINE hal_status_t hal_aon_gpio_irq_debounce_enable(phal_gpio_irq_adapter_t pgpio_irq_adapter,
 			uint32_t debounce_us)
 	{
 		return hal_gpio_stubs.hal_gpio_irq_debounce_enable(pgpio_irq_adapter, debounce_us);
-	}
+	}*/
 
 	__STATIC_INLINE void hal_aon_gpio_irq_debounce_disable(phal_gpio_irq_adapter_t pgpio_irq_adapter)
 	{
@@ -417,34 +423,20 @@ extern "C"
 #endif
 	}
 
-	/**
-	 *  @brief Enable the debounce function for the given GPIO pin.
-	 *         The debounce resource(circuit) is limited, not all GPIO pin
-	 *         can has debounce function.
-	 *
-	 *  @param[in]  pgpio_adapter  The GPIO pin adapter.
-	 *  @param[in]  debounce_us  The time filter for the debounce, in micro-second.
-	 *                           But the time resolution is 31.25us (1/32K) and the
-	 *                           maximum time is 512 ms.
-	 *
-	 *  @return     HAL_NO_RESOURCE:  No debounce resource. (All debounce circuit are allocated).
-	 *  @return     HAL_ERR_PARA:  Input arguments are invlaid.
-	 *  @return     HAL_OK:  Debounce function is enabled on this GPIO.
-	 */
-#if !IS_CUT_TEST(CONFIG_CHIP_VER)
-	__STATIC_INLINE hal_status_t hal_gpio_debounce_enable(phal_gpio_adapter_t pgpio_adapter, uint32_t debounce_us)
-	{
-#if defined(CONFIG_BUILD_NONSECURE)
-		if (pgpio_adapter->port_idx == PORT_A) {
-			return hal_gpio_debounce_enable_nsc(pgpio_adapter, debounce_us);
-		} else {
+	/*#if !IS_CUT_TEST(CONFIG_CHIP_VER)
+		__STATIC_INLINE hal_status_t hal_gpio_debounce_enable(phal_gpio_adapter_t pgpio_adapter, uint32_t debounce_us)
+		{
+	#if defined(CONFIG_BUILD_NONSECURE)
+			if (pgpio_adapter->port_idx == PORT_A) {
+				return hal_gpio_debounce_enable_nsc(pgpio_adapter, debounce_us);
+			} else {
+				return hal_gpio_stubs.hal_gpio_debounce_enable(pgpio_adapter, debounce_us);
+			}
+	#else
 			return hal_gpio_stubs.hal_gpio_debounce_enable(pgpio_adapter, debounce_us);
+	#endif
 		}
-#else
-		return hal_gpio_stubs.hal_gpio_debounce_enable(pgpio_adapter, debounce_us);
-#endif
-	}
-#endif
+	#endif*/
 
 	/**
 	 *  @brief Reads the given GPIO pin input level with de-bounced.
@@ -598,24 +590,12 @@ extern "C"
 	}
 #endif
 
-	/**
-	 *  @brief Enables the debounce function of the given GPIO IRQ pin.
-	 *         The debounce resource(circuit) is limited, not all GPIO pin
-	 *         can has debounce function.
-	 *
-	 *  @param[in]  pgpio_irq_adapter  The GPIO IRQ pin adapter.
-	 *  @param[in]  debounce_us  The time filter for the debounce, in micro-second.
-	 *                           But the time resolution is 31.25us (1/32K) and the
-	 *                           maximum time is 512 ms.
-	 *
-	 *  @return     HAL_NO_RESOURCE:  No debounce resource. (All debounce circuit are allocated).
-	 *  @return     HAL_OK:  Debounce function is enabled on this GPIO.
-	 */
+	// This function has been moved to hal_gpio.c, due to patching, and removal of static inline attribute.
 #if !IS_CUT_TEST(CONFIG_CHIP_VER)
-	__STATIC_INLINE hal_status_t hal_gpio_irq_debounce_enable(phal_gpio_irq_adapter_t pgpio_irq_adapter,
+	/*__STATIC_INLINE hal_status_t hal_gpio_irq_debounce_enable(phal_gpio_irq_adapter_t pgpio_irq_adapter,
 			uint32_t debounce_us)
 	{
-#if defined(CONFIG_BUILD_NONSECURE)
+	#if defined(CONFIG_BUILD_NONSECURE)
 
 		uint8_t port_idx = PIN_NAME_2_PORT(pgpio_irq_adapter->pin_name);
 
@@ -625,11 +605,11 @@ extern "C"
 
 			return hal_gpio_stubs.hal_gpio_irq_debounce_enable(pgpio_irq_adapter, debounce_us);
 		}
-#else
+	#else
 
 		return hal_gpio_stubs.hal_gpio_irq_debounce_enable(pgpio_irq_adapter, debounce_us);
-#endif
-	}
+	#endif
+	}*/
 
 	/**
 	 *  @brief To disable the debounce function of the given GPIO IRQ pin.
@@ -890,6 +870,9 @@ extern "C"
 	hal_status_t hal_gpio_slew_rate_ctrl(uint32_t pin_name, uint8_t slew_rate_func);
 
 	void hal_gpio_reinit(phal_gpio_adapter_t pgpio_adapter, uint32_t pin_name);
+	hal_status_t hal_gpio_irq_debounce_enable(phal_gpio_irq_adapter_t pgpio_irq_adapter,
+			uint32_t debounce_us);
+	hal_status_t hal_gpio_debounce_enable(phal_gpio_adapter_t pgpio_adapter, uint32_t debounce_us);
 
 	// Function prototypes for AON GPIO [Start]
 	void hal_aon_gpio_comm_init_via_NSC(phal_aon_gpio_comm_adapter_t paon_gpio_comm_adp);
@@ -904,6 +887,9 @@ extern "C"
 	void hal_aon_gpio_port_deinit(phal_gpio_port_adapter_t pgpio_port_adapter);
 	void hal_aon_gpio_port_dir(phal_gpio_port_adapter_t pgpio_port_adapter, gpio_dir_t dir);
 	void aon_gpio_sclk_source_select_via_NSC(uint32_t sclk_src_sel);
+	hal_status_t hal_aon_gpio_irq_debounce_enable(phal_gpio_irq_adapter_t pgpio_irq_adapter,
+			uint32_t debounce_us);
+	hal_status_t hal_aon_gpio_debounce_enable(phal_gpio_adapter_t pgpio_adapter, uint32_t debounce_us);
 
 	// Function prototypes for AON GPIO [End]
 

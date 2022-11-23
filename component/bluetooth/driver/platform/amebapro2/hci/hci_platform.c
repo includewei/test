@@ -41,7 +41,7 @@ extern unsigned int rtlbt_mp_fw_len;
 static BT_Cali_TypeDef iqk_data = {0x0000, 0x0000, 0x00, 0x00, 0x00, 0x00};
 
 HCI_IQK_DATA hci_iqk_data[HCI_START_IQK_TIMES] = {
-    {0x00, 0x5000}, {0x02, 0x3f00}, {0x3f, 0x0403},
+	{0x00, 0x5000}, {0x02, 0x3f00}, {0x3f, 0x0403},
 };
 
 //static const uint8_t hci_patch_buf[] = {0xff, 0xff, 0xff, 0xff};
@@ -50,22 +50,27 @@ static uint8_t hci_phy_efuse[HCI_PHY_EFUSE_LEN]  = {0};
 static uint8_t hci_lgc_efuse[HCI_LGC_EFUSE_LEN]  = {0};
 static uint8_t hci_chipid_in_fw  = 0;
 static uint8_t hci_init_config[] = {
-	0x55, 0xab, 0x23, 0x87,
+	/* Header */
+	0x55, 0xAB, 0x23, 0x87,
 
+	/* Length */
 	0x19, 0x00,
-	//0x10, 0x00,
-	0x30, 0x00, 0x06, 0x11, 0x28, 0x36, 0x12, 0x51, 0x89, /* BT MAC address */
-	//	0x07, 0x00,
-	0x08, 0x00, 0x04, 0x00, 0xC2, 0x01, 0x00,/* Log Baudrate 115200 */
-#ifdef CONFIG_MP_INCLUDED
-	0x0c, 0x00, 0x04, 0x1d, 0x70, 0x00, 0x00,/* Baudrate 115200 */
-#else
-	0x0c, 0x00, 0x04, 0x04, 0x50, 0xF7, 0x03, /* Baudrate 921600 */
-	0x18, 0x00, 0x01, 0x5c, /* flow control */
-#endif
-	//efuse value
+
+	/* BT MAC Address */
+	0x30, 0x00, 0x06, 0x11, 0x28, 0x36, 0x12, 0x51, 0x89,
+
+	/* LOG Uart Baudrate 115200 */
+	0x08, 0x00, 0x04, 0x00, 0xC2, 0x01, 0x00,
+
+	/* HCI Uart Baudrate 921600 */
+	0x0C, 0x00, 0x04, 0x04, 0x50, 0xF7, 0x03,
+
+	/* HCI Uart Flow Control */
+	0x18, 0x00, 0x01, 0x5C,
+
+	/* eFuse Value */
 	0x78, 0x02, 0x08, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x07,
-	0x85, 0x02, 0x0A, 0x3F, 0x3F, 0x3F, 0x3F, 0x3F, 0x3F, 0x3F, 0x3F, 0x3F, 0x64,
+	0x85, 0x02, 0x0A, 0x3F, 0x3F, 0x3F, 0x3F, 0x3F, 0x3F, 0x3F, 0x3F, 0x3F, 0x64
 };
 typedef struct {
 	uint8_t *fw_buf;
@@ -227,7 +232,7 @@ static uint8_t hci_platform_parse_config(void)
 		switch (entry_offset) {
 		case 0x000c:
 			/* MP Mode, Use Default: 115200 */
-			if ((wifi_driver_is_mp()) || (!CHECK_CFG_SW(EFUSE_SW_UPPERSTACK_SWITCH))) {
+			if ((wifi_driver_is_mp()) || (!CHECK_CFG_SW(CFG_SW_UPPERSTACK_SWITCH))) {
 				hci_platform_convert_baudrate((uint32_t *)p, &hci_cfg_init_uart_baudrate, 0);
 			}
 
@@ -237,7 +242,7 @@ static uint8_t hci_platform_parse_config(void)
 			break;
 		case 0x0018:
 			/* MP Mode, Close Flow Control */
-			if ((wifi_driver_is_mp()) || (!CHECK_CFG_SW(EFUSE_SW_UPPERSTACK_SWITCH))) {
+			if ((wifi_driver_is_mp()) || (!CHECK_CFG_SW(CFG_SW_UPPERSTACK_SWITCH))) {
 				p[0] = p[0] & (~BIT2);
 			}
 			/* TODO: Config Flow Control */
@@ -257,6 +262,8 @@ static uint8_t hci_platform_parse_config(void)
 					}
 				}
 			}
+			HCI_PRINT("Bluetooth init BT_ADDR in cfgbuf [%02x:%02x:%02x:%02x:%02x:%02x]\n\r",
+						p[5], p[4], p[3], p[2], p[1], p[0]);
 			break;
 		case 0x0278:
 			if (hci_lgc_efuse[LEFUSE(0x19e)] == 0xff) {
@@ -380,7 +387,13 @@ uint8_t hci_platform_check_iqk(void)
 		//HCI_PRINT("kosen_q_dck is 0x%x,\r\n", kosen_q_dck);
 		bt_dck_write(dos_i_dck, dos_q_dck, kosen_i_dck, kosen_q_dck);
 	}
-
+	// LO resolution
+	if ( (hci_phy_efuse[PEFUSE(0x511)] & BIT4) == 0 ) { //LO resolution enable bit 0x511[4] = phy_invalid[4]
+		uint8_t lo_resolution;
+		lo_resolution = hci_phy_efuse[PEFUSE(0x531)];
+		bt_lo_resolution_write(lo_resolution);
+	}
+	// LOK & IQK
 	if ( (hci_phy_efuse[PEFUSE(0x511)] & BIT0) == 0 ) {	//LOK & IQK enable bit 0x511[0] = phy_invalid[0]
 		if (HCI_SUCCESS == bt_iqk_efuse_valid(&bt_iqk_data)) { // check and get efuse
 			// dump iqk efuse
@@ -447,15 +460,11 @@ static void bt_power_on(void)
 static void bt_power_off(void)
 {
 	HAL_WRITE32(0x40009830, 0, 0);
-	if (!wifi_driver_is_mp()) {
-		wifi_set_powersave_mode(IPS_MODE_RESUME, LPS_MODE_RESUME);
-	}
-
 }
 
 static void hci_platform_controller_reset(void)
 {
-	if (!CHECK_CFG_SW(EFUSE_SW_BT_FW_LOG)) {
+	if (!CHECK_CFG_SW(CFG_SW_BT_FW_LOG)) {
 		HCI_INFO("FW LOG OPEN");
 		/* Open BT FW Log */
 		set_reg_value(0x40000048, BIT0 | BIT1 | BIT2 | BIT3, 7);
@@ -467,19 +476,38 @@ static void hci_platform_controller_reset(void)
 	/* BT Controller Power */
 	bt_power_on();
 	osif_delay(5);
-	
+
 	HCI_INFO("BT Reset OK!");
 }
 
-uint8_t hci_platform_init(void)
+bool rtk_bt_pre_enable(void)
 {
 	if (!(wifi_is_running(WLAN0_IDX) || wifi_is_running(WLAN1_IDX))) {
-		HCI_ERR("Wifi is OFF! Restart Wifi First!");
-		return HCI_FAIL;
+		HCI_ERR("WiFi is OFF! Please Restart BT after Wifi on!");
+		return false;
 	}
 
 	if (!wifi_driver_is_mp()) {
 		wifi_set_powersave_mode(IPS_MODE_NONE, LPS_MODE_NONE);
+	}
+
+	return true;
+}
+
+bool rtk_bt_post_disable(void)
+{
+	if (!wifi_driver_is_mp()) {
+		wifi_set_powersave_mode(IPS_MODE_RESUME, LPS_MODE_RESUME);
+	}
+
+	return true;
+}
+
+uint8_t hci_platform_init(void)
+{
+	if (rtk_bt_pre_enable() == false) {
+		HCI_ERR("rtk_bt_pre_enable fail!");
+		return HCI_FAIL;
 	}
 
 	/* Read Efuse and Parse Configbuf */
@@ -502,7 +530,7 @@ uint8_t hci_platform_init(void)
 	/* Coex: TODO */
 	if (wifi_driver_is_mp()) {
 		/* Set GNT BT */
-		rtlk_bt_set_gnt_bt(PTA_BT);
+		rltk_bt_set_gnt_bt(PTA_BT);
 	} else {
 		rltk_coex_bt_enable(1);
 	}
@@ -522,6 +550,9 @@ uint8_t hci_platform_deinit(void)
 	if (!wifi_driver_is_mp()) {
 		rltk_coex_bt_enable(0);
 	}
+
+	/* PowerSaving */
+	rtk_bt_post_disable();
 
 	return HCI_SUCCESS;
 }
@@ -549,7 +580,7 @@ uint8_t hci_platform_set_baudrate(void)
 
 uint8_t hci_platform_dl_patch_init(void)
 {
-	hci_patch_info = osif_mem_alloc(0, sizeof(HCI_PATCH_INFO));
+	hci_patch_info = osif_mem_alloc(RAM_TYPE_DATA_ON, sizeof(HCI_PATCH_INFO));
 	if (!hci_patch_info) {
 		return HCI_FAIL;
 	}
@@ -585,14 +616,14 @@ static uint8_t hci_platform_get_patch_info(void)
 	uint16_t        num_of_patch, fw_chip_id, fw_len, i;
 	uint32_t        fw_offset;
 
-	if (CHECK_CFG_SW(EFUSE_SW_USE_FLASH_PATCH)) {
+	if (CHECK_CFG_SW(CFG_SW_USE_FLASH_PATCH)) {
 		if (wifi_driver_is_mp()) {
 			patch_info->fw_buf = (uint8_t *)(void *)rtlbt_mp_fw;
 			patch_info->fw_len = rtlbt_mp_fw_len;
-		} else {		
+		} else {
 			patch_info->fw_buf = (uint8_t *)(void *)rtlbt_fw;
 			patch_info->fw_len = rtlbt_fw_len;
-		}		
+		}
 	} else {
 		patch_info->fw_buf = (uint8_t *)HCI_PATCH_FLASH_ADDRESS;
 	}
@@ -601,7 +632,7 @@ static uint8_t hci_platform_get_patch_info(void)
 		return HCI_IGNORE;
 	}
 
-	if (!memcmp(patch_info->fw_buf, merged_patch_sig, sizeof(no_patch_sig))) {
+	if (!memcmp(patch_info->fw_buf, merged_patch_sig, sizeof(merged_patch_sig))) {
 		/* Merged Patch */
 		hci_platform_flash_stream_read(patch_info->fw_buf + 0x0c, 2, (uint8_t *)&num_of_patch);
 

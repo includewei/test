@@ -11,7 +11,11 @@
 			"SENSOR_SET2",
 			"SENSOR_SET3",
 			"SENSOR_SET4",
-			"SENSOR_SET5"
+			"SENSOR_SET5",
+			"SENSOR_SET6",
+			"SENSOR_SET7",
+			"SENSOR_SET8",
+			"SENSOR_SET9"
 		]
 	},
     "MULTI_FCS_HDR":{
@@ -55,7 +59,7 @@
         },
         "iq_data": {
             "source":"binary",
-            "file":"iq_gc2053.bin"        
+            "file":"iq.bin"        
         },
         "sensor_data": {
             "source":"binary",
@@ -108,63 +112,63 @@
         }
     },
 	"SENSOR_SET6":{
-        "merge_en": false,
+        "merge_en": true,
         "fcs_data": {
             "source":"binary",
-            "file":"fcs_d6.bin"
+            "file":"fcs_data_dummy.bin"
         },
         "iq_data": {
             "source":"binary",
-            "file":"iq_d6.bin"        
+            "file":"iq.bin"        
         },
         "sensor_data": {
             "source":"binary",
-            "file":"sensor_d6.bin"        
+            "file":"sensor_jxf51.bin"        
         }
     },
 	"SENSOR_SET7":{
-        "merge_en": false,
+        "merge_en": true,
         "fcs_data": {
             "source":"binary",
-            "file":"fcs_d7.bin"
+            "file":"fcs_data_dummy.bin"
         },
         "iq_data": {
             "source":"binary",
-            "file":"iq_d7.bin"        
+            "file":"iq.bin"        
         },
         "sensor_data": {
             "source":"binary",
-            "file":"sensor_d7.bin"        
+            "file":"sensor_sc301.bin"        
         }
     },
 	"SENSOR_SET8":{
-        "merge_en": false,
+        "merge_en": true,
         "fcs_data": {
             "source":"binary",
-            "file":"fcs_d8.bin"
+            "file":"fcs_data_dummy.bin"
         },
         "iq_data": {
             "source":"binary",
-            "file":"iq_d8.bin"        
+            "file":"iq.bin"        
         },
         "sensor_data": {
             "source":"binary",
-            "file":"sensor_d8.bin"        
+            "file":"sensor_imx307.bin"        
         }
     },
 	"SENSOR_SET9":{
-        "merge_en": false,
+        "merge_en": true,
         "fcs_data": {
             "source":"binary",
-            "file":"fcs_d9.bin"
+            "file":"fcs_data_dummy.bin"
         },
         "iq_data": {
             "source":"binary",
-            "file":"iq_d9.bin"        
+            "file":"iq.bin"        
         },
         "sensor_data": {
             "source":"binary",
-            "file":"sensor_d9.bin"        
+            "file":"sensor_jxf37.bin"        
         }
     }
 }

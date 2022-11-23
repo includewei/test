@@ -15,14 +15,20 @@
 //------------------------------------------------------------------------------
 void toneframe_timer_handler(uint32_t hid);
 
-#define TIMER_FUNCTION
-
-
+//#define TIMER_FUNCTION
+#define MIN_DBFS 128
+float dB_fPOW[MIN_DBFS];
 static void tone_timer_thread(void *param)
 {
 	tone_ctx_t *ctx = (tone_ctx_t *)param;
 	while (1) {
-		vTaskDelay(ctx->audio_timer_delay_ms);
+		if (ctx->audio_timer_process_time < ctx->audio_timer_delay_ms) {
+			vTaskDelay(ctx->audio_timer_delay_ms - ctx->audio_timer_process_time);
+		} else {
+
+			printf("process %ld too long\r\n", ctx->audio_timer_process_time);
+			vTaskDelay(1);
+		}
 		toneframe_timer_handler((uint32_t)ctx);
 	}
 }
@@ -31,25 +37,29 @@ void tonetimer_task_enable(void *parm)
 {
 	tone_ctx_t *ctx = (tone_ctx_t *)parm;
 
-	if (xTaskCreate(tone_timer_thread, ((const char *)"tone_timer_thread"), 2048, ctx, tskIDLE_PRIORITY + 1, NULL) != pdPASS) {
+	if (xTaskCreate(tone_timer_thread, ((const char *)"tone_timer_thread"), 2048, ctx, tskIDLE_PRIORITY + 5, &ctx->task) != pdPASS) {
 		printf("\n\r%s xTaskCreate failed", __FUNCTION__);
 	}
 }
 
-
+uint8_t test_pcm_playout [3200];
+static int interval_frames = 0;
+int number_frames = 0;
+int sweep_flag = 0;
 void toneframe_timer_handler(uint32_t hid)
 {
 	tone_ctx_t *ctx = (tone_ctx_t *)hid;
 	uint32_t i;
+	uint32_t time_sd_start = 0;
 	short tx_pattern;
-	float temp, n_cnt, m_cnt;
-
+	float temp, n_cnt = 0, m_cnt;
+	ctx->audio_timer_process_time = 0;
 	if (ctx->stop) {
 		return;
 	}
 
 	BaseType_t xTaskWokenByReceive = pdFALSE;
-	BaseType_t xHigherPriorityTaskWoken;
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
 #ifdef TIMER_FUNCTION
 	uint32_t timestamp = xTaskGetTickCountFromISR();
@@ -66,28 +76,106 @@ void toneframe_timer_handler(uint32_t hid)
 	int is_output_ready = xQueueReceive(mctx->output_recycle, &output_item, 1000) == pdTRUE;
 #endif
 	if (is_output_ready) {
-
 		output_item->type = ctx->params.codec_id;
 		output_item->timestamp = timestamp;
 		output_item->size = ctx->params.frame_size;
-		n_cnt = ctx->params.audiotonerate;
-		m_cnt = ctx->params.samplerate;
-		short *output_buf = (short *)output_item->data_addr;
+		time_sd_start = xTaskGetTickCount();
 
-		for (i = 0; i < (ctx->params.frame_size >> 1); i++) {
-			if (ctx->tone_data_offset == ctx->params.samplerate) {
-				ctx->tone_data_offset = 0;
+		if (ctx->playmode == play_sd_data) {
+			//printf("audio input\r\n");
+
+			int br = -1;
+			static int total_size = 0;
+
+			//printf("sd_data = %x, %x\r\n", ctx->params.frame_size, ctx->sd_data);
+			br = fread((void *)output_item->data_addr, 1, ctx->params.frame_size, ctx->sd_data);
+			total_size += br;
+			//printf("audio input1\r\n");
+			if (br < ctx->params.frame_size) {
+				//printf("READ END, read count = %ld, %ld\n\r", br, total_size);
+				fseek(ctx->sd_data, 0, SEEK_SET);
+				total_size = 0;
+
 			}
-			temp = sin((2 * (3.141592653589793f) * (float)n_cnt) / m_cnt * (ctx->tone_data_offset)) * (32767.0f);// / (pow(10, 3.0f/20));
-			tx_pattern = (short)temp;
-			output_buf[i] = tx_pattern;
-			ctx->tone_data_offset++;
+		} else {
+
+			m_cnt = ctx->params.samplerate;
+
+			short *output_buf = (short *)output_item->data_addr;
+			if (ctx->sweep_enable) {
+				if (ctx->sweep_frequency == 0) {
+					if (ctx->pre_sweep_frames == 0) {
+						ctx->tone_data_offset = 0;
+						ctx->sweep_frequency += 20;
+						n_cnt = ctx->sweep_frequency;
+					} else {
+						ctx->pre_sweep_frames --;
+					}
+				} else if (ctx->sweep_frequency == ctx->params.samplerate / 2) {
+					ctx->sweep_frequency = 0;
+					ctx->pre_sweep_frames = PRE_SWEEP_MS / ctx->audio_timer_delay_ms;
+				} else {
+					if (interval_frames == (ctx->sweep_interval_frames - 1)) {
+						if (ctx->tone_data_offset != 0) {
+							printf("interval_frames = %d, sweep_frequency = %d, tone_data_offset = %d\r\n", interval_frames, ctx->sweep_frequency, ctx->tone_data_offset);
+						}
+						ctx->sweep_frequency += 20;
+						interval_frames = 0;
+						ctx->tone_data_offset = 0;
+					} else {
+						interval_frames ++;
+					}
+					n_cnt = ctx->sweep_frequency;
+				}
+			} else {
+				n_cnt = ctx->params.audiotonerate;
+			}
+			memset(output_buf, 0, ctx->params.frame_size);
+
+			if (ctx->enable_DB_SWEEP) {
+				number_frames ++;
+				if (number_frames == ctx->DBsweep_frames) {
+					if (ctx->target_dB == 57) {
+						sweep_flag = 0;
+					} else if (ctx->target_dB == 0) {
+						sweep_flag = 1;
+						//ctx->target_dB = 57;
+					}
+					if (sweep_flag) {
+						ctx->target_dB += 3;
+					} else {
+						ctx->target_dB -= 3;
+					}
+					number_frames = 0;
+					//printf("ctx->target_dB = %d\r\n", ctx->target_dB);
+				}
+			}
+
+			//printf("sweep_enable = %d, sweep_frequency = %d, tone_data_offset = %d\r\n", ctx->sweep_enable, ctx->sweep_frequency, ctx->tone_data_offset);
+			//printf("output_item->timestamp = %d\r\n", output_item->timestamp);
+			if (!(ctx->sweep_enable) || (ctx->sweep_frequency)) {
+				for (i = 0; i < (ctx->params.frame_size >> 1); i++) {
+					temp = sin((2 * (3.141592653589793f) * (float)n_cnt) / (float)m_cnt * (float)(ctx->tone_data_offset)) * dB_fPOW[ctx->target_dB] *
+						   (32767.0f);// / (pow(10, 3.0f/20));
+					tx_pattern = (short)temp;
+					output_buf[i] = tx_pattern;
+					ctx->tone_data_offset++;
+					if (((uint32_t)n_cnt * ctx->tone_data_offset) % ctx->params.samplerate == 0) {
+						//printf("sweep_frequency = %d, tone_data_offset = %d, interval_frames = %d\r\n", ctx->sweep_frequency, ctx->tone_data_offset, interval_frames);
+						ctx->tone_data_offset = 0;
+					}
+				}
+			}
 		}
 #ifdef TIMER_FUNCTION
 		xQueueSendFromISR(mctx->output_ready, (void *)&output_item, &xHigherPriorityTaskWoken);
 #else
 		xQueueSend(mctx->output_ready, (void *)&output_item, 0);
+		ctx->audio_timer_process_time = xTaskGetTickCount() - time_sd_start;
+
 #endif
+	} else {
+		printf("frames_drop\r\n");
 	}
 #ifdef TIMER_FUNCTION
 	if (xHigherPriorityTaskWoken || xTaskWokenByReceive) {
@@ -120,9 +208,11 @@ int tone_control(void *p, int cmd, int arg)
 		mm_printf("SET_AUDIOTONE\r\n");
 		if (arg > 0 && arg < (ctx->params.samplerate >> 1)) {
 			ctx->params.audiotonerate = arg;
+			ctx->sweep_enable = 0;
 			mm_printf("Set audio tone: %d\r\n", ctx->params.audiotonerate);
 		} else {
 			ctx->params.audiotonerate = 1000;
+			ctx->sweep_enable = 0;
 			mm_printf("Invalid audio tone rate for sample rate %d, Set default audio tone: %d\r\n", ctx->params.samplerate, ctx->params.audiotonerate);
 		}
 		ctx->tone_data_offset = 0;
@@ -135,7 +225,7 @@ int tone_control(void *p, int cmd, int arg)
 			ctx->params.samplerate = 16000;
 			mm_printf("Invalid sample rate.");
 		}
-		mm_printf("Set default sample rate: %d\r\n", ctx->params.audiotonerate);
+		mm_printf("Set default sample rate: %d\r\n", ctx->params.samplerate);
 		if (ctx->params.audiotonerate >= (ctx->params.samplerate >> 1)) {
 			ctx->params.audiotonerate = 1000;
 			mm_printf("Invalid audio tone rate for sample rate %d, Set default audio tone: %d\r\n", ctx->params.samplerate, ctx->params.audiotonerate);
@@ -156,7 +246,58 @@ int tone_control(void *p, int cmd, int arg)
 		printf("Recount frame_timer_period success\n\r");
 		ctx->audio_timer_delay_ms = ctx->frame_timer_period / 1000;
 		break;
+	case CMD_TONE_SWEEP_TONE:
+		if (arg > 0) {
+			//ctx->sweep_interval_frames = arg / ctx->audio_timer_delay_ms;
+			ctx->sweep_interval_frames = SWEEP_INTERVAL_MS / ctx->audio_timer_delay_ms;
+			ctx->pre_sweep_frames = PRE_SWEEP_MS / ctx->audio_timer_delay_ms;
+			ctx->sweep_frequency = 0;
+			if (ctx->sweep_interval_frames) {
+				ctx->sweep_enable = 1;
+			} else {
+				ctx->sweep_enable = 0;
+				printf("Sweep interval is too small\n\r");
+			}
+		} else {
+			ctx->sweep_enable = 0;
+		}
+		break;
+	case CMD_TONE_TARGET_DB:
+		if (arg >= 0 && arg <= (MIN_DBFS - 1)) {
+			ctx->target_dB = arg;
+		}
+		printf("set tone target dB = %d, value = %f\r\n", -ctx->target_dB, dB_fPOW[ctx->target_dB]);
+		break;
+	case CMD_TONE_SWEEP_DB:
+		if (arg > 0) {
+			ctx->DBsweep_frames = arg / ctx->audio_timer_delay_ms;
+			ctx->enable_DB_SWEEP = 1;
+			printf("Enable sweep DB with %d ms\r\n", ctx->DBsweep_frames * ctx->audio_timer_delay_ms);
+		} else {
+			ctx->target_dB = 0;
+			ctx->DBsweep_frames = 0;
+			ctx->enable_DB_SWEEP = 0;
+		}
+		break;
+	case CMD_TONE_PLAY_SD_FILE:
+		if (arg > 0) {
+			ctx->playmode = play_sd_data;
+		} else {
+			ctx->playmode = play_tone;
+		}
+		break;
 	case CMD_TONE_APPLY:
+		for (int i = 0; i < MIN_DBFS; i++) {
+			dB_fPOW[i] = pow(10.0f, (float)((float)(-i) / 20.0f));
+		}
+		ctx->sd_data = fopen("audio_sd:/playback.bin", "rb") ;
+		if (!ctx->sd_data) {
+			printf("Open SD file playback.bin failed\n\r") ;
+			ctx->playmode = play_tone;
+		} else {
+			printf("Open SD file playback.bin success\n\r") ;
+		}
+
 		if (ctx->params.codec_id == AV_CODEC_ID_PCM_RAW) {
 			ctx->frame_timer_period = (int)(1000000 / ((float)ctx->params.samplerate * 2 / ctx->params.frame_size));
 		} else {
@@ -169,10 +310,8 @@ int tone_control(void *p, int cmd, int arg)
 		}
 #ifdef TIMER_FUNCTION
 		gtimer_init(&ctx->frame_timer, 0xff);
-#else
-		ctx->audio_timer_delay_ms = ctx->frame_timer_period / 1000;
 #endif
-
+		ctx->audio_timer_delay_ms = ctx->frame_timer_period / 1000;
 		break;
 	case CMD_TONE_GET_STATE:
 		*(int *)arg = ((ctx->stop) ? 0 : 1);
@@ -183,10 +322,16 @@ int tone_control(void *p, int cmd, int arg)
 #ifdef TIMER_FUNCTION
 				gtimer_start_periodical(&ctx->frame_timer, ctx->frame_timer_period, (void *)toneframe_timer_handler, (uint32_t)ctx);
 #else
-				timer_task_enable(ctx);
+				if (ctx && ctx->task == NULL) {
+					tonetimer_task_enable(ctx);
+				}
 #endif
 				ctx->stop = 0;
+				number_frames = 0;
 				ctx->tone_data_offset = 0;
+				if (ctx->enable_DB_SWEEP) {
+					ctx->target_dB = 0;
+				}
 			}
 		} else {			// stream off
 			if (!ctx->stop) {
@@ -235,6 +380,7 @@ void *tone_create(void *parent)
 	memset(ctx, 0, sizeof(tone_ctx_t));
 
 	ctx->parent = parent;
+	ctx->enable_DB_SWEEP = 0;
 
 	ctx->stop = 1;
 	rtw_init_sema(&ctx->up_sema, 0);

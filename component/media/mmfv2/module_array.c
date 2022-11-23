@@ -5,6 +5,7 @@
 ******************************************************************************/
 
 #include <stdint.h>
+#include <math.h>
 #include "platform_stdlib.h"
 #include "osdep_service.h"
 #include "avcodec.h"
@@ -18,6 +19,8 @@ void frame_timer_handler(uint32_t hid);
 #ifndef CONFIG_PLATFORM_8735B
 #define TIMER_FUNCTION
 #endif
+
+float dB_aPOW[64];
 
 static void array_timer_thread(void *param)
 {
@@ -158,6 +161,19 @@ void frame_timer_handler(uint32_t hid)
 #endif
 			return;
 		} else {
+			if (ctx->array_sweepdb_en) {
+				if (ctx->dB_Sweep == 0) {
+					ctx->array_sweep_flag = 1;
+				} else if (ctx->dB_Sweep == 57) {
+					ctx->array_sweep_flag = 0;
+				}
+				if (ctx->array_sweep_flag) {
+					ctx->dB_Sweep += 3;
+				} else {
+					ctx->dB_Sweep -= 3;
+				}
+			}
+			//printf("dB_sweep = %d\r\n", ctx->dB_Sweep);
 			ctx->array.data_offset = 0;
 		}
 	}
@@ -175,6 +191,14 @@ void frame_timer_handler(uint32_t hid)
 		if (ctx->params.type == AVMEDIA_TYPE_AUDIO) {
 			if (ctx->params.codec_id == AV_CODEC_ID_PCMU || ctx->params.codec_id == AV_CODEC_ID_PCMA || ctx->params.codec_id == AV_CODEC_ID_PCM_RAW) {
 				output_item->size = (remain_len > ctx->params.u.a.frame_size) ? ctx->params.u.a.frame_size : remain_len;
+				if (ctx->params.codec_id == AV_CODEC_ID_PCM_RAW && ctx->array_sweepdb_en) {
+					memcpy((void *)(ctx->array_copy.data_addr + ctx->array.data_offset), (void *)(ctx->array.data_addr + ctx->array.data_offset), output_item->size);
+					output_item->data_addr = ctx->array_copy.data_addr + ctx->array.data_offset;
+					short *pcm_pro_buf = (short *)output_item->data_addr;
+					for (int i = 0; i < output_item->size / 2; i++) {
+						pcm_pro_buf[i] = (short)((float)pcm_pro_buf[i] * dB_aPOW[ctx->dB_Sweep]);
+					}
+				}
 			} else if (ctx->params.codec_id == AV_CODEC_ID_MP4A_LATM) {
 				output_item->size = array_get_aac_frame_size((unsigned char *)(ctx->array.data_addr + ctx->array.data_offset),
 									(unsigned char *)(ctx->array.data_addr + ctx->array.data_len));
@@ -224,6 +248,8 @@ int array_control(void *p, int cmd, int arg)
 		break;
 	case CMD_ARRAY_SET_ARRAY:
 		memcpy(&ctx->array, (void *)arg, sizeof(array_t));
+		ctx->array_copy.data_addr = (uint32_t)malloc(ctx->array.data_len);
+		ctx->array_copy.data_len = ctx->array.data_len;
 		break;
 	case CMD_ARRAY_SET_MODE:
 		ctx->params.mode = (uint8_t)arg;
@@ -251,6 +277,9 @@ int array_control(void *p, int cmd, int arg)
 		ctx->video_timer_delay_ms = ctx->frame_timer_period / 1000;
 		break;
 	case CMD_ARRAY_APPLY:
+		for (int i = 0; i < 64; i++) {
+			dB_aPOW[i] = pow(10.0f, (float)((float)(-i) / 20.0f));
+		}
 		if (ctx->params.type == AVMEDIA_TYPE_VIDEO) {
 			ctx->frame_timer_period = 1000000 / ctx->params.u.v.fps;
 		} else if (ctx->params.type == AVMEDIA_TYPE_AUDIO) {
@@ -275,6 +304,16 @@ int array_control(void *p, int cmd, int arg)
 		ctx->video_timer_delay_ms = ctx->frame_timer_period / 1000;
 #endif
 
+		break;
+	case CMD_ARRAY_PCM_SWEEP:
+		if (arg > 0) {
+			ctx->dB_Sweep = 0;
+			ctx->array_sweepdb_en = 1;
+			ctx->array_sweep_flag = 1;
+		} else {
+			ctx->dB_Sweep = 0;
+			ctx->array_sweepdb_en = 0;
+		}
 		break;
 	case CMD_ARRAY_GET_STATE:
 		*(int *)arg = ((ctx->stop) ? 0 : 1);
@@ -315,18 +354,23 @@ void *array_destroy(void *p)
 {
 	array_ctx_t *ctx = (array_ctx_t *)p;
 
-	if (ctx->stop == 0) {
-		array_control((void *)ctx, CMD_ARRAY_STREAMING, 0);
-	}
+	if (ctx) {
+		if (ctx->stop == 0) {
+			array_control((void *)ctx, CMD_ARRAY_STREAMING, 0);
+		}
 
-	if (ctx && ctx->up_sema) {
-		rtw_free_sema(&ctx->up_sema);
-	}
-	if (ctx && ctx->task) {
-		vTaskDelete(ctx->task);
-		ctx->task = NULL;
-	}
-	if (ctx)	{
+		if (ctx->up_sema) {
+			rtw_free_sema(&ctx->up_sema);
+		}
+		if (ctx->task) {
+			vTaskDelete(ctx->task);
+			ctx->task = NULL;
+		}
+
+		if (ctx->array_copy.data_addr) {
+			free((void *)(ctx->array_copy.data_addr));
+		}
+
 		free(ctx);
 	}
 	return NULL;

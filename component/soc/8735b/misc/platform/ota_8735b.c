@@ -17,6 +17,7 @@ sys_thread_t TaskOTA = NULL;
 // User can check target firmware postbuild routine.
 #define USE_CHECKSUM 1
 
+
 /**
   * @brief  Clear OTA signature so that boot code load default image.
   * @retval none
@@ -94,13 +95,19 @@ void sys_clear_ota_signature(void)
 		uint32_t crc_out = 0;
 		uint32_t crypto_ret;
 		int update_partition_table = 0;
+		int partition_start_block = 16 ; //B-cut:20
+
+		if (IS_CUT_B(hal_sys_get_rom_ver())) {
+			partition_start_block = 20 ; //B-cut:20
+		}
 
 		snand_t flash;
 		snand_init(&flash);
+		snand_global_unlock();
 
 
 		//read partition_table block16-23
-		for (int i = 16; i < 24; i++) {
+		for (int i = partition_start_block; i < 24; i++) {
 			snand_page_read(&flash, i * 64, 2048 + 4, &partition_data[0]);
 			if ((partition_data[2048] == 0xff) && (partition_data[2049] == 0xc4)) {
 				break;
@@ -150,13 +157,13 @@ void sys_clear_ota_signature(void)
 			crypto_ret = hal_crypto_engine_init();
 			if (crypto_ret != SUCCESS) {
 				printf("Crypto Init Failed!%d\r\n", crypto_ret);
-				return -1;
+				return;
 			}
 			crypto_ret =  hal_crypto_crc16_division(partition_data, 2048, &crc_out);
 			if (crypto_ret != SUCCESS) {
 				printf("CRC failed\r\n");
 				// ignore error and go-on
-				return -1;
+				return;
 			}
 
 			printf("crc_out = 0x%x \n\r", crc_out);
@@ -168,7 +175,7 @@ void sys_clear_ota_signature(void)
 		if (update_partition_table == 1) {
 			int success = 0;
 			int fail = 0;
-			for (int i = 16; i < 24; i++) {
+			for (int i = partition_start_block; i < 24; i++) {
 				fail = 0;
 				snand_erase_block(&flash, i * 64);
 				snand_page_write(&flash, i * 64, 2048 + 4, &partition_data[0]);
@@ -268,14 +275,18 @@ void sys_recover_ota_signature(void)
 		uint32_t crc_out = 0;
 		uint32_t crypto_ret;
 		int update_partition_table = 0;
+		int partition_start_block = 16 ; //B-cut:20
+
+		if (IS_CUT_B(hal_sys_get_rom_ver())) {
+			partition_start_block = 20 ; //B-cut:20
+		}
 
 		snand_t flash;
 		snand_init(&flash);
-
-
+		snand_global_unlock();
 
 		//read partition_table block16-23
-		for (int i = 16; i < 24; i++) {
+		for (int i = partition_start_block; i < 24; i++) {
 			snand_page_read(&flash, i * 64, 2048 + 8, &partition_data[0]);
 			if (partition_data[2048] == 0xff) {
 				break;
@@ -308,13 +319,13 @@ void sys_recover_ota_signature(void)
 			crypto_ret = hal_crypto_engine_init();
 			if (crypto_ret != SUCCESS) {
 				printf("Crypto Init Failed!%d\r\n", crypto_ret);
-				return -1;
+				return;
 			}
 			crypto_ret =  hal_crypto_crc16_division(partition_data, 2048, &crc_out);
 			if (crypto_ret != SUCCESS) {
 				printf("CRC failed\r\n");
 				// ignore error and go-on
-				return -1;
+				return;
 			}
 
 			printf("crc_out = 0x%x \n\r", crc_out);
@@ -326,7 +337,7 @@ void sys_recover_ota_signature(void)
 		if (update_partition_table == 1) {
 			int success = 0;
 			int fail = 0;
-			for (int i = 16; i < 24; i++) {
+			for (int i = partition_start_block; i < 24; i++) {
 				fail = 0;
 				snand_erase_block(&flash, i * 64);
 				snand_page_write(&flash, i * 64, 2048 + 8, &partition_data[0]);
@@ -369,14 +380,23 @@ int ota_flash_NOR(uint32_t target_fw_idx, uint32_t total_blocks, uint32_t cur_bl
 	// for first block
 	if (0 == cur_block) {
 		device_mutex_lock(RT_DEV_LOCK_FLASH);
-		if (1 == target_fw_idx) {
+		if (OTA_FW1 == target_fw_idx) {
 			// fw1 record in partition table
 			flash_read_word(&flash, 0x2060, &target_fw_addr);
 			flash_read_word(&flash, 0x2064, &target_fw_len);
-		} else if (2 == target_fw_idx) {
+		} else if (OTA_FW2 == target_fw_idx) {
 			// fw2 record in partition table
 			flash_read_word(&flash, 0x2080, &target_fw_addr);
 			flash_read_word(&flash, 0x2084, &target_fw_len);
+		} else if (OTA_BL_PRI == target_fw_idx) { //BL_PRI
+			flash_read_word(&flash, 0x2020, &target_fw_addr);
+			flash_read_word(&flash, 0x2024, &target_fw_len);
+		} else if (OTA_ISP_IQ == target_fw_idx) { //ISP_IQ
+			flash_read_word(&flash, 0x20a0, &target_fw_addr);
+			flash_read_word(&flash, 0x20a4, &target_fw_len);
+		} else if (OTA_NN_MDL == target_fw_idx) { //NN_MDL
+			flash_read_word(&flash, 0x20c0, &target_fw_addr);
+			flash_read_word(&flash, 0x20c4, &target_fw_len);
 		}
 		device_mutex_unlock(RT_DEV_LOCK_FLASH);
 		printf("\n\r[%s] target_fw_addr=0x%x, target_fw_len=0x%x\n\r", __FUNCTION__, target_fw_addr, target_fw_len);
@@ -472,15 +492,23 @@ int ota_flash_NAND(uint32_t target_fw_idx, uint32_t total_blocks, uint32_t cur_b
 	int fail = 0;
 	int ret = 0;
 	int partition_valid_block = 0 ;
+	static uint8_t type_id0 = 0;
+	static uint8_t type_id1 = 0;
+	int partition_start_block = 16 ; //B-cut:20
+
+	if (IS_CUT_B(hal_sys_get_rom_ver())) {
+		partition_start_block = 20 ;
+	}
+
 	snand_t flash;
 	snand_init(&flash);
-
+	snand_global_unlock();
 
 
 	// for first block
 	if (0 == cur_block) {
 		//read partition_table block16-23
-		for (int i = 16; i < 24; i++) {
+		for (int i = partition_start_block; i < 24; i++) {
 			snand_page_read(&flash, i * 64, 2048 + 4, &data_r[0]);
 			if ((data_r[2048] == 0xff) && (data_r[2049] == 0xc4)) {  //((data_r[2048] == 0xff) && (data_r[2053] == 0xc4) && (data_r[2054] == 0xd9)) {
 				memcpy(partition_data, data_r, 2112);
@@ -506,7 +534,7 @@ int ota_flash_NAND(uint32_t target_fw_idx, uint32_t total_blocks, uint32_t cur_b
 		//check have 2 partition_table
 		if (success == 1) {
 			printf("Just 1 partition_table! \n\r");
-			for (int i = 16; i < 24; i++) {
+			for (int i = partition_start_block; i < 24; i++) {
 				if (i != partition_valid_block) {
 					snand_erase_block(&flash, i * 64);
 					snand_page_write(&flash, i * 64, 2048 + 4, &partition_data[0]);
@@ -528,27 +556,39 @@ int ota_flash_NAND(uint32_t target_fw_idx, uint32_t total_blocks, uint32_t cur_b
 #endif
 		memset(data, 0xff, 2112);
 		int record_nub = 0;
-		if (1 == target_fw_idx) {
-			// clear fw1 record in partition table
-			for (int i = 0; i < 16; i++) {
-				if ((partition_data[i * 128 + 4] != 0xc7) && (partition_data[i * 128 + 5] != 0xc1)) {
-					memcpy(&data[record_nub * 128], &partition_data[i * 128], 128);
-					record_nub = record_nub + 1;
-				}
-			}
-		} else if (2 == target_fw_idx) {
-			// clear fw2 record in partition table
-			for (int i = 0; i < 16; i++) {
-				if ((partition_data[i * 128 + 4] != 0xc8) && (partition_data[i * 128 + 5] != 0xb9)) {
-					memcpy(&data[record_nub * 128], &partition_data[i * 128], 128);
-					record_nub = record_nub + 1;
-				}
-			}
+		if (OTA_FW1 == target_fw_idx) { //FW1
+			type_id0 = 0xc7;
+			type_id1 = 0xc1;
+		} else if (OTA_FW2 == target_fw_idx) { //FW2
+			type_id0 = 0xc8;
+			type_id1 = 0xb9;
+		} else if (OTA_BL_PRI == target_fw_idx) { //BL_PRI
+			type_id0 = 0xc5;
+			type_id1 = 0xd1;
+		} else if (OTA_ISP_IQ == target_fw_idx) { //ISP_IQ
+			type_id0 = 0xce;
+			type_id1 = 0x89;
+		} else if (OTA_NN_MDL == target_fw_idx) { //NN_MDL
+			type_id0 = 0xcf;
+			type_id1 = 0x81;
+		} else if (OTA_CER == target_fw_idx) { //CER
+			type_id0 = 0xc2;
+			type_id1 = 0xe9;
 		} else {
 			printf("\n\r[%s] The target_fw_idx is wrong!\n\r", __FUNCTION__);
 			ret = -1;
 			goto exit;
 		}
+
+		// clear target_fw record in partition table
+		for (int i = 0; i < 16; i++) {
+			if ((partition_data[i * 128 + 4] != type_id0) && (partition_data[i * 128 + 5] != type_id1)) {
+				memcpy(&data[record_nub * 128], &partition_data[i * 128], 128);
+				record_nub = record_nub + 1;
+			}
+		}
+		//update partition_table
+		memcpy(partition_data, data, 2048);
 		//update partition table CRC16
 		crypto_ret = hal_crypto_engine_init();
 		if (crypto_ret != SUCCESS) {
@@ -565,12 +605,11 @@ int ota_flash_NAND(uint32_t target_fw_idx, uint32_t total_blocks, uint32_t cur_b
 		printf("crc_out = 0x%x \n\r", crc_out);
 		partition_data[2050] = (uint8_t)(crc_out & 0xff);
 		partition_data[2051] = (uint8_t)(crc_out >> 8);
-		//update partition_table
-		memcpy(partition_data, data, 2048);
+
 		//update partition table block16-23
 		success = 0;
 		fail = 0;
-		for (int i = 16; i < 24; i++) {
+		for (int i = partition_start_block; i < 24; i++) {
 			fail = 0;
 			snand_erase_block(&flash, i * 64);
 			snand_page_write(&flash, i * 64, 2048 + 4, &partition_data[0]);
@@ -614,15 +653,16 @@ int ota_flash_NAND(uint32_t target_fw_idx, uint32_t total_blocks, uint32_t cur_b
 			memset(data, 0xff, 2112);
 //			data[2048 + 1] = 0x87;
 //			data[2048 + 3] = 0x35;
-			if (1 == target_fw_idx) {
-//				data[2048 + 5] = 0xc7;
-//				data[2048 + 6] = 0xc1;
-				data[2048 + 1] = 0xc7;
-			} else if (2 == target_fw_idx) {
-//				data[2048 + 5] = 0xc8;
-//				data[2048 + 6] = 0xb9;
-				data[2048 + 1] = 0xc8;
-			}
+			/*			if (1 == target_fw_idx) {
+			//				data[2048 + 5] = 0xc7;
+			//				data[2048 + 6] = 0xc1;
+							data[2048 + 1] = 0xc7;
+						} else if (2 == target_fw_idx) {
+			//				data[2048 + 5] = 0xc8;
+			//				data[2048 + 6] = 0xb9;
+							data[2048 + 1] = 0xc8;
+						}*/
+			data[2048 + 1] = type_id0;
 
 			fail = 0;
 			snand_erase_block(&flash, i * 64);
@@ -674,17 +714,9 @@ int ota_flash_NAND(uint32_t target_fw_idx, uint32_t total_blocks, uint32_t cur_b
 		for (int i = 0; i < 16; i++) {
 			if ((partition_data[i * 128 + 4] == 0xff) && (partition_data[i * 128 + 5] == 0xff)) {
 				printf("partition_table record %d is empty \n\r", i);
-				if (1 == target_fw_idx) {
-					partition_data[i * 128 + 4] = 0xc7;
-					partition_data[i * 128 + 5] = 0xc1;
-				} else if (2 == target_fw_idx) {
-					partition_data[i * 128 + 4] = 0xc8;
-					partition_data[i * 128 + 5] = 0xb9;
-				} else {
-					printf("\n\r[%s] The target_fw_idx is wrong!\n\r", __FUNCTION__);
-					ret = -1;
-					goto exit;
-				}
+
+				partition_data[i * 128 + 4] = type_id0;
+				partition_data[i * 128 + 5] = type_id1;
 
 				partition_data[i * 128 + 6] = total_blocks & 0xff;
 				partition_data[i * 128 + 7] = (total_blocks >> 8) & 0xff;
@@ -697,24 +729,12 @@ int ota_flash_NAND(uint32_t target_fw_idx, uint32_t total_blocks, uint32_t cur_b
 		}
 	} else {
 		for (int i = 0; i < 16; i++) {
-			if (1 == target_fw_idx) {
-				if ((partition_data[i * 128 + 4] == 0xc7) && (partition_data[i * 128 + 5] == 0xc1)) {
-					for (int j = 0; j < 48; j++) {
-						if ((partition_data[(i * 128) + 0x20 + (2 * j)] == 0xff) && (partition_data[(i * 128) + 0x20 + (2 * j) + 1] == 0xff)) {
-							partition_data[(i * 128) + 0x20 + (2 * j)] = block_w_nub & 0xff;
-							partition_data[(i * 128) + 0x20 + (2 * j) + 1] = (block_w_nub >> 8) & 0xff;
-							break;
-						}
-					}
-				}
-			} else if (2 == target_fw_idx) {
-				if ((partition_data[i * 128 + 4] == 0xc8) && (partition_data[i * 128 + 5] == 0xb9)) {
-					for (int j = 0; j < 48; j++) {
-						if ((partition_data[(i * 128) + 0x20 + (2 * j)] == 0xff) && (partition_data[(i * 128) + 0x20 + (2 * j) + 1] == 0xff)) {
-							partition_data[(i * 128) + 0x20 + (2 * j)] = block_w_nub & 0xff;
-							partition_data[(i * 128) + 0x20 + (2 * j) + 1] = (block_w_nub >> 8) & 0xff;
-							break;
-						}
+			if ((partition_data[i * 128 + 4] == type_id0) && (partition_data[i * 128 + 5] == type_id1)) {
+				for (int j = 0; j < 48; j++) {
+					if ((partition_data[(i * 128) + 0x20 + (2 * j)] == 0xff) && (partition_data[(i * 128) + 0x20 + (2 * j) + 1] == 0xff)) {
+						partition_data[(i * 128) + 0x20 + (2 * j)] = block_w_nub & 0xff;
+						partition_data[(i * 128) + 0x20 + (2 * j) + 1] = (block_w_nub >> 8) & 0xff;
+						break;
 					}
 				}
 			}
@@ -724,18 +744,10 @@ int ota_flash_NAND(uint32_t target_fw_idx, uint32_t total_blocks, uint32_t cur_b
 	// for final block update magic number
 	if (cur_block == (total_blocks - 1)) {
 		for (int i = 0; i < 16; i++) {
-			if (1 == target_fw_idx) {
-				if ((partition_data[i * 128 + 4] == 0xc7) && (partition_data[i * 128 + 5] == 0xc1)) {
-					partition_data[i * 128] = 0x87;
-					partition_data[i * 128 + 2] = 0x35;
-					printf("partition_table update magic number OK\n\r");
-				}
-			} else if (2 == target_fw_idx) {
-				if ((partition_data[i * 128 + 4] == 0xc8) && (partition_data[i * 128 + 5] == 0xb9)) {
-					partition_data[i * 128] = 0x87;
-					partition_data[i * 128 + 2] = 0x35;
-					printf("partition_table update magic number OK\n\r");
-				}
+			if ((partition_data[i * 128 + 4] == type_id0) && (partition_data[i * 128 + 5] == type_id1)) {
+				partition_data[i * 128] = 0x87;
+				partition_data[i * 128 + 2] = 0x35;
+				printf("partition_table update magic number OK\n\r");
 			}
 		}
 		//update partition table CRC16
@@ -758,7 +770,7 @@ int ota_flash_NAND(uint32_t target_fw_idx, uint32_t total_blocks, uint32_t cur_b
 		//update partition table block16-23
 		success = 0;
 		fail = 0;
-		for (int i = 16; i < 24; i++) {
+		for (int i = partition_start_block; i < 24; i++) {
 			fail = 0;
 			snand_erase_block(&flash, i * 64);
 			snand_page_write(&flash, i * 64, 2048 + 4, &partition_data[0]);
@@ -775,6 +787,31 @@ int ota_flash_NAND(uint32_t target_fw_idx, uint32_t total_blocks, uint32_t cur_b
 			}
 			if (success == 2) {
 				break;
+			}
+		}
+		if (IS_CUT_B(hal_sys_get_rom_ver())) { //B-cut ota BL_PRI rewrite partition_boot block 16-19
+			if ((OTA_BL_PRI == target_fw_idx) | (OTA_ISP_IQ == target_fw_idx) | (OTA_CER == target_fw_idx)) { //BL_PRI or ISP_IQ or CER
+				partition_start_block = 16 ;
+				success = 0;
+				for (int i = partition_start_block; i < 20; i++) {
+					fail = 0;
+					snand_erase_block(&flash, i * 64);
+					snand_page_write(&flash, i * 64, 2048 + 4, &partition_data[0]);
+					snand_page_read(&flash, i * 64, 2048 + 4, &data_r[0]);
+					if (memcmp(partition_data, data_r, (2048 + 4)) != 0) {
+						printf("bolck %d write fail! \n\r", i);
+						fail = 1;
+						snand_erase_block(&flash, i * 64);
+						data_r[2048] = 0;
+						snand_page_write(&flash, i * 64, 2048 + 4, &data_r[0]);
+					}
+					if (fail == 0) {
+						success = success + 1;
+					}
+					if (success == 2) {
+						break;
+					}
+				}
 			}
 		}
 
@@ -832,7 +869,7 @@ int update_ota_connect_server(update_cfg_local_t *cfg)
 
 static void update_ota_local_task(void *param)
 {
-	int server_socket;
+	int server_socket = -1;
 	uint8_t *buf;
 	int read_bytes = 0;
 	uint32_t idx = 0;
@@ -899,9 +936,9 @@ static void update_ota_local_task(void *param)
 	cur_fw_idx = hal_sys_get_ld_fw_idx();
 	printf("\n\r[%s] Current firmware index is %d\r\n", __FUNCTION__, cur_fw_idx);
 	if (1 == cur_fw_idx) {
-		target_fw_idx = 2;
+		target_fw_idx = OTA_FW2;
 	} else if (2 == cur_fw_idx) {
-		target_fw_idx = 1;
+		target_fw_idx = OTA_FW1;
 	} else {
 		goto update_ota_exit;
 	}
@@ -1379,9 +1416,9 @@ restart_http_ota:
 	cur_fw_idx = hal_sys_get_ld_fw_idx();
 	printf("\n\r[%s] Current firmware index is %d\r\n", __FUNCTION__, cur_fw_idx);
 	if (1 == cur_fw_idx) {
-		target_fw_idx = 2;
+		target_fw_idx = OTA_FW2;
 	} else if (2 == cur_fw_idx) {
-		target_fw_idx = 1;
+		target_fw_idx = OTA_FW1;
 	} else {
 		goto update_ota_exit;
 	}

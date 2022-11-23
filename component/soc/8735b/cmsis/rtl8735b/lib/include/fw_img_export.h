@@ -2,7 +2,7 @@
  * @file     fw_img_export.h
  * @brief    Define data format exported after boot.
  * @version  V1.00
- * @date     2022-03-02
+ * @date     2022-07-08
  *
  * @note
  *
@@ -102,6 +102,13 @@ typedef struct voe_ld_export_info_type_s {
 	voe_img_ld_info_type_t  voe_img_ld_info;
 } voe_ld_export_info_type_t, *pvoe_ld_export_info_type_t;
 
+typedef struct isp_iq_fw_info_s {
+	uint16_t type_id;
+	uint8_t resv[2];
+	uint32_t start_addr;
+	uint32_t length;
+} isp_iq_fw_info_t;
+
 typedef struct _BL4FW_INFO_T_ {
 	struct {
 		uint8_t str_sign[BL4FW_STR_SIGN_MAX_SIZE];
@@ -131,7 +138,10 @@ typedef struct _BL4VOE_PERI_INFO_T_ {
 		uint8_t str_sign[BL4VOE_PERI_STR_SIGN_MAX_SIZE];
 		uint32_t resv[4];
 	} hdr;
-	voe_fcs_peri_info_t data;
+	voe_fcs_peri_info_t data; //32 bytes
+	uint8_t resv[BL4VOE_INFO_DATA_MAX_SIZE - sizeof(voe_fcs_peri_info_t)];
+
+
 } BL4VOE_PERI_INFO_T;
 
 

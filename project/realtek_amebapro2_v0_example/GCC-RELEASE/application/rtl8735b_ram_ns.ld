@@ -3,6 +3,13 @@
 /* !! the include symbole may failed if the symbol file name is too long!! */
 INCLUDE "romsym_ns.so"
 
+/* unit - Mega byte */
+DDR_SIZE = 128;
+NN_SIZE = 16;
+
+DDR_END = 0x70000000 + ((DDR_SIZE - 2) - NN_SIZE)*1024*1024;
+NN_END  = 0x70000000 + (DDR_SIZE - 2)*1024*1024;
+
 MEMORY
 {
   ITCM_RAM (wrx) 		: ORIGIN = 0x00010000, LENGTH = 0x00017000 - 0x00010000		/*  28KB */
@@ -13,22 +20,24 @@ MEMORY
   VECTORS_RAM (rwx)     : ORIGIN = 0x20100000, LENGTH = 0x20100200 - 0x20100000		/*  512B */
   
   /* 0x20100200 ~ 0x20101200 4KB is reserved for ROM used RAM bss */
+  /* 0x20101200 ~ 0x20105200 16KB is reserved for Bootloader RAM code used */
+  /* 0x20105200 ~ 0x20106200 4KB is reserved for Bootloader RAM BSS used */
   
   /* RAM functions entry table */
-  RAM_FUN_TABLE (rwx)   : ORIGIN = 0x20101200, LENGTH = 0x201012F0 - 0x20101200		/*  240B */
-  RAM_IMG_SIGN (rwx)    : ORIGIN = 0x201012F0, LENGTH = 0x20101300 - 0x201012F0  	/*   16B */
+  RAM_FUN_TABLE (rwx)   : ORIGIN = 0x20106200, LENGTH = 0x201062F0 - 0x20106200		/*  240B */
+  RAM_IMG_SIGN (rwx)    : ORIGIN = 0x201062F0, LENGTH = 0x20106300 - 0x201062F0  	/*   16B */
   
   /* Internal SRAM for text, rodata & data */
-  RAM (rwx)             : ORIGIN = 0x20101300, LENGTH = 0x20156000 - 0x20101300		/*  339.25KB */
+  RAM_1 (rwx)           : ORIGIN = 0x20106300, LENGTH = 0x20120000 - 0x20106300  /* 107KB */
+  RAM_RETENTION (rwx)   : ORIGIN = 0x20120000, LENGTH = 0x20140000 - 0x20120000  /* 128KB retention data */
+  RAM_2 (rwx)           : ORIGIN = 0x20140000, LENGTH = 0x20156000 - 0x20140000  /* 88KB */
 
   /* DDR memory */
   VOE    (rwx)          : ORIGIN = 0x70000000, LENGTH = 0x70100000 - 0x70000000	/*  1MB */
-  /* DDR 64M */
-  DDR    (rwx) 		    : ORIGIN = 0x70100000, LENGTH = 0x73600000 - 0x70100000 /* 53MB */
-  NN     (rwx)      	: ORIGIN = 0x73600000, LENGTH = 0x73E00000 - 0x73600000	/* 8MB */
-  /* DDR 128M */
-  /*DDR    (rwx) 		: ORIGIN = 0x70100000, LENGTH = 0x77600000 - 0x70100000*/ /* 53 + 64MB */
-  /*NN     (rwx)      	: ORIGIN = 0x77600000, LENGTH = 0x77E00000 - 0x77600000*/ /* 8MB */ 
+
+  /* DDR */
+  DDR    (rwx) 			: ORIGIN = 0x70100000, LENGTH = DDR_END - 0x70100000 /* 55 + 64MB */
+  NN     (rwx)      	: ORIGIN =    DDR_END, LENGTH = NN_END - DDR_END 	 /* 8MB */  
 }
 
 /* Library configurations */
@@ -68,7 +77,7 @@ MEMORY
 
 ENTRY(ram_start)
 
-__sram_end__		= ORIGIN(RAM) + LENGTH(RAM);
+__sram_end__		= ORIGIN(RAM_2) + LENGTH(RAM_2);
 __eram_end__		= ORIGIN(DDR) + LENGTH(DDR);		
 
 __voe_code_size__   = LENGTH(VOE);
@@ -132,17 +141,7 @@ SECTIONS
 		__ram_start_table_end__ = .;
 
 	} > RAM_FUN_TABLE
-	
-	.ddr.bss :
-	{
-		. = ALIGN(4);
-		__eram_bss_start__ = .;	
-		*(.sdram.bss*)
-		*mem.*o*(.bss*)
-		*memp.*o*(.bss*)
-		__eram_bss_end__ = .;			
-	} > DDR	
-	
+
     /* for C++ supporting */
 	.ddr.code.text : 
     {
@@ -210,7 +209,7 @@ SECTIONS
 		/* All data end */
 		__data_end__ = .;
 
-	} > RAM
+	} > RAM_1
 
 	.ram.code_text : AT (__etext2)
 	{
@@ -228,7 +227,7 @@ SECTIONS
 		*cmd_shell.*o*(.text*)
 
 		*hal_sys_ctrl.*o*(.text*)
-		*hal_dram_init.*o*(.text*)
+		*hal_dram*.*o*(.text*)
 		*hal_timer.*o*(.text*)
 		*hal_uart.*o*(.text*)
 		*hal_gdma.*o*(.text*)
@@ -238,7 +237,7 @@ SECTIONS
 		
 		. = ALIGN(4);
 		__ram_code_text_end__ = .;		
-	} > RAM
+	} > RAM_1
 
 	.ram.code_rodata : AT (__ram_code_rodata_start__)
 	{
@@ -250,19 +249,23 @@ SECTIONS
 		*hal_flash.*o*(.rodata*)
 		. = ALIGN(4);
 		__ram_code_rodata_end__ = .;
-	} > RAM
-	
+	} > RAM_1
+
+	.ram.retention.data :
+	{
+		*(.retention.data*)
+	} > RAM_RETENTION
+
 	.ram.bss :
 	{
 		. = ALIGN(4);
 		__bss_start__ = .;
 		*lib_a*(.bss*)
-		*(.bss*)
 		*(COMMON)
 		*hal_sys_ctrl.*o*(.bss*)
 		*hal_dram*.*o*(.bss*)
 		*hal_flash.*o*(.bss*)
-	} > RAM
+	} > RAM_2
 
 	.non_secure.bss :
 	{
@@ -276,7 +279,7 @@ SECTIONS
 		__bss_end__ = .;
 		__sram_heap_start__ = .;
 		
-	} > RAM
+	} > RAM_2
 	
 	.heap (COPY):
 	{
@@ -336,6 +339,15 @@ SECTIONS
 		*(.ddr.data)
 		*(.sdram.data*)
 		__eram_data_end__ = .;
+	} > DDR
+
+	.ddr.bss :
+	{
+		. = ALIGN(4);
+		__eram_bss_start__ = .;
+		*(.bss*)
+		*(.sdram.bss*)
+		__eram_bss_end__ = .;
 		__eram_heap_start__ = .;
 	} > DDR
 

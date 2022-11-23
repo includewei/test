@@ -61,10 +61,9 @@ int opusc_handle(void *p, void *input, void *output)
 	int frame_idx = 0;
 
 	if (ctx->stop == 1) {
-		printf("stop\r\n");
+		mm_printf("opus encoder stop\r\n");
 		return 0;
 	}
-
 
 	output_item->timestamp = input_item->timestamp;
 	// set timestamp to 1st sample (cache head)
@@ -74,7 +73,6 @@ int opusc_handle(void *p, void *input, void *output)
 	memcpy(ctx->cache + ctx->cache_idx, (void *)input_item->data_addr, input_item->size);
 	ctx->cache_idx += input_item->size;
 
-	//xSemaphoreTake(opus_progress_sema, portMAX_DELAY);
 	if (ctx->params.use_framesize == 0) {
 		while (1) {
 			if ((ctx->cache_idx < (frame_msec_idx[frame_idx]*ctx->params.sample_rate / 1000 * ctx->params.bit_length / 8)) || (frame_idx >= MAX_IDX_FRAME)) {
@@ -120,10 +118,9 @@ int opusc_handle(void *p, void *input, void *output)
 			frame_size = 0;
 		}
 	}
-	//xSemaphoreGive(opus_progress_sema);
 
 	int new_frame_size;
-
+	//mm_printf("opus encode frame_size = %d\r\n", frame_size);
 	if (frame_size > 0) {
 		new_frame_size = (frame_size / 8 + (frame_size % 8 == 0 ? 0 : 1)) * 8;
 		if (opus_packet_pad((unsigned char *)output_item->data_addr, frame_size, new_frame_size)) {
@@ -249,7 +246,7 @@ void *opusc_create(void *parent)
 
 	//the Opus encoder can switch to a lower audio bandwidth(?) or number of channels
 	//Number of channels (1 or 2) in input signal
-	printf("need bytes: %d\r\n", opus_encoder_get_size(1));
+	mm_printf("OPUS encoder needs bytes: %d\r\n", opus_encoder_get_size(1));
 	ctx->opus_enc = opus_encoder_create(48000, 1, OPUS_APPLICATION_AUDIO, &error_code);
 	if (error_code != 0) { //OPUS_OK
 		printf("error_code = %d\r\n", error_code);

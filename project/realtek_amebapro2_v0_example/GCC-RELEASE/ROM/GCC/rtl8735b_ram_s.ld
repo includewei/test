@@ -13,16 +13,16 @@ MEMORY
   DTCM_RAM (wrx) 		: ORIGIN = 0x20002200, LENGTH = 0x20004000 - 0x20002200 	/*  7.5KB    */
 
   /* Non-Secure Callable: for Non-Secure callable functions and secure gateway */  
-  NSC (rwx)             : ORIGIN = 0x2015E000, LENGTH = 0x2016C300 - 0x2015E000	    /*  56.75KB  */
+  NSC (rwx)             : ORIGIN = 0x20156000, LENGTH = 0x20164300 - 0x20156000	    /*  56.75KB  */
   
   /* RAM functions entry table */
-  RAM_FUN_TABLE (rwx)   : ORIGIN = 0x2016C300, LENGTH = 0x2016C3F0 - 0x2016C300     /* 240B   */ 
+  RAM_FUN_TABLE (rwx)   : ORIGIN = 0x20164300, LENGTH = 0x201643F0 - 0x20164300     /* 240B   */ 
   
   /* RAM image Signature */
-  RAM_IMG_SIGN (rwx)    : ORIGIN = 0x2016C3F0, LENGTH = 0x2016C400 - 0x2016C3F0		/*  16B   */
+  RAM_IMG_SIGN (rwx)    : ORIGIN = 0x201643F0, LENGTH = 0x20164400 - 0x201643F0		/*  16B   */
 
   /* Internal SRAM for text, rodata & data */
-  RAM (rwx)             : ORIGIN = 0x2016C400, LENGTH = 0x20177800 - 0x2016C400		/*  45KB  */
+  RAM (rwx)             : ORIGIN = 0x20164400, LENGTH = 0x20177800 - 0x20164400		/*  77KB  */
 
   VOE (rwx)             : ORIGIN = 0x70000000, LENGTH = 0x70100000 - 0x70000000		/*  1MB */
   DDR (rwx)	            : ORIGIN = 0x73E00000, LENGTH = 0x74000000 - 0x73E00000		/*  2MB */
@@ -176,6 +176,9 @@ SECTIONS
 		__bl4voe_data_start__ = .;
         KEEP(*(.bl4voe.ram.data))
         __bl4voe_data_end__ = .;
+        __bl4voe_ldinfo_data_start__ = .;
+        KEEP(*(.bl4voe.ldinfo.ram.data))
+        __bl4voe_ldinfo_data_end__ = .;
         __bl4voe_peri_data_start__ = .;
         KEEP(*(.bl4voe.peri.ram.data))
         __bl4voe_peri_data_end__ = .;
@@ -275,6 +278,7 @@ SECTIONS
 	{
 		. = ALIGN(4);
 		__eram_bss_start__ = .;	
+		*(.lpddr.bss)
 		__eram_bss_end__ = .;
 		__eram_heap_start__ = .;
 		
@@ -291,6 +295,74 @@ SECTIONS
 	__StackTop = ORIGIN(DTCM_RAM) + LENGTH(DTCM_RAM);
 	__StackLimit = __StackTop - SIZEOF(.stack_dummy);
 	PROVIDE(__stack = __StackTop);
+
+
+    /* DWARF debug sections.
+       Symbols in the DWARF debugging sections are relative to the beginning
+       of the section so we begin them at 0.  */
+    /* DWARF 1 */
+    .debug          0 : { *(.debug) }
+    .line           0 : { *(.line) }
+    /* GNU DWARF 1 extensions */
+    .debug_srcinfo  0 : { *(.debug_srcinfo) }
+    .debug_sfnames  0 : { *(.debug_sfnames) }
+    /* DWARF 1.1 and DWARF 2 */
+    .debug_aranges  0 : { *(.debug_aranges) }
+    .debug_pubnames 0 : { *(.debug_pubnames) }
+    /* DWARF 2 */
+    .debug_info     0 : { *(.debug_info .gnu.linkonce.wi.*) }
+    .debug_abbrev   0 : { *(.debug_abbrev) }
+    .debug_line     0 : { *(.debug_line) }
+    .debug_frame    0 : { *(.debug_frame) }
+    .debug_str      0 : { *(.debug_str) }
+    .debug_loc      0 : { *(.debug_loc) }
+    .debug_macinfo  0 : { *(.debug_macinfo) }
+    /* SGI/MIPS DWARF 2 extensions */
+    .debug_weaknames 0 : { *(.debug_weaknames) }
+    .debug_funcnames 0 : { *(.debug_funcnames) }
+    .debug_typenames 0 : { *(.debug_typenames) }
+    .debug_varnames  0 : { *(.debug_varnames) }
+    /* DWARF 3 */
+    .debug_pubtypes 0 : { *(.debug_pubtypes) }
+    .debug_ranges   0 : { *(.debug_ranges) }
+    /* DWARF Extension.  */
+    .debug_macro    0 : { *(.debug_macro) }
+    .gnu.attributes 0 : { KEEP (*(.gnu.attributes)) }
+    .gptab.sdata : { *(.gptab.data) *(.gptab.sdata) }
+    .gptab.sbss : { *(.gptab.bss) *(.gptab.sbss) }
+    .mdebug.abi32 0 : { KEEP(*(.mdebug.abi32)) }
+    .mdebug.abiN32 0 : { KEEP(*(.mdebug.abiN32)) }
+    .mdebug.abi64 0 : { KEEP(*(.mdebug.abi64)) }
+    .mdebug.abiO64 0 : { KEEP(*(.mdebug.abiO64)) }
+    .mdebug.eabi32 0 : { KEEP(*(.mdebug.eabi32)) }
+    .mdebug.eabi64 0 : { KEEP(*(.mdebug.eabi64)) }
+    .gcc_compiled_long32 0 : { KEEP(*(.gcc_compiled_long32)) }
+    .gcc_compiled_long64 0 : { KEEP(*(.gcc_compiled_long64)) }
+    .ARM.attributes 0 : { *(.ARM.attributes) }
+
+    /DISCARD/ :
+    {
+        /* Stabs debugging sections.  */
+        *(.comment)
+        *(.stabstr)
+        *(.ARM.exidx)
+        /*
+        *(.pdr)
+        *(.note.GNU-stack) *(.gnu_debuglink) *(.gnu.lto_*) *(.gnu.attributes)
+        *(.reginfo)
+        *(.rel.dyn)
+        *(.MIPS.abiflags)
+        *(.note.gnu.build-id)
+         */
+    }
+
+    /* Collect unexpected sections.  */
+    .trashcan :
+    {
+        *(*)
+    } > RAM
+
+    ASSERT(SIZEOF(.trashcan) == 0, "Some section is collect by trashcan. Check your map file.")
 
 	/* Check if data + heap + stack exceeds RAM limit */
 /* TODO:	ASSERT(__StackLimit >= __HeapLimit, "region RAM overflowed with stack") */

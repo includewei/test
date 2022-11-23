@@ -17,7 +17,7 @@
 #elif USE_HCI_H5
     #define RESERVE_LEN 4
 #else
-    #define RESERVE_LEN 0    
+    #define RESERVE_LEN 0
 #endif
 
 #ifdef hci_platform_START_IQK
@@ -42,7 +42,7 @@ static uint8_t hci_process_start_iqk(uint16_t opcode)
 
         if (HCI_SUCCESS != hci_sa_send(H4_CMD, buf, 7, HCI_SYNC))
             return HCI_FAIL;
-        
+
         /* Wait Resp: Need, Check Resp: No Need */
     }
 
@@ -67,7 +67,7 @@ static uint8_t hci_process_read_local_ver(uint16_t opcode)
         return HCI_FAIL;
 
     /* Check Resp: OpCode and Status, LMP Subversion */
-    if (!(*(uint16_t *)(&buf[3]) == opcode) || buf[5] != 0x00)
+    if (buf[3] != (uint8_t)(opcode >> 0) || buf[4] != (uint8_t)(opcode >> 8) || buf[5] != 0x00)
         return HCI_FAIL;
 
     uint16_t lmp_sbuver = ((uint16_t)buf[12]) | (((uint16_t)buf[13]) << 8);
@@ -91,7 +91,7 @@ static uint8_t hci_process_read_rom_ver(uint16_t opcode)
         return HCI_FAIL;
 
     /* Check Resp: OpCode and Status */
-    if (!(*(uint16_t *)(&buf[3]) == opcode) || buf[5] != 0x00)
+    if (buf[3] != (uint8_t)(opcode >> 0) || buf[4] != (uint8_t)(opcode >> 8) || buf[5] != 0x00)
         return HCI_FAIL;
 
     /* Get Chip Id (Rom_Ver+1) and Find Patch */
@@ -115,7 +115,7 @@ static uint8_t hci_process_update_baudrate(uint16_t opcode)
         return HCI_FAIL;
 
     /* Check Resp: OpCode and Status */
-    if (!(*(uint16_t *)(&buf[3]) == opcode) || buf[5] != 0x00)
+    if (buf[3] != (uint8_t)(opcode >> 0) || buf[4] != (uint8_t)(opcode >> 8) || buf[5] != 0x00)
         return HCI_FAIL;
 
     /* Set Host-side baudrate */
@@ -153,7 +153,7 @@ static uint8_t hci_process_download_patch(uint16_t opcode)
             goto dl_patch_done;
 
         /* Check Resp: OpCode and Status */
-        if (!(*(uint16_t *)(&buf[3]) == opcode) || buf[5] != 0x00)
+        if (buf[3] != (uint8_t)(opcode >> 0) || buf[4] != (uint8_t)(opcode >> 8) || buf[5] != 0x00)
             goto dl_patch_done;
 
         if (buf[6] & 0x80)
@@ -167,39 +167,6 @@ dl_patch_done:
     return ret;
 }
 
-#ifdef CONFIG_HCI_FT_MODE
-static uint8_t hci_process_read_thermal(uint16_t opcode)
-{
-    /* OpCode: 0xfc40, Data Len: Cmd(3), Event(7) */
-    uint8_t buf_raw[RESERVE_LEN+7];
-    uint8_t* buf = buf_raw+RESERVE_LEN;
-
-    if (HCI_SUCCESS != hci_platform_check_mp())
-        return HCI_IGNORE;
-
-    for (uint8_t i = 0; i < HCI_READ_THER_TIMES; i++)
-    {
-        buf[0] = (uint8_t)(opcode >> 0);
-        buf[1] = (uint8_t)(opcode >> 8);
-        buf[2] = (uint8_t)(0);
-
-        if (HCI_SUCCESS != hci_sa_send(H4_CMD, buf, 3, HCI_SYNC))
-            return HCI_FAIL;
-
-        /* Check Resp: OpCode and Status, Get Thermal */
-        if (!(*(uint16_t *)(&buf[3]) == opcode) || buf[5] != 0x00)
-            return HCI_FAIL;
-
-        hci_platform_get_thermal(buf[5]);
-    }
-
-    if (HCI_SUCCESS != hci_platform_set_thermal())
-        return HCI_FAIL;
-
-    return HCI_SUCCESS;
-}
-#endif
-
 #ifdef hci_platform_WRITE_IQK
 static uint8_t hci_process_write_iqk(uint16_t opcode)
 {
@@ -207,6 +174,10 @@ static uint8_t hci_process_write_iqk(uint16_t opcode)
     uint8_t buf_raw[RESERVE_LEN+3+HCI_WRITE_IQK_DATA_LEN];
     uint8_t* buf = buf_raw+RESERVE_LEN;
 
+#ifdef hci_platform_TRIGGER_RX_DCK
+    /* bt rx dck */
+    hci_platform_bt_rx_dck();
+#endif
     buf[0] = (uint8_t)(opcode >> 0);
     buf[1] = (uint8_t)(opcode >> 8);
     buf[2] = (uint8_t)(HCI_WRITE_IQK_DATA_LEN);
@@ -232,14 +203,14 @@ static uint8_t hci_process_set_cut_ver(uint16_t opcode)
     buf[0] = (uint8_t)(opcode >> 0);
     buf[1] = (uint8_t)(opcode >> 8);
     buf[2] = (uint8_t)(1);
-	buf[3] = (uint8_t)(hal_sys_get_rom_ver()); // 0: tes chip, 1: A cut, 2: B cut, 3: C cut 
-	//buf[3] = (uint8_t)(3);
-	
+    buf[3] = (uint8_t)(hal_sys_get_rom_ver()); // 0: tes chip, 1: A cut, 2: B cut, 3: C cut
+    //buf[3] = (uint8_t)(3);
+
     if (HCI_SUCCESS != hci_sa_send(H4_CMD, buf, 4, HCI_SYNC))
         return HCI_FAIL;
 
     /* Check Resp: OpCode and Status, LMP Subversion */
-    if (!(*(uint16_t *)(&buf[3]) == opcode) || buf[5] != 0x00)
+    if (buf[3] != (uint8_t)(opcode >> 0) || buf[4] != (uint8_t)(opcode >> 8) || buf[5] != 0x00)
         return HCI_FAIL;
 
     return HCI_SUCCESS;
@@ -261,19 +232,10 @@ static uint8_t hci_process_hci_reset(uint16_t opcode)
         return HCI_FAIL;
 
     /* Check Resp: OpCode and Status, LMP Subversion */
-    if (!(*(uint16_t *)(&buf[3]) == opcode) || buf[5] != 0x00)
+    if (buf[3] != (uint8_t)(opcode >> 0) || buf[4] != (uint8_t)(opcode >> 8) || buf[5] != 0x00)
         return HCI_FAIL;
 
     return HCI_SUCCESS;
-}
-#endif
-
-#ifdef CONFIG_HCI_READ_BDADDR
-static uint8_t hci_process_read_bd_addr(uint16_t opcode)
-{
-	(void)opcode;
-	/* TODO */
-	return HCI_SUCCESS;
 }
 #endif
 
@@ -288,20 +250,14 @@ static struct {
     {0xFC6D, hci_process_read_rom_ver},
     {0xFC17, hci_process_update_baudrate},
     {0xFC20, hci_process_download_patch},
-#ifdef CONFIG_HCI_FT_MODE
-    {0xFC40, hci_process_read_thermal},
-#endif
 #ifdef hci_platform_WRITE_IQK
     {0xFD91, hci_process_write_iqk},
 #endif
 #ifdef hci_platform_SET_CUT_VER
-	{0xFDAB, hci_process_set_cut_ver},
+    {0xFDAB, hci_process_set_cut_ver},
 #endif
 #ifdef CONFIG_HCI_RESET
     {0x0C03, hci_process_hci_reset},
-#endif
-#ifdef CONFIG_HCI_READ_BDADDR
-	{0x1009, hci_process_read_bd_addr},
 #endif
     {0, NULL}
 };

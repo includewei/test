@@ -86,6 +86,7 @@ list(
 endif()
 
 target_compile_definitions(${kvs_webrtc} PRIVATE ${kvs_webrtc_flags} )
+target_compile_options(${kvs_webrtc} PRIVATE ${LIBS_WARN_ERR_FLAGS} )
 
 include(../includepath.cmake)
 target_include_directories(

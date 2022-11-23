@@ -198,7 +198,7 @@ static uint8_t amebapro2_uart_open(void)
     /* Init amebapro2_uart */
     if (!amebapro2_uart)
     {
-        amebapro2_uart = osif_mem_alloc(0, sizeof(struct amebapro2_uart_t));
+        amebapro2_uart = osif_mem_alloc(RAM_TYPE_DATA_ON, sizeof(struct amebapro2_uart_t));
         if (!amebapro2_uart) {
             HCI_ERR("amebapro2_uart is NULL!");
             return HCI_FAIL;
@@ -255,39 +255,51 @@ static uint8_t amebapro2_uart_open(void)
 
 static uint8_t amebapro2_uart_close(void)
 {
-    if (amebapro2_uart)
+    if (!amebapro2_uart)
     {
-        /* Disable Serial UART */
-        serial_irq_set(&amebapro2_uart->serial_obj, RxIrq, 0);
-        serial_free(&amebapro2_uart->serial_obj);
-        memset(&amebapro2_uart->serial_obj, 0, sizeof(serial_t));
-
-#if defined(HCI_UART_TX_DMA) && HCI_UART_TX_DMA
-        if (amebapro2_uart->tx_done_sem) {
-            osif_sem_delete(amebapro2_uart->tx_done_sem);
-            amebapro2_uart->tx_done_sem = NULL;
-        }
-
-        if (amebapro2_uart->tx_buffer)
-            osif_mem_aligned_free(amebapro2_uart->tx_buffer);
-#endif
-        /* Deinit UART Ringbuf */
-        if (amebapro2_uart->ring_buffer)
-            osif_mem_aligned_free(amebapro2_uart->ring_buffer);
-
-        osif_mem_free(amebapro2_uart);
-        amebapro2_uart = NULL;
-
-        return HCI_SUCCESS;
-    } else {
         HCI_ERR("amebapro2_uart is NULL!");
         return HCI_FAIL;
     }
+
+    /* Disable Serial UART */
+    serial_irq_set(&amebapro2_uart->serial_obj, RxIrq, 0);
+    serial_free(&amebapro2_uart->serial_obj);
+    memset(&amebapro2_uart->serial_obj, 0, sizeof(serial_t));
+
+    return HCI_SUCCESS;
+}
+
+static uint8_t amebapro2_uart_free(void)
+{
+    if (!amebapro2_uart)
+    {
+        HCI_ERR("amebapro2_uart is NULL!");
+        return HCI_FAIL;
+    }
+
+#if defined(HCI_UART_TX_DMA) && HCI_UART_TX_DMA
+    if (amebapro2_uart->tx_done_sem) {
+        osif_sem_delete(amebapro2_uart->tx_done_sem);
+        amebapro2_uart->tx_done_sem = NULL;
+    }
+
+    if (amebapro2_uart->tx_buffer)
+        osif_mem_aligned_free(amebapro2_uart->tx_buffer);
+#endif
+    /* Deinit UART Ringbuf */
+    if (amebapro2_uart->ring_buffer)
+        osif_mem_aligned_free(amebapro2_uart->ring_buffer);
+
+    osif_mem_free(amebapro2_uart);
+    amebapro2_uart = NULL;
+
+    return HCI_SUCCESS;
 }
 
 HCI_UART_OPS hci_uart_ops = {
     .open          = amebapro2_uart_open,
     .close         = amebapro2_uart_close,
+    .free_ops      = amebapro2_uart_free,
     .send          = amebapro2_uart_send,
     .read          = amebapro2_uart_read,
     .set_rx_ind    = amebapro2_uart_set_rx_ind,

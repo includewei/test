@@ -640,8 +640,8 @@ snand_bbm_load(
 {
 	uint32_t tmpIdx = 0;
 	uint32_t blkIdx = 0;
-	uint32_t bbmtValid = FALSE;
-	uint32_t v2rtValid = FALSE;
+	//uint32_t bbmtValid = FALSE;
+	//uint32_t v2rtValid = FALSE;
 	uint32_t ppb = -1UL; /**< pagePerBlock */
 	dbg_printf("%s %s Ln %d.\r\n", __FILE__, __func__, __LINE__);
 	if (!rtkNandInfo) {
@@ -676,7 +676,7 @@ snand_bbm_load(
 #endif
 		blkIdx++;
 	}
-	bbmtValid = TRUE;
+	//bbmtValid = TRUE;
 
 	blkIdx = V2RT_BACKUP_BLOCK_IDX;
 	for (tmpIdx = 0; tmpIdx < V2RT_BACKUP_COPY; tmpIdx++) {
@@ -698,7 +698,7 @@ snand_bbm_load(
 #endif
 		blkIdx++;
 	}
-	v2rtValid = TRUE;
+	//v2rtValid = TRUE;
 
 	dbg_printf("[ToDo] else, BBM and V2R are available\r\n");
 	return SUCCESS;
@@ -718,8 +718,8 @@ snand_bbm_store(
 {
 	uint32_t tmpIdx = 0;
 	uint32_t blkIdx = 0;
-	uint32_t bbmtSaved = FALSE;
-	uint32_t v2rtSaved = FALSE;
+	//uint32_t bbmtSaved = FALSE;
+	//uint32_t v2rtSaved = FALSE;
 	uint32_t ppb = -1UL; /**< pagePerBlock */
 	dbg_printf("%s %s Ln %d.\r\n", __FILE__, __func__, __LINE__);
 	if (!rtkNandInfo) {
@@ -753,7 +753,7 @@ snand_bbm_store(
 #endif
 		blkIdx++;
 	}
-	bbmtSaved = TRUE;
+	//bbmtSaved = TRUE;
 
 	blkIdx = V2RT_BACKUP_BLOCK_IDX;
 	for (tmpIdx = 0; tmpIdx < V2RT_BACKUP_COPY; tmpIdx++) {
@@ -774,7 +774,7 @@ snand_bbm_store(
 #endif
 		blkIdx++;
 	}
-	v2rtSaved = TRUE;
+	//v2rtSaved = TRUE;
 
 	dbg_printf("[ToDo] If no error, BBM and V2R are stored in S-NAND flash\r\n");
 	return SUCCESS;
@@ -1012,37 +1012,37 @@ hal_snafc_adaptor_t mMBedAmebaPro2SnafcAdaptor = {
 
 
 /* Default BUS setting for WRITE */
-#define DEFAULT_W_CMD_CYCLE (3)
-#define DEFAULT_W_CMD_IOWIDTH (SNAFC_SIO_WIDTH)
+#define SNAND_API_DEF_W_CMD_CYCLE (3)
+#define SNAND_API_DEF_W_CMD_IOWIDTH (SNAFC_SIO_WIDTH)
 #if SUPPORT_QUAD_BIT_MODE_W
-#define DEFAULT_W_CMD_OP (SNAND_PROGRAM_LOAD_X4_OP) /*@@ sa enum snandBusOpCmd_e in rtl8735b_snand.h */
-#define DEFAULT_W_DAT_IOWIDTH (SNAFC_QIO_WIDTH)     /*@@ sa enum snandBusOpCmd_e in rtl8735b_snand.h */
+#define SNAND_API_DEF_W_CMD_OP (SNAND_PROGRAM_LOAD_X4_OP) /*@@ sa enum snandBusOpCmd_e in rtl8735b_snand.h */
+#define SNAND_API_DEF_W_DAT_IOWIDTH (SNAFC_QIO_WIDTH)     /*@@ sa enum snandBusOpCmd_e in rtl8735b_snand.h */
 #else /* !SUPPORT_QUAD_BIT_MODE_W, using 1-bit mode as default */
-#define DEFAULT_W_CMD_OP (SNAND_PROGRAM_LOAD_OP)    /*@@ sa enum snandBusOpCmd_e in rtl8735b_snand.h */
-#define DEFAULT_W_DAT_IOWIDTH (SNAFC_SIO_WIDTH)     /*@@ sa enum snandBusOpCmd_e in rtl8735b_snand.h */
+#define SNAND_API_DEF_W_CMD_OP (SNAND_PROGRAM_LOAD_OP)    /*@@ sa enum snandBusOpCmd_e in rtl8735b_snand.h */
+#define SNAND_API_DEF_W_DAT_IOWIDTH (SNAFC_SIO_WIDTH)     /*@@ sa enum snandBusOpCmd_e in rtl8735b_snand.h */
 #endif
 
 /* Default BUS setting for READ */
-#define DEFAULT_R_CMD_CYCLE (3)
-#define DEFAULT_R_CMD_IOWIDTH (SNAFC_SIO_WIDTH)
+#define SNAND_API_DEF_R_CMD_CYCLE (3)
+#define SNAND_API_DEF_R_CMD_IOWIDTH (SNAFC_SIO_WIDTH)
 #if SUPPORT_QUAD_BIT_MODE_R
-#define DEFAULT_R_CMD_OP (SNAND_FAST_READ_X4_OP)    /*@@ sa enum snandBusOpCmd_e in rtl8735b_snand.h */
-#define DEFAULT_R_DAT_IOWIDTH (SNAFC_QIO_WIDTH)     /*@@ sa enum snafcBusWidth_e in rtl8735b_snand.h */
+#define SNAND_API_DEF_R_CMD_OP (SNAND_FAST_READ_X4_OP)    /*@@ sa enum snandBusOpCmd_e in rtl8735b_snand.h */
+#define SNAND_API_DEF_R_DAT_IOWIDTH (SNAFC_QIO_WIDTH)     /*@@ sa enum snafcBusWidth_e in rtl8735b_snand.h */
 #else /* !SUPPORT_QUAD_BIT_MODE_W, using 1-bit mode as default */
-#define DEFAULT_R_CMD_OP (SNAND_NORMAL_READ_OP)     /*@@ sa enum snandBusOpCmd_e in rtl8735b_snand.h */
-#define DEFAULT_R_DAT_IOWIDTH (SNAFC_SIO_WIDTH)     /*@@ sa enum snafcBusWidth_e in rtl8735b_snand.h */
+#define SNAND_API_DEF_R_CMD_OP (SNAND_NORMAL_READ_OP)     /*@@ sa enum snandBusOpCmd_e in rtl8735b_snand.h */
+#define SNAND_API_DEF_R_DAT_IOWIDTH (SNAFC_SIO_WIDTH)     /*@@ sa enum snafcBusWidth_e in rtl8735b_snand.h */
 #endif
 snand_bus_cfg_t mMBedAmebaPro2SnafcCmd = {
 	.w_cmd_cycle = 1,
-	.w_cmd = DEFAULT_W_CMD_OP,
-	.w_addr_cycle = DEFAULT_W_CMD_CYCLE,
-	.w_addr_io = DEFAULT_W_CMD_IOWIDTH,
-	.w_data_io = DEFAULT_W_DAT_IOWIDTH,
+	.w_cmd = SNAND_API_DEF_W_CMD_OP,
+	.w_addr_cycle = SNAND_API_DEF_W_CMD_CYCLE,
+	.w_addr_io = SNAND_API_DEF_W_CMD_IOWIDTH,
+	.w_data_io = SNAND_API_DEF_W_DAT_IOWIDTH,
 	.r_cmd_cycle = 1,
-	.r_cmd = DEFAULT_R_CMD_OP,
-	.r_addr_cycle = DEFAULT_R_CMD_CYCLE,
-	.r_addr_io = DEFAULT_R_CMD_IOWIDTH,
-	.r_data_io = DEFAULT_R_DAT_IOWIDTH,
+	.r_cmd = SNAND_API_DEF_R_CMD_OP,
+	.r_addr_cycle = SNAND_API_DEF_R_CMD_CYCLE,
+	.r_addr_io = SNAND_API_DEF_R_CMD_IOWIDTH,
+	.r_data_io = SNAND_API_DEF_R_DAT_IOWIDTH,
 };
 
 /**
@@ -1509,13 +1509,12 @@ This function aims to get the density of the flash.
 */
 uint32_t snand_get_size(snand_t *obj)
 {
-	hal_snafc_adaptor_t *ptPro2SnafcAdator;
-	u8 size_id;
-	u8 size = 0;
-
+	uint32_t size = 0;
 	snand_init(obj);
-	ptPro2SnafcAdator = (obj->psnand_adapter);
 #if 0 /* FIXME */
+	hal_snafc_adaptor_t *ptPro2SnafcAdator;
+	uint32_t size_id;
+	ptPro2SnafcAdator = (obj->psnand_adapter);
 	size_id = ptPro2SnafcAdator->flash_id[2];
 	size = ((1 << size_id) >> 20) * 8;
 #else /* Hack */
@@ -1533,7 +1532,7 @@ void snand_clk_faster(void)
 {
 	hal_snafc_adaptor_t *ptPro2SnafcAdator;
 	ptPro2SnafcAdator = &mMBedAmebaPro2SnafcAdaptor;
-	if ((ptPro2SnafcAdator->clkSel < SNAFC_SPEED_SEL_3) && (ptPro2SnafcAdator->clkSel >= SNAFC_SPEED_SEL_0)) {
+	if (ptPro2SnafcAdator->clkSel < SNAFC_SPEED_SEL_3) {
 		ptPro2SnafcAdator->clkSel++;
 		snand_resource_lock();
 		if (pglob_snafc_adaptor != NULL) {

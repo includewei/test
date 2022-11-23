@@ -10,10 +10,11 @@ MEMORY
 
   VECTORS_RAM (rwx)     : ORIGIN = 0x20100000, LENGTH = 0x20100200 - 0x20100000  /* 512B */
   
-  /* Jump cross 0x20100200 ~ 0x20100A00 for NS ROM code used */
-  RAM_FUN_TABLE (rwx)   : ORIGIN = 0x20100A00, LENGTH = 0x20100AF0 - 0x20100A00  /* 240B */
-  RAM_IMG_SIGN (rwx)    : ORIGIN = 0x20100AF0, LENGTH = 0x20100B00 - 0x20100AF0  /*  16B */
-  RAM (rwx)             : ORIGIN = 0x20100B00, LENGTH = 0x20177B00 - 0x20100B00  /* 476KB */
+  /* Jump cross 0x20100200 ~ 0x20101200 for NS ROM code used */
+  /* Jump cross 0x20101200 ~ 0x20105200 for Bootloader RAM code used */
+  RAM_FUN_TABLE (rwx)   : ORIGIN = 0x20105200, LENGTH = 0x201052F0 - 0x20105200  /* 240B */
+  RAM_IMG_SIGN (rwx)    : ORIGIN = 0x201052F0, LENGTH = 0x20105300 - 0x201052F0  /*  16B */
+  RAM (rwx)             : ORIGIN = 0x20105300, LENGTH = 0x20177B00 - 0x20105300  /* 458KB */
   RAM_NC (rwx)          : ORIGIN = 0x20177B00, LENGTH = 0x20179800 - 0x20177B00  /*  7KB*/
   /* Jump cross 0x2017BB00 ~ 0x20180000 for S ROM code used*/
   
@@ -176,6 +177,9 @@ SECTIONS
 		__bl4voe_data_start__ = .;
         KEEP(*(.bl4voe.ram.data))
         __bl4voe_data_end__ = .;
+        __bl4voe_ldinfo_data_start__ = .;
+        KEEP(*(.bl4voe.ldinfo.ram.data))
+        __bl4voe_ldinfo_data_end__ = .;
         __bl4voe_peri_data_start__ = .;
         KEEP(*(.bl4voe.peri.ram.data))
         __bl4voe_peri_data_end__ = .;
@@ -185,6 +189,7 @@ SECTIONS
 		*lib_a*(.data*)
 		*hal_sys_ctrl.o(.data*)
 		*hal_dram*.o(.data*)
+		*(.ram.data)
 		
 		. = ALIGN(4);
 		/* preinit data */
@@ -359,6 +364,7 @@ SECTIONS
 		. = ALIGN(4);
 		__eram_data_start__ = .;	
 		*(.data*)							
+		*(.ddr.data)
 		__eram_data_end__ = .;	
 	} > DDR
 

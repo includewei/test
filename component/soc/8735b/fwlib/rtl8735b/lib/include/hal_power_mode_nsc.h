@@ -49,6 +49,7 @@ void NS_ENTRY hal_SleepCG_nsc(u16 Option, u32 SDuration, u8 Clock, u8 SramOption
 void NS_ENTRY hal_SleepPG_nsc(u16 Option, u32 SDuration, u8 Clock, u8 SramOption);
 u8   NS_ENTRY hal_power_lib_version_nsc(void);
 void NS_ENTRY hal_syspll_peripll_spread_spectrum_en_nsc(u8 syspll_en, u8 peripll_en);
+u32  NS_ENTRY  hal_get_wake_reason(void);
 
 /** @} */ /* End of group hal_power_mode_nsc_api */
 #endif // end of "#if defined(CONFIG_BUILD_SECURE)"
@@ -59,12 +60,14 @@ void  hal_SleepCG_nsc(u16 Option, u32 SDuration, u8 Clock, u8 SramOption);
 void  hal_SleepPG_nsc(u16 Option, u32 SDuration, u8 Clock, u8 SramOption);
 u8    hal_power_lib_version_nsc(void);
 void  hal_syspll_peripll_spread_spectrum_en_nsc(u8 syspll_en, u8 peripll_en);
+u32   hal_get_wake_reason_nsc(void);
 
 #define hal_DeepSleep                               hal_DeepSleep_nsc
 #define hal_SleepCG                                 hal_SleepCG_nsc
 #define hal_SleepPG                                 hal_SleepPG_nsc
 #define hal_power_lib_version                       hal_power_lib_version_nsc
 #define hal_syspll_peripll_spread_spectrum_en       hal_syspll_peripll_spread_spectrum_en_nsc
+#define hal_get_wake_reason                         hal_get_wake_reason_nsc
 #endif  // end of "#if defined(CONFIG_BUILD_NONSECURE)"
 
 /** @} */ /* End of group hal_power_mode_nsc */

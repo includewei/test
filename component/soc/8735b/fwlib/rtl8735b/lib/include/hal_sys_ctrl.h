@@ -3,7 +3,7 @@
 * @brief       The HAL API implementation for the System control
 *
 * @version     V1.00
-* @date        2022-01-25
+* @date        2022-11-15
 *
 * @note
 *
@@ -40,10 +40,67 @@ extern "C"
 {
 #endif
 
+#define FW_IMG_MANIFEST_VERSION_MAX_SIZE                (32)
+#define VIDEO_IMGS_INVALID_OFFSET                       (0xFEFEFEFE)
+
+typedef enum {
+	SYS_CUST_PWS_VAL_SET = 1,
+	SYS_CUST_PWS_VAL_GET = 2
+} SYS_CUST_PWS_VAL_CTRL_t;
+
 typedef enum {
 	BT_UART_MUX_EXTERNAL = 0,
 	BT_UART_MUX_INTERNAL = 1
 } BT_UART_MUX_SELECT_t;
+
+typedef enum {
+	VIDEO_ISP_SENSOR_SET0               = 0x1,
+	VIDEO_ISP_SENSOR_SET1               = 0x2,
+	VIDEO_ISP_SENSOR_SET2               = 0x3,
+	VIDEO_ISP_SENSOR_SET3               = 0x4,
+	VIDEO_ISP_SENSOR_SET4               = 0x5,
+	VIDEO_ISP_SENSOR_SET5               = 0x6,
+	VIDEO_ISP_SENSOR_SET6               = 0x7,
+	VIDEO_ISP_SENSOR_SET7               = 0x8,
+	VIDEO_ISP_SENSOR_SET8               = 0x9,
+	VIDEO_ISP_SENSOR_SET9               = 0xA
+} VIDEO_ISPIQ_IMG_GET_SENSOR_SET_CTRL_t;
+
+typedef enum {
+	VIDEO_ISP_SENSOR_IQ                 = 0x1,
+	VIDEO_ISP_SENSOR_DATA               = 0x2,
+} VIDEO_ISPIQ_IMG_GET_SENSOR_MEMBER_CTRL_t;
+
+typedef enum {
+	VIDEO_ISP_SET0_IQ_OFFSET            = ((VIDEO_ISP_SENSOR_SET0 << 4) | VIDEO_ISP_SENSOR_IQ),
+	VIDEO_ISP_SET0_SENSOR_OFFSET        = ((VIDEO_ISP_SENSOR_SET0 << 4) | VIDEO_ISP_SENSOR_DATA),
+	VIDEO_ISP_SET1_IQ_OFFSET            = ((VIDEO_ISP_SENSOR_SET1 << 4) | VIDEO_ISP_SENSOR_IQ),
+	VIDEO_ISP_SET1_SENSOR_OFFSET        = ((VIDEO_ISP_SENSOR_SET1 << 4) | VIDEO_ISP_SENSOR_DATA),
+	VIDEO_ISP_SET2_IQ_OFFSET            = ((VIDEO_ISP_SENSOR_SET2 << 4) | VIDEO_ISP_SENSOR_IQ),
+	VIDEO_ISP_SET2_SENSOR_OFFSET        = ((VIDEO_ISP_SENSOR_SET2 << 4) | VIDEO_ISP_SENSOR_DATA),
+	VIDEO_ISP_SET3_IQ_OFFSET            = ((VIDEO_ISP_SENSOR_SET3 << 4) | VIDEO_ISP_SENSOR_IQ),
+	VIDEO_ISP_SET3_SENSOR_OFFSET        = ((VIDEO_ISP_SENSOR_SET3 << 4) | VIDEO_ISP_SENSOR_DATA),
+	VIDEO_ISP_SET4_IQ_OFFSET            = ((VIDEO_ISP_SENSOR_SET4 << 4) | VIDEO_ISP_SENSOR_IQ),
+	VIDEO_ISP_SET4_SENSOR_OFFSET        = ((VIDEO_ISP_SENSOR_SET4 << 4) | VIDEO_ISP_SENSOR_DATA),
+	VIDEO_ISP_SET5_IQ_OFFSET            = ((VIDEO_ISP_SENSOR_SET5 << 4) | VIDEO_ISP_SENSOR_IQ),
+	VIDEO_ISP_SET5_SENSOR_OFFSET        = ((VIDEO_ISP_SENSOR_SET5 << 4) | VIDEO_ISP_SENSOR_DATA),
+	VIDEO_ISP_SET6_IQ_OFFSET            = ((VIDEO_ISP_SENSOR_SET6 << 4) | VIDEO_ISP_SENSOR_IQ),
+	VIDEO_ISP_SET6_SENSOR_OFFSET        = ((VIDEO_ISP_SENSOR_SET6 << 4) | VIDEO_ISP_SENSOR_DATA),
+	VIDEO_ISP_SET7_IQ_OFFSET            = ((VIDEO_ISP_SENSOR_SET7 << 4) | VIDEO_ISP_SENSOR_IQ),
+	VIDEO_ISP_SET7_SENSOR_OFFSET        = ((VIDEO_ISP_SENSOR_SET7 << 4) | VIDEO_ISP_SENSOR_DATA),
+	VIDEO_ISP_SET8_IQ_OFFSET            = ((VIDEO_ISP_SENSOR_SET8 << 4) | VIDEO_ISP_SENSOR_IQ),
+	VIDEO_ISP_SET8_SENSOR_OFFSET        = ((VIDEO_ISP_SENSOR_SET8 << 4) | VIDEO_ISP_SENSOR_DATA),
+	VIDEO_ISP_SET9_IQ_OFFSET            = ((VIDEO_ISP_SENSOR_SET9 << 4) | VIDEO_ISP_SENSOR_IQ),
+	VIDEO_ISP_SET9_SENSOR_OFFSET        = ((VIDEO_ISP_SENSOR_SET9 << 4) | VIDEO_ISP_SENSOR_DATA),
+	VIDEO_VOE_OFFSET                    = 0xF0,
+} VIDEO_IMG_GET_OBJ_CTRL_t;
+
+typedef struct video_reld_img_ctrl_info_s {
+	uint8_t fwin;
+	uint8_t enc_en;
+	uint8_t resv[2];
+	uint32_t data_start_offset;     // ref img manifest start
+} video_reld_img_ctrl_info_t;
 
 enum dbg_port_mode_e {
 	DBG_PORT_OFF            = 0,    ///< debug port off
@@ -61,6 +118,12 @@ enum dbg_port_pin_sel_e {
 	TMS_IO_DF_CLK_DF   = 4,         ///< debugger use pins same as rom code select
 };
 typedef uint8_t     dbg_port_pin_sel_t;
+
+enum {
+	FW_IMG_IDX_UNKNOWN     =   0x0,
+	FW_IMG_IDX1            =   0x1,
+	FW_IMG_IDX2            =   0x2
+};
 
 enum ADC_VREF_SEL_e {
 	VREF_SEL_0p75_V = 0x0,
@@ -100,7 +163,10 @@ uint32_t hal_sys_get_video_info(uint8_t idx);
 uint8_t hal_sys_get_rom_ver(void);
 uint8_t hal_sys_get_img_ld_idx_core(const uint8_t img_obj, void *pimf_ld_info);
 uint8_t hal_sys_get_ld_fw_idx(void);
+void hal_sys_get_fw_version_raw(const uint8_t ld_img_idx, uint8_t *pver_raw_buf);
+uint32_t hal_sys_get_fw_timest(const uint8_t ld_img_idx);
 uint32_t hal_sys_get_ld_fw_img_dev_nor_offset(void);
+hal_status_t hal_sys_get_video_img_ld_offset(void *ctrl_obj_info, const uint8_t ctrl_obj);
 uint8_t hal_sys_get_ld_img_idx(const uint8_t img_obj);
 
 void hal_sdm_32k_enable(u8 bypass_mode);
@@ -120,8 +186,11 @@ void hal_sys_high_val_protect_init(void);
 void hal_sys_high_val_protect_init_flow(void);
 void hal_sys_high_val_protect_deinit(void);
 void hal_sys_high_val_protect_ld(const uint32_t otp_addr, uint8_t *p_otp_v, const uint32_t ld_size);
+void hal_sys_high_val_mem_protect_ld(void *s1, const void *s2, size_t ld_size);
 void hal_sys_high_val_protect_ld_delay(uint8_t delay_unit_sel);
 uint8_t hal_sys_check_high_val_protect_init(void);
+int hal_sys_flash_sec_aes_gcm_tag_cmp(const void *a, const void *b, size_t size);
+int hal_sys_high_val_protect_cmp(const void *a, const void *b, size_t size);
 hal_status_t hal_sys_adc_vref_setting(uint8_t set_value);
 void hal_sys_set_sw_boot_rom_trap_op(uint8_t op_idx, uint8_t ctrl_status);
 void hal_sys_set_sw_boot_rom_pg_trap_op(void);
@@ -136,7 +205,9 @@ void hal_sys_spic_ddr_ctrl(u8 ctrl);
 void hal_sys_spic_phy_en(void);
 void hal_sys_spic_set_phy_delay(u8 delay_line);
 u8 hal_sys_spic_read_phy_delay(void);
-
+uint8_t hal_sys_get_atld_cfg(const uint8_t op);
+void hal_sys_get_img_vrf_digest(const uint8_t op_img, void *pld_buf);
+void hal_sys_get_cust_derived_uid(void *pld_buf);
 
 #define RAM_FOOTPH_INIT(idx)                hal_sys_boot_footpath_init(idx)
 #define RAM_FOOTPH_STORE(idx,fp_v)          hal_sys_boot_footpath_store(idx,fp_v)

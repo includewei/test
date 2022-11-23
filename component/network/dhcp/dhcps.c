@@ -900,9 +900,8 @@ static void dhcps_receive_udp_packet_handler(void *arg, struct udp_pcb *udp_pcb,
 		if (udp_packet_buffer->next != NULL) {
 			merged_packet_buffer = pbuf_coalesce(udp_packet_buffer,
 												 PBUF_TRANSPORT);
-			if (merged_packet_buffer->tot_len !=
-				total_length_of_packet_buffer) {
-				pbuf_free(udp_packet_buffer);
+			if ((merged_packet_buffer->tot_len != total_length_of_packet_buffer) || (merged_packet_buffer == udp_packet_buffer)) {
+				pbuf_free(merged_packet_buffer);
 				return;
 			}
 			udp_packet_buffer = merged_packet_buffer;
@@ -984,7 +983,7 @@ void dhcps_set_addr_pool(int addr_pool_set, struct ip_addr *addr_pool_start, str
 
 
 #define DOMAIN_NAME "amebaiot.com"
-char *domain_name = DOMAIN_NAME;
+const char *domain_name = DOMAIN_NAME;
 uint8_t domain_name_buf[sizeof(DOMAIN_NAME) + 1];
 
 static void dnss_receive_udp_packet_handler(

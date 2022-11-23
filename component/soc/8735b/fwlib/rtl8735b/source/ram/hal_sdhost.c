@@ -1,6 +1,6 @@
 /**************************************************************************//**
  * @file    hal_sdhost.c
- * @brief    This file implements NSC entries of the SD Host HAL.
+ * @brief    This file implements the SD Host HAL functions.
  * @version V1.00
  * @date    2021-10-21
  *
@@ -31,14 +31,24 @@
 
 #if CONFIG_SDHOST_EN
 
+/**
+ * @addtogroup hal_sdhost
+ * @{
+ */
+
+
 hal_status_t hal_sdhost_init_host(hal_sdhost_adapter_t *psdhost_adapter)
 {
 	hal_status_t ret;
-	ret = hal_sdhost_stubs.hal_sdhost_init_host(psdhost_adapter, NULL);
+	ret = hal_sdhost_stubs.hal_sdhost_init_host(psdhost_adapter);
 	//psdhost_adapter->verbose = SdHostVerCmd;
 	return ret;
 }
 
+/**
+ *  CMD9 is only acceptable in [stand-by] state.
+ *  Use hal_sdhost_card_select to switch between [statnd-by] and [transfer].
+ */
 hal_status_t hal_sdhost_get_csd(hal_sdhost_adapter_t *adpt, hal_sdhost_csd_t *csd)
 {
 	hal_status_t ret;
@@ -62,6 +72,9 @@ hal_status_t hal_sdhost_get_csd(hal_sdhost_adapter_t *adpt, hal_sdhost_csd_t *cs
 	return HAL_OK;
 }
 
+/**
+ * Copy CID stored in adapter
+ */
 hal_status_t hal_sdhost_get_cid(hal_sdhost_adapter_t *adpt, hal_sdhost_cid_t *cid)
 {
 	if (NULL == adpt || NULL == cid) {
@@ -70,5 +83,7 @@ hal_status_t hal_sdhost_get_cid(hal_sdhost_adapter_t *adpt, hal_sdhost_cid_t *ci
 	memcpy(cid, adpt->cid, SD_CID_LEN);
 	return HAL_OK;
 }
+
+/** @} */ /* End of group hal_sdhost */
 
 #endif /* CONFIG_SDHOST_EN */

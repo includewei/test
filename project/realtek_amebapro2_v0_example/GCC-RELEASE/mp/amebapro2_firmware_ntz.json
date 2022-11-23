@@ -5,6 +5,7 @@
 	"FIRMWARE":{
 		"manifest":"MANIFEST",
 		"images":[
+			"IQ_SENSOR",
 			"VOE",
 			"FW"
 		]
@@ -35,6 +36,13 @@
 			"type":"IMG_VOE"
 		},
         "file":"voe.bin"
+	},
+	"IQ_SENSOR": {
+		"source":"binary",
+		"header":{
+			"type":"IMG_ISP"
+		},
+        "file":"firmware_isp_iq.bin"
 	},
 	"FW": {
 		"source":"application.ntz.axf",

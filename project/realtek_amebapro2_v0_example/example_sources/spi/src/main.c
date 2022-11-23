@@ -7,16 +7,16 @@
 #define FakeMbedAPI  1
 
 // SPI0 (S0)
-#define SPI0_MOSI  PE_7
-#define SPI0_MISO  PE_6
-#define SPI0_SCLK  PE_5
-#define SPI0_CS    PE_8
+#define SPI0_MOSI  PE_3
+#define SPI0_MISO  PE_2
+#define SPI0_SCLK  PE_1
+#define SPI0_CS    PE_4
 
 // SPI1 (S1)
-#define SPI1_MOSI  PF_9
-#define SPI1_MISO  PF_7
-#define SPI1_SCLK  PF_8
-#define SPI1_CS    PF_6
+#define SPI1_MOSI  PF_7
+#define SPI1_MISO  PF_5
+#define SPI1_SCLK  PF_6
+#define SPI1_CS    PF_8
 
 
 /**

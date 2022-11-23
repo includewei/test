@@ -30,16 +30,16 @@ MEMORY
   RAM_IMG_SIGN (rwx)    : ORIGIN = 0x201012F0, LENGTH = 0x20101300 - 0x201012F0		/*  16B      */
   
   /* Internal SRAM for text, rodata & data */
-  RAM (rwx)             : ORIGIN = 0x20101300, LENGTH = 0x2015E000 - 0x20101300		/* 371KB+256B*/
+  RAM (rwx)             : ORIGIN = 0x20101300, LENGTH = 0x20156000 - 0x20101300		/* 339KB+256B*/
 
   /* Non-Cacheable memory, defined by MPU configuration */
   /* RAM_NC (rwx)       : ORIGIN = 0x20128000, LENGTH = 0x20180000 - 0x20128000 */
 
   /* DDR memory */
-  DDR (rwx)	            : ORIGIN = 0x70200000, LENGTH = 0x72C00000 - 0x70200000		/* 42MB */
-  DDR_NC (rwx)	        : ORIGIN = 0x72C00000, LENGTH = 0x72E00000 - 0x72C00000		/*  2MB */ 
-  VOE        (rwx)      : ORIGIN = 0x72E00000, LENGTH = 0x73000000 - 0x72E00000		/*  2MB */
-  NN         (rwx)      : ORIGIN = 0x73000000, LENGTH = 0x74000000 - 0x73000000		/* 16MB */  
+  VOE (rwx)          	: ORIGIN = 0x70000000, LENGTH = 0x70100000 - 0x70000000		/*  1MB */
+  DDR_NC (rwx)	        : ORIGIN = 0x70100000, LENGTH = 0x70300000 - 0x70100000		/*  2MB */
+  DDR (rwx)	            : ORIGIN = 0x70300000, LENGTH = 0x72E00000 - 0x70300000		/* 43MB */
+  NN  (rwx)      		: ORIGIN = 0x72E00000, LENGTH = 0x73E00000 - 0x72E00000		/* 16MB */ 
   
 }
 

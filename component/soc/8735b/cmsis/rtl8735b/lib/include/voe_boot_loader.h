@@ -1,8 +1,8 @@
 /**************************************************************************//**
- * @file     hal_pinmux.h
+ * @file     voe_boot_loader.h
  * @brief    The HAL API implementation for the pin mux managemment.
  * @version  V1.00
- * @date     2022-02-15
+ * @date     2022-09-13
  *
  * @note
  *
@@ -39,7 +39,7 @@ extern "C"
 
 #define BOOT_LD_MULTI_FCS_MAX                        10
 #define BOOT_LD_VOE_LD_INFO_DIGEST_MAX               32            /* Bytes */
-
+#define BOOT_LD_FCS_PARA_IMG_MAX_SIZE                (0x1000)      /* Bytes */
 
 typedef struct isp_multi_fcs_info_s {
 	uint32_t sensor_set_size[BOOT_LD_MULTI_FCS_MAX];
@@ -77,7 +77,8 @@ typedef struct isp_multi_fcs_ld_info_s {
 	uint32_t version;
 	uint32_t wait_km_init_timeout_us;
 	uint32_t fcs_hdr_start;
-	uint32_t resv2[3];
+	uint32_t ispiq_img_offset;                  // offset in byres ref. img hdr start(indep isp_iq/ fw isp_iq)
+	uint32_t resv2[2];
 	sensor_set_info_t sensor_set[BOOT_LD_MULTI_FCS_MAX];
 	dev_part_record_ld_t part_record;            // provide img manifest location
 	uint32_t mani_unprt_offset;                 // offset in byres ref. img manifest start
@@ -110,14 +111,20 @@ typedef struct voe_fcs_peri_info_s {
 
 } voe_fcs_peri_info_t, *pvoe_fcs_peri_info_t;
 
-
+typedef struct voe_isp_img_reld_info_type_s {
+	uint32_t fcs_hdr_start;
+	uint32_t ispiq_img_start_addr;
+	uint32_t resv_offset;
+	uint32_t voe_offset;        // ref load fw img start addr
+} voe_isp_img_reld_info_type_t, *pvoe_isp_img_reld_info_type_t;
 
 typedef struct voe_img_ld_info_type_s {
 	dev_part_record_ld_t part_record;       // provide img manifest location
 	uint32_t img_hdr_offset;                // img_hdr_offset
 	uint32_t voe_data_offset;               // voe_data_offset
 	uint32_t voe_data_len;                  // voe_data_len
-	uint32_t resv[5];
+	voe_isp_img_reld_info_type_t reld_info;
+	uint32_t resv;
 	uint8_t digest[BOOT_LD_VOE_LD_INFO_DIGEST_MAX];
 } voe_img_ld_info_type_t, *pvoe_img_ld_info_type_t;
 
@@ -129,6 +136,7 @@ typedef struct voe_fcs_load_ctl_s {
 	int *fw_addr;
 	isp_multi_fcs_ld_info_t *p_fcs_ld_info;
 	voe_fcs_peri_info_t *p_fcs_peri_info;
+	void *p_fcs_para_raw;
 } voe_fcs_load_ctrl_t, *pvoe_fcs_load_ctrl_t;
 
 int load_voe_boot_process(const uint8_t ctrl_obj, int *fw_addr, isp_multi_fcs_ld_info_t *p_fcs_ld_info);

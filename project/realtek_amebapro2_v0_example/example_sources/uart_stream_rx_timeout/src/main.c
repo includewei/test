@@ -1,3 +1,4 @@
+#include <string.h>
 #include "serial_api.h"
 #include "serial_ex_api.h"
 #include "task.h"
@@ -35,7 +36,7 @@ static void uart_send_string(serial_t *sobj, char *pstr)
 	}
 }
 
-void Release_CPU()
+void Release_CPU(void)
 {
 	// while waitting UART transfer done, try to wakeup other task
 #if 1

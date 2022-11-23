@@ -22,6 +22,7 @@
 #define RTL8735B_SUPPORT 1
 /* Configure for bus */
 #define CONFIG_AXI_HCI
+
 /* PHY layer band config */
 #define CONFIG_DFS
 #define NOT_SUPPORT_40M
@@ -32,21 +33,38 @@
 #define SUPPORT_5G_CHANNEL
 #define CONFIG_INIT_CHAN 1
 /* PHY layer band config end */
+
 /* For DM support */
 #define RATE_ADAPTIVE_SUPPORT 1
 #define TX_CHECK_DSEC_ALWAYS 1
+#define CONFIG_ANTENNA_DIVERSITY
+#define CONFIG_DISABLE_TURBO_EDCA
+
 /* For phydm configurations */
 #define CONFIG_FW_C2H_PKT
-#define PHYDM_LINUX_CODING_STYLE 1
-#define PHYDM_NEW_INTERFACE 1
+#define PHYDM_VERSION	2 /*phydm trunk*/
+
 #undef DBG
 #define DBG 1 /* for phydm debug */
+
+/* Configurations for RF Calibration */
+#define CONFIG_REG_ENABLE_KFREE 0	// 0: Depend on efuse(flash), 1: enable, 2: disable
+
+/* Configurations for WiFi FW */
+//#define CONFIG_NO_FW
+//#define CONFIG_EX_FW_BIN
+#define RTW_HALMAC		/* Use HALMAC architecture */
+//#define FW_IQK // FW not support
+
 /* config in concurrent mode */
 #ifdef CONFIG_CONCURRENT_MODE
 #define CONFIG_RUNTIME_PORT_SWITCH
 #endif
-//#define CONFIG_NO_FW
-//#define CONFIG_EX_FW_BIN
+
+/* Configurations for WiFi driver resource */
+#define CONFIG_RX_RING_COUNT 32
+#define CONFIG_RX_REORDER_WIN_SIZE 16
+
 /* Configurations for power saving */
 #define CONFIG_POWER_SAVING
 #ifdef CONFIG_POWER_SAVING
@@ -62,34 +80,37 @@
 /* Config the BT_COEXIST for wlan5 verison */
 #define CONFIG_BT_COEXIST_SOC
 
+/* Configurations for WOWLAN */
 #define CONFIG_WOWLAN
 #define CONFIG_WOWLAN_SD1
 #define CONFIG_WOWLAN_HW_CAM
 #define CONFIG_WOWLAN_CUSTOM_PATTERN
 #define CONFIG_WOWLAN_TCP_KEEP_ALIVE
 #define CONFIG_WOWLAN_SSL_KEEP_ALIVE
+#define CONFIG_WOWLAN_SSL_SERVER_KEEP_ALIVE
 //#define CONFIG_WOWLAN_TCP_KEEP_ALIVE_TEST
 
 #define CONFIG_GTK_OL
-//#if RX_AGGREGATION
 #define CONFIG_WOWLAN_ADDBA_RSP_OFFLOAD
-//#endif
 
 #define CONFIG_ARP_KEEP_ALIVE
 #define CONFIG_WOWLAN_DHCP_RENEW
-//#define CONFIG_WOWLAN_DTIMTO
+#define CONFIG_WOWLAN_DTIMTO
 //#define CONFIG_WOWLAN_DYNAMIC_TX_PWR
 #define CONFIG_ARP_POWER_BIT_CONTROL
+#define CONFIG_ARP_REQUEST_KEEP_ALIVE
+#define CONFIG_WOWLAN_PARAM
+#define CONFIG_PNO_CONTROL
+#define CONFIG_SMART_DTIM
+#define CONFIG_WOWLAN_IO_WDT
 
-#define FW_IQK
-
-#define RTW_HALMAC		/* Use HALMAC architecture */
 /* For efuse or flash config start */
 #define CONFIG_EFUSE_SEPARATE
 #define CONFIG_EFUSE_RAW
 //#define CONFIG_EFUSE_RW_PROTECT
 #define CHECK_EFUSE_VALID_MASK
 
+#define CONFIG_WLAN_SWITCH_MODE 		//save memory while switching mode without driver re-init
 
 #define CONFIG_MAC_LOOPBACK_DRIVER_RTL8735B 0 // 1: HAL+MAC LOOPBACK, 2: HAL+MAC+BB LOOPBACK 3: DRV+HAL+MAC LOOPBACK
 #if defined(CONFIG_MAC_LOOPBACK_DRIVER_RTL8735B) && (CONFIG_MAC_LOOPBACK_DRIVER_RTL8735B == 3)
@@ -136,7 +157,25 @@
 //#define INT_HANDLE_IN_ISR 1
 #endif
 
-#define CONFIG_REG_ENABLE_KFREE 0	// 0: Depend on efuse(flash), 1: enable, 2: disable
-#define CONFIG_RX_RING_COUNT 32
+/*************************** Config for MP_MODE *******************************/
+//#define CONFIG_MP_INCLUDED
+#ifdef CONFIG_MP_INCLUDED
+#define MP_DRIVER 1
+#undef CONFIG_ANTENNA_DIVERSITY
+#undef CONFIG_BT_COEXIST_SOC
+#undef CONFIG_REG_ENABLE_KFREE
+#define CONFIG_REG_ENABLE_KFREE 1	 // 1: enable, 2: disable
+#else /* undef CONFIG_MP_INCLUDED  */
+#define MP_DRIVER 0
+#endif /* #ifdef CONFIG_MP_INCLUDED */
+/************************* Config for MP_MODE end *****************************/
+
+/* debug log level */
+#define RELEASE_VERSION
+#ifdef RELEASE_VERSION
+#define RTW_MSG_LEVEL    RTW_MSG_ERROR
+#else
+#define RTW_MSG_LEVEL    RTW_MSG_WARNING
+#endif
 
 #endif  /*#ifndef AUTOCONF_8735B_H  */

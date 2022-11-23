@@ -23,14 +23,14 @@ static void nand_flash_test_task(void *param)
 
 	snand_init(&flash);
 
-	printf("Bad block scan!\n\r");
+	dbg_printf("Bad block scan!\n\r");
 	for (int i = 0; i < 1024; i++) {
 		snand_page_read(&flash, i * 64, 2048 + 32, &data[0]);
 		if (data[2048] != 0xff) {
-			printf("Block %d is bad block!\n\r", i);
+			dbg_printf("Block %d is bad block!\n\r", i);
 		}
 	}
-	printf("Bad block scan done!\n\r");
+	dbg_printf("Bad block scan done!\n\r");
 	snand_page_read(&flash, FLASH_TEST_BASE_BLOCK * 64, 2048 + 32, &data[0]);
 
 	if (data[2048] == 0xff) {
@@ -47,13 +47,13 @@ static void nand_flash_test_task(void *param)
 		snand_page_read(&flash, FLASH_TEST_BASE_BLOCK * 64, 2048 + 32, &data[0]);
 		for (int i = 0; i < 2048; i++) {
 			if (data[i] != data_w[i]) {
-				printf("data[%d]=%d is not data_w[%d]=%d !\n\r", i, data[i], i, data_w[i]);
+				dbg_printf("data[%d]=%d is not data_w[%d]=%d !\n\r", i, data[i], i, data_w[i]);
 			}
 		}
-		printf("NAND FLASH DEMO Done!\n\r");
+		dbg_printf("NAND FLASH DEMO Done!\n\r");
 
 	} else {
-		printf("Block %d is Bad Block!\n\r", FLASH_TEST_BASE_BLOCK);
+		dbg_printf("Block %d is Bad Block!\n\r", FLASH_TEST_BASE_BLOCK);
 
 	}
 

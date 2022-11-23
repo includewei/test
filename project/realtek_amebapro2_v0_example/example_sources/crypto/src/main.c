@@ -5,6 +5,12 @@
 #include "memory.h"
 #include "platform_stdlib.h"
 
+#include "FreeRTOS.h"
+#include "task.h"
+#include "device_lock.h"
+
+#define STACKSIZE 2048
+
 #undef __crypto_mem_dump
 #define __crypto_mem_dump(start,size,prefix) do{ \
 dbg_printf(prefix "\r\n"); \
@@ -316,7 +322,9 @@ int test_md5(void)
 
 	dbg_printf("MD5 test \r\n");
 	memset(digest, 0, sizeof(digest));
+	device_mutex_lock(RT_DEV_LOCK_CRYPTO);
 	ret = crypto_md5(plaintext, strlen((const char *)plaintext), digest); // the length of MD5's digest is 16 bytes.
+	device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 	if (SUCCESS != ret) {
 		dbg_printf("crypto_md5 failed,ret = %d \r\n", ret);
 		goto test_md5_end;
@@ -334,7 +342,9 @@ int test_md5(void)
 
 	for (i = 0; i < 14; i++) {
 		dbg_printf(" MD5 test #%d: \r\n", (i + 1));
+		device_mutex_lock(RT_DEV_LOCK_CRYPTO);
 		ret = crypto_md5(auth_plaintext_test_buf[i], auth_plaintext_test_buflen[i], md5sum); // the length of MD5's digest is 16 bytes.
+		device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 		if (SUCCESS != ret) {
 			dbg_printf("crypto_md5 failed, ret = %d \r\n", ret);
 			break;
@@ -368,15 +378,19 @@ int test_sha2_256(void)
 		memset(digest, 0, sizeof(digest));
 		if (AUTH_SHA2_256 == i) {
 			dbg_printf("SHA2 test \r\n");
+			device_mutex_lock(RT_DEV_LOCK_CRYPTO);
 			ret = crypto_sha2_256(plaintext, strlen((const char *)plaintext), digest); // the length of SHA2_256's digest is 32 bytes.
+			device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 			if (SUCCESS != ret) {
 				dbg_printf("crypto_sha2_256 failed,ret = %d \r\n", ret);
 				goto test_sha2_end;
 			}
 		} else if (AUTH_HMAC_SHA2_256 == i) {
 			dbg_printf("SHA2 HMAC test \r\n");
+			device_mutex_lock(RT_DEV_LOCK_CRYPTO);
 			ret = crypto_hmac_sha2_256(plaintext, strlen((const char *)plaintext), sha2_256_hmac_key, strlen((const char *)sha2_256_hmac_key),
 									   digest); // the length of SHA2_256's digest is 32 bytes.
+			device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 			if (SUCCESS != ret) {
 				dbg_printf("crypto_hmac_sha2_256 failed,ret = %d \r\n", ret);
 				goto test_sha2_end;
@@ -397,15 +411,19 @@ int test_sha2_256(void)
 		for (j = 0; j < 14; j++) {
 			if (0 == i) {
 				dbg_printf(" SHA2 test #%d: \r\n", (j + 1));
+				device_mutex_lock(RT_DEV_LOCK_CRYPTO);
 				ret = crypto_sha2_256(auth_plaintext_test_buf[j], auth_plaintext_test_buflen[j], sha2_256sum); // the length of SHA2_256's digest is 32 bytes.
+				device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 				if (SUCCESS != ret) {
 					dbg_printf("crypto_sha2_256 failed,ret = %d \r\n", ret);
 					break;
 				}
 			} else if (1 == i) {
 				dbg_printf(" HMAC SHA2 test #%d: ", (j + 1));
+				device_mutex_lock(RT_DEV_LOCK_CRYPTO);
 				ret = crypto_hmac_sha2_256(auth_plaintext_test_buf[j], auth_plaintext_test_buflen[j], sha2_256_hmac_key, strlen((const char *)sha2_256_hmac_key),
 										   sha2_256sum); // the length of SHA2_256's digest is 32 bytes.
+				device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 				if (SUCCESS != ret) {
 					dbg_printf("crypto_hmac_sha2_256 failed,ret = %d \r\n", ret);
 					break;
@@ -524,24 +542,30 @@ int test_aes_256(void)
 			dbg_printf("AES 256 ECB test Encrypt \r\n");
 			pIv = NULL;
 			ivlen = 0;
+			device_mutex_lock(RT_DEV_LOCK_CRYPTO);
 			ret = crypto_aes_ecb_init(key, keylen);
 			if (SUCCESS != ret) {
+				device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 				dbg_printf("AES ECB init failed, ret = %d \r\n", ret);
 				goto test_aes_end;
 			}
 			ret = crypto_aes_ecb_encrypt(message, msglen, pIv, ivlen, pResult);
+			device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 			if (SUCCESS != ret) {
 				dbg_printf("AES ECB encrypt failed, ret = %d \r\n", ret);
 				goto test_aes_end;
 			}
 		} else if (CIPHER_AES_256_CBC == i) {
 			dbg_printf("AES 256 CBC test Encrypt \r\n");
+			device_mutex_lock(RT_DEV_LOCK_CRYPTO);
 			ret = crypto_aes_cbc_init(key, keylen);
 			if (SUCCESS != ret) {
+				device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 				dbg_printf("AES CBC init failed, ret = %d \r\n", ret);
 				goto test_aes_end;
 			}
 			ret = crypto_aes_cbc_encrypt(message, msglen, pIv, ivlen, pResult);
+			device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 			if (SUCCESS != ret) {
 				dbg_printf("AES CBC encrypt failed, ret = %d \r\n", ret);
 				goto test_aes_end;
@@ -562,14 +586,30 @@ int test_aes_256(void)
 
 		if (CIPHER_AES_256_ECB == i) {
 			dbg_printf("AES 256 ECB test Decrypt \r\n");
+			device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+			ret = crypto_aes_ecb_init(key, keylen);
+			if (SUCCESS != ret) {
+				device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+				dbg_printf("AES ECB init failed, ret = %d \r\n", ret);
+				goto test_aes_end;
+			}
 			ret = crypto_aes_ecb_decrypt(message, msglen, pIv, ivlen, pResult);
+			device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 			if (SUCCESS != ret) {
 				dbg_printf("AES ECB decrypt failed, ret = %d \r\n", ret);
 				goto test_aes_end;
 			}
 		} else if (CIPHER_AES_256_CBC == i) {
 			dbg_printf("AES 256 CBC test Decrypt \r\n");
+			device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+			ret = crypto_aes_cbc_init(key, keylen);
+			if (SUCCESS != ret) {
+				device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+				dbg_printf("AES CBC init failed, ret = %d \r\n", ret);
+				goto test_aes_end;
+			}
 			ret = crypto_aes_cbc_decrypt(message, msglen, pIv, ivlen, pResult);
+			device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 			if (SUCCESS != ret) {
 				dbg_printf("AES CBC decrypt failed, ret = %d \r\n", ret);
 				goto test_aes_end;
@@ -615,12 +655,15 @@ int test_aes_256_gcm(void)
 		msglen = sizeof(aes_gcm_test_buf);
 
 		dbg_printf("AES 256 GCM test Encrypt \r\n");
+		device_mutex_lock(RT_DEV_LOCK_CRYPTO);
 		ret = crypto_aes_gcm_init(key, keylen);
 		if (SUCCESS != ret) {
+			device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 			dbg_printf("AES GCM init failed, ret = %d \r\n", ret);
 			goto test_aes_gcm_end;
 		}
 		ret = crypto_aes_gcm_encrypt(message, msglen, nonce, pAAD, aadlen, pResult, pTag);
+		device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 		if (SUCCESS != ret) {
 			dbg_printf("AES GCM encrypt failed, ret = %d \r\n", ret);
 			goto test_aes_gcm_end;
@@ -650,7 +693,15 @@ int test_aes_256_gcm(void)
 		memset(tag, 0, sizeof(tag));
 
 		dbg_printf("AES 256 GCM test Decrypt \r\n");
+		device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+		ret = crypto_aes_gcm_init(key, keylen);
+		if (SUCCESS != ret) {
+			device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+			dbg_printf("AES GCM init failed, ret = %d \r\n", ret);
+			goto test_aes_gcm_end;
+		}
 		ret = crypto_aes_gcm_decrypt(message, msglen, nonce, pAAD, aadlen, pResult, pTag);
+		device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 		if (memcmp(aes_gcm_test_buf, pResult, msglen) == 0) {
 			dbg_printf("AES GCM 256 decrypt result success \r\n");
 			if (memcmp(aes_gcm_test_tag, pTag, 16) == 0) {
@@ -676,14 +727,16 @@ test_aes_gcm_end:
 	return ret;
 }
 
-int main(void)
+static void test_thread(void *param)
 {
 	// sample text
 	int ret;
 
 	dbg_printf("\r\n   CRYPTO Demo   \r\n");
 
+	device_mutex_lock(RT_DEV_LOCK_CRYPTO);
 	ret = crypto_init();
+	device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 	if (SUCCESS != ret) {
 		dbg_printf("crypto engine init failed \r\n");
 	}
@@ -710,10 +763,24 @@ int main(void)
 		goto vrf_end;
 	}
 vrf_end:
+	device_mutex_lock(RT_DEV_LOCK_CRYPTO);
 	ret = crypto_deinit();
+	device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
 	if (SUCCESS != ret) {
 		dbg_printf("crypto engine deinit failed \r\n");
 	}
 
-	for (;;);
+	vTaskDelete(NULL);
+}
+
+int main(void)
+{
+
+	/* Note that it should be protected by device_mutex_lock() if using HW crypto */
+	if (xTaskCreate(test_thread, "test_thread", STACKSIZE, NULL, tskIDLE_PRIORITY + 1, NULL) != pdPASS) {
+		printf("\n\r%s xTaskCreate failed", __FUNCTION__);
+	}
+
+	vTaskStartScheduler();
+	while (1);
 }

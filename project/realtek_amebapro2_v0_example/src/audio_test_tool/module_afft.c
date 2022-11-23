@@ -234,7 +234,7 @@ void noise_cal_bk(fft_cal_bk_t *pfft_cal, uint32_t data_shift, uint32_t thd_cnt,
 
 uint32_t get_cfft_instance(uint32_t fft_size)
 {
-	uint32_t s;
+	uint32_t s = 1024;
 
 	switch (fft_size) {
 	case 16: //bit 4
@@ -286,7 +286,7 @@ void afft_input_init(float *pinput, float *pdata, uint32_t fft_size)
 }
 
 //caculate the fft
-void fft_cal_bk(float *ptest_data, fft_cal_bk_t *pfft_cal, uint32_t sample_rate)
+void fft_cal_bk(float *ptest_data, fft_cal_bk_t *pfft_cal, uint32_t sample_rate, float *accumlated_output, uint32_t *accumlated_times)
 {
 	//window
 	for (uint32_t i = 0; i < FFT_BK_SIZE; i++) {
@@ -303,7 +303,16 @@ void fft_cal_bk(float *ptest_data, fft_cal_bk_t *pfft_cal, uint32_t sample_rate)
 	/* Process the data through the Complex Magniture Module for calculating the magnitude at each bin */
 	arm_cmplx_mag_f32(pfft_cal->input, pfft_cal->output, FFT_BK_SIZE);
 
+	/* only the front half elements are needed and the magnitude  */
+	for (uint32_t j = 0; j < (FFT_BK_SIZE >> 1); j++) {
+		if (j != 0 && j != (FFT_BK_SIZE >> 1) - 1) {
+			pfft_cal->output[j] = 2 * pfft_cal->output[j];
+		}
+		pfft_cal->output[j] = pfft_cal->output[j] / FFT_BK_SIZE;
+	}
+
 	/* Calculates maxValue and returns corresponding value */
+	/* only use the front half size to do calculate */
 	arm_max_f32(pfft_cal->output, (FFT_BK_SIZE >> 1), &pfft_cal->max_value, &pfft_cal->max_index);
 
 	//dbg_printf("max_value: %f, max_index: %d \r\n", pfft_cal->max_value, pfft_cal->max_index);
@@ -315,9 +324,17 @@ void fft_cal_bk(float *ptest_data, fft_cal_bk_t *pfft_cal, uint32_t sample_rate)
 	pfft_cal->input_frq = ((float)sample_rate / FFT_BK_SIZE) * pfft_cal->max_index;
 
 #if 0
+
 	/* output print */
-	for (i = 0; i < FFT_SIZE; i++) {
-		dbg_printf("%f \r\n", pfft_cal->output[i]);
+	for (int i = 0; i < (FFT_BK_SIZE >> 1); i++) {
+		if (accumlated_output && accumlated_times) {
+			accumlated_times++;
+			//printf("%f \r\n", accumlated_output[i]);
+			accumlated_output[i] += pfft_cal->output[i];
+			//printf("frequency: %f, average magnitude: %f, magnitude: %f\r\n", ((float)sample_rate / FFT_BK_SIZE) * i, 20*log10f(accumlated_output[i] / (*accumlated_times)), 20*log10f(pfft_cal->output[i]));
+		} else {
+			//printf("frequency: %f, magnitude: %f\r\n", ((float)sample_rate / FFT_BK_SIZE) * i, 20*log10f(pfft_cal->output[i]));
+		}
 	}
 #endif
 
@@ -327,7 +344,7 @@ int afft_handle(void *p, void *input, void *output)
 {
 	afft_ctx_t *ctx = (afft_ctx_t *)p;
 	mm_queue_item_t *input_item = (mm_queue_item_t *)input;
-	(void)output;
+	mm_queue_item_t *output_item = (mm_queue_item_t *)output;
 
 	//int samples_read, frame_size;
 	//int frame_size = 0;
@@ -335,32 +352,37 @@ int afft_handle(void *p, void *input, void *output)
 	//output_item->timestamp = input_item->timestamp;
 	// set timestamp to 1st sample (cache head)
 	//output_item->timestamp -= 1000 * (ctx->cache_idx / 2) / ctx->params.sample_rate;
-
+	//printf("AFFT Handle\r\n");
 	memcpy(ctx->cache + ctx->cache_idx, (void *)input_item->data_addr, input_item->size);
 	ctx->cache_idx += input_item->size;
 
 	if (ctx->cache_idx >= FFT_BK_SIZE * 2) {
 		if (!ctx->stop) {
 			for (int i = 0; i < FFT_BK_SIZE; i++) {
-				audio_rxdata_bk[i] = (float)((short)((ctx->cache[(i << 1) + 1] << 8) | ctx->cache[(i << 1)]));
+				audio_rxdata_bk[i] = (float)((short)((ctx->cache[(i << 1) + 1] << 8) | ctx->cache[(i << 1)])) / (32767.0f);
 			}
-			fft_cal_bk(audio_rxdata_bk, &(ctx->fft_cal_bk_signal), ctx->params.sample_rate);
+			fft_cal_bk(audio_rxdata_bk, &(ctx->fft_cal_bk_signal), ctx->params.sample_rate, ctx->accumlated_output, &(ctx->accumlated_times));
 			mm_printf("\r\n ============== Audio Info =============== \r\n");
 			mm_printf("sample_rate: %d \r\n", ctx->params.sample_rate);
 			mm_printf("max_index: %d \r\n", ctx->fft_cal_bk_signal.max_index);
 			mm_printf("input_frq: %f \r\n", ctx->fft_cal_bk_signal.input_frq);
+			mm_printf("input_frq megnitude: %f \r\n", 20 * log10f(ctx->fft_cal_bk_signal.output[ctx->fft_cal_bk_signal.max_index]));
 		}
 		ctx->cache_idx -= FFT_BK_SIZE * 2;
-		if (ctx->cache_idx > 0) {
+		if (ctx->cache_idx >= 0) {
 			memmove(ctx->cache, ctx->cache + FFT_BK_SIZE * 2, ctx->cache_idx);
 		}
 	}
+	if (ctx->pcm_out_en) {
+		//printf("AFFT Output\r\n");
+		output_item->size = input_item->size;
+		output_item->timestamp = input_item->timestamp;
+		output_item->type = input_item->type;
+		memcpy((void *) output_item->data_addr, (void *) input_item->data_addr, input_item->size);
 
+		return output_item->size;
+	}
 	return 0;
-	//output_item->size = frame_size;
-	//output_item->type = AV_CODEC_ID_MP4A_LATM;
-	//output_item->index = 0;
-	//return frame_size;
 }
 
 int afft_control(void *p, int cmd, int arg)
@@ -380,15 +402,33 @@ int afft_control(void *p, int cmd, int arg)
 	case CMD_AFFT_CHANNEL:
 		ctx->params.channel = arg;
 		break;
+	case CMD_AFFT_RESET_FFT_RESULT:
+		ctx->accumlated_times = 0;
+		memset(ctx->accumlated_output, 0, sizeof(float) * FFT_BK_SIZE);
+		break;
+	case CMD_AFFT_SET_OUTPUT:
+		if (arg) {
+			ctx->pcm_out_en = (bool)arg;
+			((mm_context_t *)ctx->parent)->module->output_type = MM_TYPE_ASINK;
+			((mm_context_t *)ctx->parent)->module->module_type = MM_TYPE_ADSP;
+		} else {
+			ctx->pcm_out_en = (bool)arg;
+			((mm_context_t *)ctx->parent)->module->output_type = MM_TYPE_NONE;
+			((mm_context_t *)ctx->parent)->module->module_type = MM_TYPE_ASINK;
+		}
+		break;
 	case CMD_AFFT_SHOWN:
 		if (arg) {
 			ctx->cache_idx = 0;
 			ctx->stop = 0;
+			ctx->accumlated_times = 0;
 		} else {
 			ctx->stop = 1;
 		}
 		break;
 	case CMD_AFFT_APPLY:
+		ctx->accumlated_times = 0;
+		memset(ctx->accumlated_output, 0, sizeof(float) * FFT_BK_SIZE);
 		ctx->cache = (uint8_t *)malloc(FFT_BK_SIZE * 2 + 1500);	// 1500 max audio page size
 		if (!ctx->cache) {
 			mm_printf("Output memory\n\r");
@@ -427,14 +467,30 @@ void *afft_create(void *parent)
 	return ctx;
 }
 
+void *afft_new_item(void *p)
+{
+	afft_ctx_t *ctx = (afft_ctx_t *)p;
+
+	return (void *)malloc(ctx->params.pcm_frame_size);
+}
+
+void *afft_del_item(void *p, void *d)
+{
+	(void)p;
+	if (d) {
+		free(d);
+	}
+	return NULL;
+}
+
 mm_module_t afft_module = {
 	.create = afft_create,
 	.destroy = afft_destroy,
 	.control = afft_control,
 	.handle = afft_handle,
 
-	.new_item = NULL,
-	.del_item = NULL,
+	.new_item = afft_new_item,
+	.del_item = afft_del_item,
 	.rsz_item = NULL,
 
 	.output_type = MM_TYPE_NONE,

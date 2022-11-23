@@ -3,7 +3,7 @@
 #include "log_service.h"
 #include "atcmd_mp.h"
 
-#if CONFIG_ATCMD_MP
+#if defined(CONFIG_ATCMD_MP) && CONFIG_ATCMD_MP
 extern void fATM2(void *arg);	// MP ext2 AT command
 //-------- AT MP commands ---------------------------------------------------------------
 void fATMt(void *arg)

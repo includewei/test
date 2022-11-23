@@ -3,6 +3,7 @@
 //#include "main.h"
 
 #include "analogin_api.h"
+#include "wait_api.h"
 
 #define MBED_ADC_EXAMPLE_PIN_0    PF_0
 #define MBED_ADC_EXAMPLE_PIN_1    PF_1
@@ -17,10 +18,10 @@ analogin_t   adc1;
 analogin_t   adc2;
 analogin_t   adc3;
 #else
-volatile analogin_t   adc0;
-volatile analogin_t   adc1;
-volatile analogin_t   adc2;
-volatile analogin_t   adc3;
+analogin_t   adc0;
+analogin_t   adc1;
+analogin_t   adc2;
+analogin_t   adc3;
 #endif
 
 

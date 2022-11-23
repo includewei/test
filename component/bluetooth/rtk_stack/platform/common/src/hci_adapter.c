@@ -7,14 +7,13 @@
 #include <string.h>
 
 #include "os_mem.h"
+#include "os_sched.h"
 #include "hci_tp.h"
 #include "hci_process.h"
 #include "bt_types.h"
-
 #include "hci_uart.h"
 #include "bt_board.h"
 #include "hci_board.h"
-
 #include "trace_app.h"
 
 
@@ -26,11 +25,11 @@ typedef struct {
 T_HCI_UART hci_rtk;
 T_HCI_UART *p_hci_rtk = &hci_rtk;
 
+uint8_t flag_for_hci_trx = 0;
 uint8_t g_hci_step = 0;
 extern HCI_PROCESS_TABLE hci_process_table[];
 extern uint8_t hci_total_step;
 extern bool hci_board_complete(void);
-uint8_t flag_for_hci_trx = 0;
 //================================internal===========================
 bool hci_rtk_tx_cb(void)
 {
@@ -43,6 +42,9 @@ bool hci_rtk_tx_cb(void)
 //=================================external==========================
 bool hci_adapter_send(uint8_t *p_buf, uint16_t len)
 {
+	while (p_hci_rtk->tx_buf != NULL) {
+		os_delay(1);
+	}
 	p_hci_rtk->tx_buf  = p_buf;
 	return hci_tp_send(p_buf, len, hci_rtk_tx_cb);
 }

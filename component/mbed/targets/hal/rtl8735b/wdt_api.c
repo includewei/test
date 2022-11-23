@@ -29,20 +29,27 @@
 #include "wdt_api.h"
 #include "hal_wdt.h"
 #include "hal_wdt_nsc.h"
+#include "hal_sys_ctrl.h"
+#include "hal_sys_ctrl_nsc.h"
 
+#define AON_WDT     1
 
 /**
  *  @brief   Initial the watch dog time setting
  *
- *  @param   timeout_ms: the watch-dog timer timeout value, in ms.
+ *  @param   timeout_ms: the watch-dog timer timeout value, in ms.(Min Value 1000 and Max value 65535)
  *           default action of timeout is to reset the whole system.
  *  @return  None
  *
  */
 void watchdog_init(uint32_t timeout_ms)
 {
-	hal_wdt_reset(0x17);
-	hal_wdt_init((timeout_ms * 1000));
+	if (AON_WDT) {
+		hal_aon_wdt_enable(0, timeout_ms);
+	} else {
+		hal_wdt_reset(0x17);
+		hal_wdt_init((timeout_ms * 1000));
+	}
 }
 
 /**
@@ -54,7 +61,11 @@ void watchdog_init(uint32_t timeout_ms)
  */
 void watchdog_start(void)
 {
-	hal_wdt_enable();
+	if (AON_WDT) {
+		hal_wdt_aon_enable();
+	} else {
+		hal_wdt_enable();
+	}
 }
 
 /**
@@ -66,7 +77,11 @@ void watchdog_start(void)
  */
 void watchdog_stop(void)
 {
-	hal_wdt_disable();
+	if (AON_WDT) {
+		hal_wdt_aon_disable();
+	} else {
+		hal_wdt_disable();
+	}
 }
 
 /**
@@ -78,23 +93,32 @@ void watchdog_stop(void)
  */
 void watchdog_refresh(void)
 {
-	hal_wdt_refresh();
+	if (AON_WDT) {
+		hal_wdt_aon_disable();
+		hal_wdt_aon_enable();
+	} else {
+		hal_wdt_refresh();
+	}
 }
 
 /**
- *  @brief   Switch the watchdog timer to interrupt mode and
- *           register a watchdog timer timeout interrupt handler.
- *           The interrupt handler will be called when the watch-dog
- *           timer is timeout.
- *
- *  @param   handler: the callback function for WDT timeout interrupt.
- *           id: the parameter for the callback function
- *  @return  None
- *
- */
+*  @brief   Switch the watchdog timer to interrupt mode and
+*           register a watchdog timer timeout interrupt handler.
+*           The interrupt handler will be called when the watch-dog
+*           timer is timeout.
+*
+*  @param   handler: the callback function for WDT timeout interrupt.
+*           id: the parameter for the callback function
+*  @return  None
+*
+*/
 void watchdog_irq_init(wdt_irq_handler handler, uint32_t id)
 {
-	hal_wdt_reg_irq((irq_handler_t)handler, (void *)id);
+	if (AON_WDT) {
+		dbg_printf("\r\nThe AON WDT dosen't supprt IRQ Mode\r\n");
+	} else {
+		hal_wdt_reg_irq((irq_handler_t)handler, (void *)id);
+	}
 }
 
 

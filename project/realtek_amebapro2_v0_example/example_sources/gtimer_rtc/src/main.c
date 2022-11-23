@@ -5,6 +5,8 @@
 
 #define SW_RTC_TIMER_ID    TIMER4
 
+extern void gtimer_clock_sel(u8 clock_sel);
+
 static gtimer_t sw_rtc;
 static volatile struct tm rtc_timeinfo;
 
@@ -88,7 +90,7 @@ static void rtc_set_time(uint32_t year, uint8_t mon, uint8_t mday, uint8_t wday,
 
 static void rtc_read_time(struct tm *timeinfo)
 {
-	rtw_memcpy((void *)timeinfo, (void *)&rtc_timeinfo, sizeof(struct tm));
+	memcpy((void *)timeinfo, (void *)&rtc_timeinfo, sizeof(struct tm));
 	timeinfo->tm_mon++;
 	timeinfo->tm_mday++;
 	timeinfo->tm_wday++;

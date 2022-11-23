@@ -301,9 +301,8 @@ int  flash_burst_read(flash_t *obj, uint32_t address, uint32_t Length, uint8_t *
 {
 	flash_init(obj);
 
-	flash_resource_lock();
-	hal_flash_burst_read((obj->phal_spic_adaptor), Length, address, data);
-	flash_resource_unlock();
+	dcache_invalidate_by_addr((uint32_t *)(SPI_FLASH_BASE + address), Length);
+	hal_flash_stream_read((obj->phal_spic_adaptor), Length, address, data);
 	return 1;
 }
 
@@ -584,7 +583,7 @@ void flash_get_size(flash_t *obj)
 {
 	phal_spic_adaptor_t phal_spic_adaptor;
 	u8 size_id;
-	u8 size = 0;
+	u16 size = 0;
 
 	flash_init(obj);
 	phal_spic_adaptor = (obj->phal_spic_adaptor);

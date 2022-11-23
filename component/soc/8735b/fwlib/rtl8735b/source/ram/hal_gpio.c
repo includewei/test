@@ -62,7 +62,7 @@ void AON_IRQHandler_S_to_NS(void)
 
 	int_sts = AON_GPIO->GPIO_INT_STS;
 
-	if (hal_gpio_stubs.ppaon_gpio_comm_adp == NULL) {
+	if (*(hal_gpio_stubs.ppaon_gpio_comm_adp) == NULL) {
 		// Not initialed yet, ignore interrupt
 		AON_GPIO->GPIO_INT_CLR = int_sts;
 		__DSB();
@@ -261,17 +261,26 @@ void aon_gpio_sclk_source_select_via_NSC(uint32_t sclk_src_sel)
 
 void hal_aon_gpio_comm_init_via_NSC(phal_aon_gpio_comm_adapter_t paon_gpio_comm_adp)
 {
-
-#if IS_CUT_TEST(CONFIG_CHIP_VER)
-	hal_rtl_aon_gpio_comm_init_patch(paon_gpio_comm_adp);
-#else
-
 #if defined (CONFIG_BUILD_SECURE) && (CONFIG_BUILD_SECURE != 0)
+
+	AON_TypeDef *aon = AON;
+	volatile uint32_t val;
+
 	paon_gpio_comm_adp->gpio_irq_using = 0;
 	paon_gpio_comm_adp->gpio_irq_list_head = NULL;
 	paon_gpio_comm_adp->gpio_irq_list_tail = NULL;
 
 	*(hal_gpio_stubs.ppaon_gpio_comm_adp) = paon_gpio_comm_adp;
+
+
+	// This part below is added to address issues related to low-power operations - Standby/Sleep
+	// This is because when exiting Standby mode, AON+0xC[7] is not reset to 0,
+	// causing multiple interrupts to be triggered when GPIO IRQ is re-initialized and enabled.
+	// FIX: Manually reset AON+0xC[7] (i.e., set to 0) in this function.
+
+	val = AON->AON_REG_AON_CLK_CTRL;
+	val &= ~(AON_BIT_GPIO_INTR_CLK);
+	AON->AON_REG_AON_CLK_CTRL = val;
 
 	DBG_GPIO_INFO("TZ RAM AON GPIO comm init (calling from NSC)\r\n");
 
@@ -279,10 +288,15 @@ void hal_aon_gpio_comm_init_via_NSC(phal_aon_gpio_comm_adapter_t paon_gpio_comm_
 	hal_irq_disable(AON_IRQn);
 	__ISB();
 	hal_irq_set_vector(AON_IRQn, (uint32_t)&AON_IRQHandler_S_to_NS);
+	if (((AON->AON_REG_AON_FUNC_CTRL) & AON_BIT_GPIO_FEN) >> AON_SHIFT_GPIO_FEN == 1) {
+		AON_GPIO->GPIO_INT_DIS = 0x3F;
+		AON_GPIO->GPIO_INT_FUNC_DIS = 0x3F;
+		AON_GPIO->GPIO_EI_EN = 0x3F;
+	}
 	hal_irq_enable(AON_IRQn);
 	DBG_GPIO_INFO("ppaon_gpio_comm_adp in GPIO RAM (equivalent of __paon_gpio_comm_adp): %x\r\n", *(hal_gpio_stubs.ppaon_gpio_comm_adp));
 #endif
-#endif
+
 }
 
 /* Functions parking, to be called from AON GPIO NSC function */
@@ -302,28 +316,29 @@ void hal_gpio_comm_init(phal_gpio_comm_adapter_t pgpio_comm_adp)
 void hal_aon_gpio_comm_init(phal_aon_gpio_comm_adapter_t paon_gpio_comm_adp)
 {
 
-#if IS_CUT_TEST(CONFIG_CHIP_VER)
-	hal_rtl_aon_gpio_comm_init_patch(paon_gpio_comm_adp);
-#else
-
 #if defined(CONFIG_BUILD_NONSECURE) && (CONFIG_BUILD_NONSECURE != 0)
+	DBG_GPIO_INFO("TZ RAM AON GPIO comm init (Calling NSC)\r\n");
+
 	hal_aon_gpio_comm_init_nsc(paon_gpio_comm_adp);
+
 #else
-	DBG_GPIO_INFO("NTZ RAM AON GPIO comm init (Calling to ROM now)\r\n");
-	hal_gpio_stubs.hal_aon_gpio_comm_init(paon_gpio_comm_adp);
-#endif
+	DBG_GPIO_INFO("NTZ RAM AON GPIO comm init (Calling ROM patch)\r\n");
+
+	// All cuts of chip to route via ROM patch
+	hal_rtl_aon_gpio_comm_init_patch(paon_gpio_comm_adp);
+
+	//hal_gpio_stubs.hal_aon_gpio_comm_init(paon_gpio_comm_adp); // unused - taking ROM patch route
 
 #endif
+
 
 }
 
 void hal_pon_gpio_comm_init(phal_pon_gpio_comm_adapter_t ppon_gpio_comm_adp)
 {
-#if IS_CUT_TEST(CONFIG_CHIP_VER)
 	hal_rtl_pon_gpio_comm_init_patch(ppon_gpio_comm_adp);
-#else
-	hal_gpio_stubs.hal_pon_gpio_comm_init(ppon_gpio_comm_adp);
-#endif
+
+	//hal_gpio_stubs.hal_pon_gpio_comm_init(ppon_gpio_comm_adp); // unused - going by patch route
 }
 
 /**
@@ -626,7 +641,7 @@ hal_status_t hal_gpio_init(phal_gpio_adapter_t pgpio_adapter, uint32_t pin_name)
 
 	if (port_idx == PORT_A) {
 		// AON GPIO
-		hal_gpio_init_nsc(pgpio_adapter, pin_name);
+		return hal_gpio_init_nsc(pgpio_adapter, pin_name);
 
 	} else {
 
@@ -849,7 +864,7 @@ hal_status_t hal_gpio_irq_init(phal_gpio_irq_adapter_t pgpio_irq_adapter, uint32
 		// AON GPIO
 		hal_sys_peripheral_en(GPIO_AON, ENABLE);
 
-	} else 	if (port_idx == PORT_B || port_idx == PORT_C || port_idx == PORT_D || port_idx == PORT_E || port_idx == PORT_S) {
+	} else  if (port_idx == PORT_B || port_idx == PORT_C || port_idx == PORT_D || port_idx == PORT_E || port_idx == PORT_S) {
 		// SYSON GPIO
 		hal_sys_peripheral_en(GPIO_SYS, ENABLE);
 
@@ -1020,7 +1035,7 @@ hal_status_t hal_gpio_port_init(phal_gpio_port_adapter_t pgpio_port_adapter, uin
 
 #if defined(CONFIG_BUILD_NONSECURE) && (CONFIG_BUILD_NONSECURE != 0)
 	if (port_idx == PORT_A) { // AON GPIO (Port A)
-		hal_gpio_port_init_nsc(pgpio_port_adapter, port_idx, mask, dir);
+		return hal_gpio_port_init_nsc(pgpio_port_adapter, port_idx, mask, dir);
 
 	} else {
 
@@ -1218,6 +1233,87 @@ void hal_gpio_port_dir(phal_gpio_port_adapter_t pgpio_port_adapter, uint32_t mas
 }
 #endif
 
+
+hal_status_t hal_aon_gpio_irq_debounce_enable(phal_gpio_irq_adapter_t pgpio_irq_adapter,
+		uint32_t debounce_us)
+{
+	return hal_rtl_gpio_irq_debounce_enable_patch(pgpio_irq_adapter, debounce_us);
+}
+
+hal_status_t hal_aon_gpio_debounce_enable(phal_gpio_adapter_t pgpio_adapter, uint32_t debounce_us)
+{
+	return hal_rtl_gpio_debounce_enable_patch(pgpio_adapter, debounce_us);
+}
+
+/**
+ *  @brief Enables the debounce function of the given GPIO IRQ pin.
+ *         The debounce resource(circuit) is limited, not all GPIO pin
+ *         can has debounce function.
+ *
+ *  @param[in]  pgpio_irq_adapter  The GPIO IRQ pin adapter.
+ *  @param[in]  debounce_us  The time filter for the debounce, in micro-second.
+ *                           But the time resolution is 31.25us (1/32K) and the
+ *                           maximum time is 512 ms.
+ *
+ *  @return     HAL_NO_RESOURCE:  No debounce resource. (All debounce circuit are allocated).
+ *  @return     HAL_OK:  Debounce function is enabled on this GPIO.
+ */
+
+// Special note: All cuts of chip, Test/A/B/C/D and beyond will always use this HAL RAM function.
+// This also means that for GPIO IRQ Debounce Enable, we will call the RAM patch forever.
+// The affected ROM function is hal_rtl_gpio_irq_debounce().
+// For AON GPIO, the function that the NSC will call is stated right above.
+
+hal_status_t hal_gpio_irq_debounce_enable(phal_gpio_irq_adapter_t pgpio_irq_adapter,
+		uint32_t debounce_us)
+{
+
+#if defined(CONFIG_BUILD_NONSECURE)
+
+	uint8_t port_idx = PIN_NAME_2_PORT(pgpio_irq_adapter->pin_name);
+
+	if (port_idx == PORT_A) {
+		return hal_gpio_irq_debounce_enable_nsc(pgpio_irq_adapter, debounce_us);
+	} else {
+
+		return hal_rtl_gpio_irq_debounce_enable_patch(pgpio_irq_adapter, debounce_us);
+	}
+
+#else
+	return hal_rtl_gpio_irq_debounce_enable_patch(pgpio_irq_adapter, debounce_us);
+
+#endif
+
+}
+
+/**
+ *  @brief Enable the debounce function for the given GPIO pin.
+ *         The debounce resource(circuit) is limited, not all GPIO pin
+ *         can has debounce function.
+ *
+ *  @param[in]  pgpio_adapter  The GPIO pin adapter.
+ *  @param[in]  debounce_us  The time filter for the debounce, in micro-second.
+ *                           But the time resolution is 31.25us (1/32K) and the
+ *                           maximum time is 512 ms.
+ *
+ *  @return     HAL_NO_RESOURCE:  No debounce resource. (All debounce circuit are allocated).
+ *  @return     HAL_ERR_PARA:  Input arguments are invlaid.
+ *  @return     HAL_OK:  Debounce function is enabled on this GPIO.
+ */
+
+hal_status_t hal_gpio_debounce_enable(phal_gpio_adapter_t pgpio_adapter, uint32_t debounce_us)
+{
+#if defined(CONFIG_BUILD_NONSECURE)
+	if (pgpio_adapter->port_idx == PORT_A) {
+		return hal_gpio_debounce_enable_nsc(pgpio_adapter, debounce_us);
+	} else {
+		return hal_rtl_gpio_debounce_enable_patch(pgpio_adapter, debounce_us);
+	}
+#else
+	return hal_rtl_gpio_debounce_enable_patch(pgpio_adapter, debounce_us);
+#endif
+}
+
 // For Test chip patching only
 
 #if IS_CUT_TEST(CONFIG_CHIP_VER)
@@ -1226,21 +1322,23 @@ void hal_gpio_irq_disable(phal_gpio_irq_adapter_t pgpio_irq_adapter)
 	hal_rtl_gpio_irq_disable_patch(pgpio_irq_adapter);
 }
 
-hal_status_t hal_gpio_debounce_enable(phal_gpio_adapter_t pgpio_adapter, uint32_t debounce_us)
+// This function has been moved above (out of section within #IS_CUT_TEST(CONFIG_CHIP_VER))
+/*hal_status_t hal_gpio_debounce_enable(phal_gpio_adapter_t pgpio_adapter, uint32_t debounce_us)
 {
-	return hal_rtl_gpio_debounce_enable_patch(pgpio_adapter, debounce_us);
-}
+    return hal_rtl_gpio_debounce_enable_patch(pgpio_adapter, debounce_us);
+}*/
 
 void hal_gpio_debounce_disable(phal_gpio_adapter_t pgpio_adapter)
 {
 	hal_rtl_gpio_debounce_disable_patch(pgpio_adapter);
 }
 
-hal_status_t hal_gpio_irq_debounce_enable(phal_gpio_irq_adapter_t pgpio_irq_adapter,
-		uint32_t debounce_us)
+// This function has been moved above (out of section within #IS_CUT_TEST(CONFIG_CHIP_VER))
+/*hal_status_t hal_gpio_irq_debounce_enable(phal_gpio_irq_adapter_t pgpio_irq_adapter,
+        uint32_t debounce_us)
 {
-	return hal_rtl_gpio_irq_debounce_enable_patch(pgpio_irq_adapter, debounce_us);
-}
+    return hal_rtl_gpio_irq_debounce_enable_patch(pgpio_irq_adapter, debounce_us);
+}*/
 
 void hal_gpio_irq_debounce_disable(phal_gpio_irq_adapter_t pgpio_irq_adapter)
 {

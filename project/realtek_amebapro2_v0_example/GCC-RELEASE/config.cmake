@@ -1,28 +1,52 @@
 cmake_minimum_required(VERSION 3.6)
 
-# check system is LINUX 
-if(UNIX AND NOT APPLE)
-    set(LINUX TRUE)
-    message(STATUS "Build on LINUX")
-endif()
-
 if(NOT DEFINED CONFIG_DONE)
+	execute_process(COMMAND uname OUTPUT_VARIABLE uname)
+
+	if(${CMAKE_HOST_SYSTEM_NAME} MATCHES "Linux")
+		message(STATUS "Build on Linux")
+		set(LINUX TRUE)
+	else()
+		set(LINUX FALSE)
+	endif()
+
+	if(${CMAKE_HOST_SYSTEM_NAME} MATCHES "Windows")
+		set(WINDOWS TRUE)
+		if (uname MATCHES "^MSYS" OR uname MATCHES "^MINGW")
+			set(WIN_MSYS TRUE)
+			message(STATUS "Build on Mingw")
+		else()
+			set(WIN_MSYS FALSE)
+			message(STATUS "Build on Windows")
+		endif()	
+	else()
+		set(WINDOWS FALSE)
+		set(WIN_MSYS FALSE)
+	endif()
+
 	set(CONFIG_DONE ON)
 	
 	set(freertos "freertos_v202012.00")
 	set(lwip "lwip_v2.1.2")
 	set(mbedtls "mbedtls-3.0.0")
+	set(viplite "VIPLiteDrv_1.8.0")
 	
 	message(STATUS "FreeRTOS = ${freertos}")
 	message(STATUS "LWIP     = ${lwip}")
 	message(STATUS "mbedTLS  = ${mbedtls}")
+	message(STATUS "VIPLite  = ${viplite}")
 	
 	if(NOT DEFINED CUTVER)
 		set(CUTVER "B")
 	endif()
+	
+	if(NOT DEFINED DDR)
+		set(DDR "128M")
+	endif()
 
 	if(CUTVER STREQUAL "TEST")
 		set(MPCHIP OFF)
+		message(FATAL_ERROR "Test chip is not supported now")
 	else()
 		set(MPCHIP ON)
 	endif()
@@ -38,11 +62,19 @@ if(NOT DEFINED CONFIG_DONE)
 	if(NOT DEFINED BUILD_PXP)
 		set(BUILD_PXP OFF)
 	endif()
+	
+	if(BUILD_PXP)
+		message(FATAL_ERROR "PXP is not supported now")
+	endif()	
 
 	# for simulation, not use now
 	if(NOT DEFINED BUILD_FPGA)
 		set(BUILD_FPGA OFF)
 	endif()
+	
+	if(BUILD_FPGA)
+		message(FATAL_ERROR "FPGA is not supported now")
+	endif()		
 
 	if(NOT DEFINED BUILD_LIB)
 		set(BUILD_LIB OFF)
@@ -59,6 +91,11 @@ if(NOT DEFINED CONFIG_DONE)
 	if(NOT DEFINED DEBUG)
 		set(DEBUG OFF)
 	endif()
+    
+	#AUDIO AEC LIB
+	if (NOT DEFINED BUILD_NEWAEC)
+		set(BUILD_NEWAEC ON)
+	endif()
 	
 	#elf2bin
 	if(NOT DEFINED ELF2BIN)
@@ -70,9 +107,9 @@ if(NOT DEFINED CONFIG_DONE)
 		endif()
 	else()
 		if (LINUX)
-		set(ELF2BIN ${prj_root}/GCC-RELEASE/elf2bin.linux)
+		set(ELF2BIN ${prj_root}/GCC-RELEASE/testchip/elf2bin.linux)
 		else()
-		set(ELF2BIN ${prj_root}/GCC-RELEASE/elf2bin.exe)
+		set(ELF2BIN ${prj_root}/GCC-RELEASE/testchip/elf2bin.exe)
 		endif()
 	endif()
 	endif()		
@@ -88,10 +125,18 @@ if(NOT DEFINED CONFIG_DONE)
 	endif()
 	endif()		
 	
+	#platform console command, for wildcard
+	if (LINUX OR WIN_MSYS)
+		set(PLAT_COPY cp)
+	else()		
+		set(PLAT_COPY copy)
+	endif()
+	
 	#default postbuild script
 	if (MPCHIP)
 		set(POSTBUILD_BOOT		${prj_root}/GCC-RELEASE/mp/amebapro2_bootloader.json)
 		set(POSTBUILD_FW_NTZ 	${prj_root}/GCC-RELEASE/mp/amebapro2_firmware_ntz.json)
+		set(POSTBUILD_FW_NTZXIP	${prj_root}/GCC-RELEASE/mp/amebapro2_firmware_ntz_xip.json)
 		set(POSTBUILD_FW_TZ		${prj_root}/GCC-RELEASE/mp/amebapro2_firmware_tz.json)
 		set(POSTBUILD_KEY_CFG	${prj_root}/GCC-RELEASE/mp/key_cfg.json)
 		set(POSTBUILD_CERT		${prj_root}/GCC-RELEASE/mp/certificate.json)
@@ -108,9 +153,7 @@ if(NOT DEFINED CONFIG_DONE)
 		
 		set(VOE_BIN_PATH       ${sdk_root}/component/soc/8735b/fwlib/rtl8735b/lib/source/ram/video/voe_bin)
 		
-		set(NN_MODEL_PATH		${prj_root}/src/test_model)
-		#set(USED_NN_MODEL		${prj_root}/src/test_model/yolov4_tiny.nb)
-		#set(USED_NN_MODEL		${prj_root}/src/test_model/yamnet_fp16.nb)
+		set(NN_MODEL_PATH		${prj_root}/src/test_model/model_nb)
 	endif()	
 
 	execute_process(
@@ -167,6 +210,22 @@ if(NOT DEFINED CONFIG_DONE)
 		execute_process(COMMAND bash "-c" "sed -i 's/define.*CONFIG_CHIP_VER.*_CUT/define CONFIG_CHIP_VER\t\t\t\t\t\t\tCHIP_TEST_CUT/' ./component/soc/8735b/cmsis/rtl8735b/include/platform_conf.h" WORKING_DIRECTORY ${sdk_root} )
 		execute_process(COMMAND bash "-c" "sed -i 's/define.*CONFIG_CHIP_VER.*_CUT/define CONFIG_CHIP_VER\t\t\t\t\t\t\tCHIP_TEST_CUT/' ./component/soc/8735b/cmsis/rtl8735b/include/platform_conf.h" WORKING_DIRECTORY ${sdk_root} )
 	endif()
-
+	
+	if(DDR STREQUAL "128M")
+		message(STATUS "Setup for DDR ${DDR}")
+		execute_process(COMMAND bash "-c" "sed -i 's/define.*SAU_INIT_END5.*/define SAU_INIT_END5 0x77DFFFFF/' ./component/soc/8735b/cmsis/rtl8735b/include/partition_rtl8735b.h" WORKING_DIRECTORY ${sdk_root} )
+		execute_process(COMMAND bash "-c" "sed -i 's/DDR_SIZE = .*/DDR_SIZE = 128;/' ./GCC-RELEASE/application/rtl8735b_ram.ld" WORKING_DIRECTORY ${prj_root} )
+		execute_process(COMMAND bash "-c" "sed -i 's/DDR_SIZE = .*/DDR_SIZE = 128;/' ./GCC-RELEASE/application/rtl8735b_ram_ns.ld" WORKING_DIRECTORY ${prj_root} )
+		execute_process(COMMAND bash "-c" "sed -i 's/DDR_SIZE = .*/DDR_SIZE = 128;/' ./GCC-RELEASE/application/rtl8735b_ram_s.ld" WORKING_DIRECTORY ${prj_root} )
+		execute_process(COMMAND bash "-c" "sed -i 's/DDR_SIZE = .*/DDR_SIZE = 128;/' ./GCC-RELEASE/bootloader/rtl8735b_boot_mp.ld" WORKING_DIRECTORY ${prj_root} )
+	elseif(DDR STREQUAL "64M")
+		message(STATUS "Setup for DDR ${DDR}")
+		execute_process(COMMAND bash "-c" "sed -i 's/define.*SAU_INIT_END5.*/define SAU_INIT_END5 0x73DFFFFF/' ./component/soc/8735b/cmsis/rtl8735b/include/partition_rtl8735b.h" WORKING_DIRECTORY ${sdk_root} )
+		execute_process(COMMAND bash "-c" "sed -i 's/DDR_SIZE = .*/DDR_SIZE = 64;/' ./GCC-RELEASE/application/rtl8735b_ram.ld" WORKING_DIRECTORY ${prj_root} )
+		execute_process(COMMAND bash "-c" "sed -i 's/DDR_SIZE = .*/DDR_SIZE = 64;/' ./GCC-RELEASE/application/rtl8735b_ram_ns.ld" WORKING_DIRECTORY ${prj_root} )
+		execute_process(COMMAND bash "-c" "sed -i 's/DDR_SIZE = .*/DDR_SIZE = 64;/' ./GCC-RELEASE/application/rtl8735b_ram_s.ld" WORKING_DIRECTORY ${prj_root} )
+		execute_process(COMMAND bash "-c" "sed -i 's/DDR_SIZE = .*/DDR_SIZE = 64;/' ./GCC-RELEASE/bootloader/rtl8735b_boot_mp.ld" WORKING_DIRECTORY ${prj_root} )
+	endif()
+	
 endif() #CONFIG_DONE
 

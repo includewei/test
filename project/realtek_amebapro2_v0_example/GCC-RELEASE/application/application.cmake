@@ -26,7 +26,12 @@ else()
 endif()
 include(./libmmf.cmake OPTIONAL)
 include(./libg711.cmake OPTIONAL)
+if(BUILD_NEWAEC)
+#AEC FILE
+include(./libctaec.cmake OPTIONAL)
+else()
 include(./libaec.cmake OPTIONAL)
+endif()
 include(./libhttp.cmake OPTIONAL)
 include(./libsdcard.cmake OPTIONAL)
 include(./libfaac.cmake OPTIONAL)
@@ -41,6 +46,7 @@ include(./libnn.cmake OPTIONAL)
 include(./libqrcode.cmake OPTIONAL)
 include(./libfmp4.cmake OPTIONAL)
 include(./liblightsensor.cmake OPTIONAL)
+include(./libispfeature.cmake OPTIONAL)
 
 if(BUILD_LIB)
 	message(STATUS "build libraries")
@@ -52,6 +58,10 @@ endif()
 ADD_LIBRARY (bt_upperstack_lib STATIC IMPORTED )
 SET_PROPERTY ( TARGET bt_upperstack_lib PROPERTY IMPORTED_LOCATION ${sdk_root}/component/bluetooth/rtk_stack/platform/amebapro2/lib/btgap.a )
 
+# FACEALIGNMENT NK
+ADD_LIBRARY (libface STATIC IMPORTED )
+SET_PROPERTY ( TARGET libface PROPERTY IMPORTED_LOCATION ${prj_root}/src/test_model/face_alignment/libface.a )
+
 if(NOT BUILD_TZ)
 ADD_LIBRARY (hal_pmc_lib STATIC IMPORTED )
 SET_PROPERTY ( TARGET hal_pmc_lib PROPERTY IMPORTED_LOCATION ${sdk_root}/component/soc/8735b/fwlib/rtl8735b/lib/lib/hal_pmc.a )
@@ -61,7 +71,7 @@ endif()
 if(NOT BUILD_TZ)
 #build TZ, move to secure project
 list(
-    APPEND app_sources
+    APPEND out_sources
 	
 	${sdk_root}/component/soc/8735b/fwlib/rtl8735b/source/ram_s/hal_flash_sec.c
 	${sdk_root}/component/soc/8735b/fwlib/rtl8735b/source/ram_s/hal_hkdf.c
@@ -74,7 +84,7 @@ list(
 endif()
 
 list(
-    APPEND app_sources
+    APPEND out_sources
 	
 	${sdk_root}/component/soc/8735b/fwlib/rtl8735b/source/ram/hal_audio.c
 	${sdk_root}/component/soc/8735b/fwlib/rtl8735b/source/ram/hal_adc.c
@@ -109,7 +119,7 @@ list(
 )
 
 list(
-    APPEND app_sources
+    APPEND out_sources
 	
 	${sdk_root}/component/soc/8735b/fwlib/rtl8735b/source/ram_ns/hal_flash_ns.c
 	${sdk_root}/component/soc/8735b/fwlib/rtl8735b/source/ram_ns/hal_spic_ns.c
@@ -117,7 +127,7 @@ list(
 
 #MBED
 list(
-    APPEND app_sources
+    APPEND out_sources
 	${sdk_root}/component/mbed/targets/hal/rtl8735b/audio_api.c
 	${sdk_root}/component/mbed/targets/hal/rtl8735b/crypto_api.c
 	${sdk_root}/component/mbed/targets/hal/rtl8735b/dma_api.c
@@ -145,11 +155,12 @@ list(
 	${sdk_root}/component/mbed/targets/hal/rtl8735b/power_mode_api.c
 	${sdk_root}/component/mbed/targets/hal/rtl8735b/snand_api.c
 	${sdk_root}/component/mbed/targets/hal/rtl8735b/sys_api.c
+	${sdk_root}/component/mbed/targets/hal/rtl8735b/ethernet_api.c
 )
 
 #RTOS
 list(
-    APPEND app_sources
+    APPEND out_sources
 	${sdk_root}/component/os/freertos/${freertos}/Source/croutine.c
 	${sdk_root}/component/os/freertos/${freertos}/Source/event_groups.c
 	${sdk_root}/component/os/freertos/${freertos}/Source/list.c
@@ -182,7 +193,7 @@ list(
 
 if(BUILD_TZ)
 list(
-    APPEND app_sources
+    APPEND out_sources
 	#FREERTOS
 	${sdk_root}/component/os/freertos/${freertos}/Source/portable/GCC/ARM_CM33/non_secure/port.c
 	${sdk_root}/component/os/freertos/${freertos}/Source/portable/GCC/ARM_CM33/non_secure/portasm.c
@@ -192,7 +203,7 @@ list(
 )
 else()
 list(
-    APPEND app_sources
+    APPEND out_sources
 	#FREERTOS
 	${sdk_root}/component/os/freertos/${freertos}/Source/portable/GCC/ARM_CM33_NTZ/non_secure/port.c
 	${sdk_root}/component/os/freertos/${freertos}/Source/portable/GCC/ARM_CM33_NTZ/non_secure/portasm.c
@@ -203,7 +214,7 @@ endif()
 
 #CMSIS
 list(
-    APPEND app_sources
+    APPEND out_sources
 	${sdk_root}/component/soc/8735b/cmsis/rtl8735b/source/ram/mpu_config.c
 
 	${sdk_root}/component/soc/8735b/cmsis/cmsis-dsp/source/BasicMathFunctions/arm_add_f32.c
@@ -218,6 +229,7 @@ list(
 	${sdk_root}/component/soc/8735b/cmsis/cmsis-dsp/source/TransformFunctions/arm_rfft_fast_f32.c
 	${sdk_root}/component/soc/8735b/cmsis/cmsis-dsp/source/TransformFunctions/arm_rfft_fast_init_f32.c
 	${sdk_root}/component/soc/8735b/cmsis/cmsis-dsp/source/BasicMathFunctions/arm_scale_f32.c
+	${sdk_root}/component/soc/8735b/cmsis/cmsis-dsp/source/BasicMathFunctions/arm_dot_prod_f32.c
 )
 
 #at_cmd
@@ -230,6 +242,7 @@ list(
 	${sdk_root}/component/at_cmd/atcmd_mp_ext2.c
 	${sdk_root}/component/at_cmd/atcmd_isp.c
 	${sdk_root}/component/at_cmd/atcmd_ftl.c
+	${sdk_root}/component/at_cmd/atcmd_ethernet.c
 	${sdk_root}/component/at_cmd/log_service.c
 	${sdk_root}/component/soc/8735b/misc/driver/rtl_console.c
 	${sdk_root}/component/soc/8735b/misc/driver/low_level_io.c
@@ -255,6 +268,12 @@ list(
 	#option
 	${sdk_root}/component/wifi/driver/src/core/option/rtw_opt_crypto_ssl.c
 	${sdk_root}/component/wifi/driver/src/core/option/rtw_opt_skbuf_rtl8735b.c
+)
+
+#ethernet
+list(
+	APPEND app_sources
+	${sdk_root}/component/ethernet_mii/ethernet_mii.c
 )
 
 #network
@@ -294,11 +313,14 @@ list(
 	${sdk_root}/component/soc/8735b/misc/platform/ota_8735b_fwfs.c
 	#httplite
 	${sdk_root}/component/network/httplite/http_client.c
+	#tftp
+	${sdk_root}/component/network/tftp/tftp_client.c
+	${sdk_root}/component/network/tftp/tftp_server.c
 )
 
 #lwip
 list(
-	APPEND app_sources
+	APPEND out_sources
 	#api
 	${sdk_root}/component/lwip/api/lwip_netconf.c
 	#lwip - api
@@ -358,7 +380,7 @@ list(
 #ssl
 if(${mbedtls} STREQUAL "mbedtls-2.4.0")
 list(
-	APPEND app_sources
+	APPEND out_sources
 	${sdk_root}/component/ssl/mbedtls-2.4.0/library/aesni.c
 	${sdk_root}/component/ssl/mbedtls-2.4.0/library/blowfish.c
 	${sdk_root}/component/ssl/mbedtls-2.4.0/library/camellia.c
@@ -406,7 +428,7 @@ list(
 )
 elseif(${mbedtls} STREQUAL "mbedtls-3.0.0")
 list(
-	APPEND app_sources
+	APPEND out_sources
 	${sdk_root}/component/ssl/mbedtls-3.0.0/library/aes.c
 	${sdk_root}/component/ssl/mbedtls-3.0.0/library/aes_alt.c
 	${sdk_root}/component/ssl/mbedtls-3.0.0/library/aesni.c
@@ -488,7 +510,7 @@ list(
 elseif(${mbedtls} STREQUAL "mbedtls-2.16.6")
 file(GLOB MBEDTLS_SRC CONFIGURE_DEPENDS ${sdk_root}/component/ssl/mbedtls-2.16.6/library/*.c)
 list(
-	APPEND app_sources
+	APPEND out_sources
 	${MBEDTLS_SRC}
 	#ssl_ram_map
 	${sdk_root}/component/ssl/ssl_ram_map/rom/rom_ssl_ram_map.c
@@ -498,7 +520,7 @@ endif()
 
 #FATFS
 list(
-	APPEND app_sources
+	APPEND out_sources
 	${sdk_root}/component/file_system/fatfs/disk_if/src/sdcard.c
 	${sdk_root}/component/file_system/fatfs/disk_if/src/flash_fatfs.c
 	${sdk_root}/component/file_system/fatfs/fatfs_ext/src/ff_driver.c
@@ -515,11 +537,12 @@ list(
 
 #Littlefs
 list(
-	APPEND app_sources
+	APPEND out_sources
 	${sdk_root}/component/file_system/littlefs/r2.41/lfs.c
 	${sdk_root}/component/file_system/littlefs/r2.41/lfs_util.c
 	${sdk_root}/component/file_system/littlefs/lfs_nor_flash_api.c
 	${sdk_root}/component/file_system/littlefs/lfs_nand_flash_api.c
+	${sdk_root}/component/file_system/littlefs/lfs_reent.c
 )
 
 #vfs
@@ -576,7 +599,7 @@ list(
 	${sdk_root}/component/media/mmfv2/module_aac.c
 	${sdk_root}/component/media/mmfv2/module_aad.c
 	${sdk_root}/component/media/mmfv2/module_g711.c
-	#${sdk_root}/component/media/mmfv2/module_httpfs.c
+	${sdk_root}/component/media/mmfv2/module_httpfs.c
 	${sdk_root}/component/media/mmfv2/module_i2s.c
 	${sdk_root}/component/media/mmfv2/module_mp4.c
 	${sdk_root}/component/media/mmfv2/module_rtp.c
@@ -586,6 +609,8 @@ list(
     ${sdk_root}/component/media/mmfv2/module_demuxer.c
     ${sdk_root}/component/media/mmfv2/module_md.c
     ${sdk_root}/component/media/mmfv2/module_fmp4.c
+    ${sdk_root}/component/media/mmfv2/module_fileloader.c
+    ${sdk_root}/component/media/mmfv2/module_filesaver.c
 )
 
 #MISC
@@ -616,10 +641,16 @@ list(
 	${sdk_root}/component/file_system/fwfs/fwfs.c
 )
 
+#NN FILE OP
+list(
+	APPEND app_sources
+	
+	${sdk_root}/component/file_system/nn/nn_file_op.c
+)
 
 #BLUETOOTH
 list(
-	APPEND app_sources
+	APPEND out_sources
 
 	${sdk_root}/component/bluetooth/driver/hci/hci_process/hci_process.c
 	${sdk_root}/component/bluetooth/driver/hci/hci_process/hci_standalone.c
@@ -630,6 +661,7 @@ list(
 	${sdk_root}/component/bluetooth/driver/platform/amebapro2/hci/hci_dbg.c
 	${sdk_root}/component/bluetooth/driver/platform/amebapro2/hci/hci_platform.c
 	${sdk_root}/component/bluetooth/driver/platform/amebapro2/hci/hci_uart.c
+	${sdk_root}/component/bluetooth/rtk_stack/platform/amebapro2/src/vendor_cmd/vendor_cmd.c
 	${sdk_root}/component/bluetooth/rtk_stack/platform/amebapro2/src/platform_utils.c
 	${sdk_root}/component/bluetooth/rtk_stack/platform/amebapro2/src/rtk_coex.c
 	${sdk_root}/component/bluetooth/rtk_stack/platform/amebapro2/src/trace_uart.c
@@ -672,29 +704,38 @@ list(
 #NN MODEL
 list(
 	APPEND app_sources
-	${prj_root}/src/test_model/model_mbnetssd.c
-	${prj_root}/src/test_model/mbnetssd_postprocessing.c
-	${prj_root}/src/test_model/model_yolov3t.c
+	${prj_root}/src/test_model/model_yolo.c
 	${prj_root}/src/test_model/model_yamnet.c
 	${prj_root}/src/test_model/model_yamnet_s.c
+	${prj_root}/src/test_model/model_mobilefacenet.c
+	${prj_root}/src/test_model/model_scrfd.c
 	${prj_root}/src/test_model/mel_spectrogram.c
-	${prj_root}/src/test_model/wave_sample/DCBOS2UWKAA_30_0.c
-	${prj_root}/src/test_model/wave_sample/Pgprrf93CtE_30_2.c
-	${prj_root}/src/test_model/wave_sample/KOS5gxwxFlI_170_0.c
-	${prj_root}/src/test_model/wave_sample/YpGd1FUqzwY_0_0.c
-	${prj_root}/src/test_model/wave_sample/ZthT5nwFkJg_60_1.c
-	${prj_root}/src/test_model/wave_sample/fvYPQygklIo_30_2.c
-	${prj_root}/src/test_model/wave_sample/jSC3k_UgPOI_120_2.c
-	${prj_root}/src/test_model/wave_sample/vUXCWzZyMew_20_1.c
 )
-#NN example
+#NN utils
+list(
+	APPEND app_sources
+	${prj_root}/src/test_model/nn_utils/sigmoid.c
+	${prj_root}/src/test_model/nn_utils/quantize.c
+	${prj_root}/src/test_model/nn_utils/iou.c
+	${prj_root}/src/test_model/nn_utils/nms.c
+	${prj_root}/src/test_model/nn_utils/tensor.c
+)
+#NN module
 list(
 	APPEND app_sources
 
 	${sdk_root}/component/media/mmfv2/module_vipnn.c
-	
 	${sdk_root}/component/media/mmfv2/module_facerecog.c
-	${sdk_root}/component/media/mmfv2/module_mbnssd.c
+)
+
+#SVM
+list(
+	APPEND app_sources
+	${prj_root}/src/test_model/svm/svm.cpp
+	#sim_io
+	${prj_root}/src/test_model/svm/sim_io/sim_io.c
+	#FastLZ
+	${prj_root}/src/test_model/svm/fastlz/fastlz.c
 )
 
 if(PICOLIBC)
@@ -740,12 +781,39 @@ elseif(DEFINED DOORBELL_CHIME AND DOORBELL_CHIME)
     endif()
 elseif(DEFINED AUDIO_TEST_TOOL AND AUDIO_TEST_TOOL)
     message(STATUS "Build AUDIO_TEST_TOOL project")
-    include(${prj_root}/src/audio_test_tool/audio_test_tool.cmake)
+	include(${prj_root}/src/internal/audio_test_tool/audio_test_tool.cmake OPTIONAL RESULT_VARIABLE audio_test_internal)
+    if (audio_test_internal)
+        message(STATUS "Internal Test Version")
+    else()
+        include(${prj_root}/src/audio_test_tool/audio_test_tool.cmake OPTIONAL RESULT_VARIABLE audio_test_release)
+        if (NOT audio_test_release)
+            message(STATUS "Audio Test Tool Not Release")
+        endif()
+    endif()
     if(NOT DEBUG)
         set(AUDIO_TEST_TOOL OFF CACHE STRING INTERNAL FORCE)
     endif()
+elseif(DEFINED NN_TESTER_EXAMPLE AND NN_TESTER_EXAMPLE)
+	message(STATUS "Build NN_TESTER_EXAMPLE project")
+	include(${prj_root}/src/internal/nn_tester/example_file_vipnn_tester.cmake)
+	if(NOT DEBUG)
+		set(NN_TESTER_EXAMPLE OFF CACHE STRING INTERNAL FORCE)
+	endif()
 else()
 endif()
+
+if(CONSOLE STREQUAL "RTT")
+	include(./console_segger_rtt.cmake OPTIONAL)
+endif()
+
+include(./console_xmodem.cmake OPTIONAL)
+include(./console_remote_sh.cmake OPTIONAL)
+
+if(UNITEST)
+	include(${prj_root}/src/internal/unitest/unitest.cmake OPTIONAL)
+endif()
+
+add_library(outsrc ${out_sources})
 
 if(BUILD_TZ)
 	add_library(secure_object OBJECT IMPORTED)
@@ -755,6 +823,7 @@ if(BUILD_TZ)
 		${app}
 		${app_sources}
 		${app_example_sources}
+		$<TARGET_OBJECTS:outsrc>
 		$<TARGET_OBJECTS:secure_object>
 	)
 	add_dependencies(${app} import_lib.o)
@@ -767,6 +836,7 @@ else()
 		${app}
 		${app_sources}
 		${app_example_sources}
+		$<TARGET_OBJECTS:outsrc>
 	)
 
 	set( soclib soc_ntz)
@@ -791,6 +861,12 @@ list(
 	CONFIG_SYSTEM_TIME64=1
 )
 
+if (BUILD_NEWAEC)
+list(
+	APPEND app_flags
+    CONFIG_NEWAEC=1
+)    
+endif()
 if(BUILD_WLANMP)	
 list(
 	APPEND app_flags
@@ -806,13 +882,16 @@ list(
 )
 endif()
 
-target_compile_definitions(${app} PRIVATE ${app_flags} )
+target_compile_options(${app} PRIVATE $<$<COMPILE_LANGUAGE:C>:${WARN_ERR_FLAGS}>)
+target_compile_options(outsrc PRIVATE $<$<COMPILE_LANGUAGE:C>:${OUTSRC_WARN_ERR_FLAGS}>)
+
+target_compile_definitions(${app} PRIVATE ${app_flags})
+target_compile_definitions(outsrc PRIVATE ${app_flags})
 
 # HEADER FILE PATH
-target_include_directories(
-	${app}
-	PUBLIC
-
+list(
+	APPEND app_inc_path
+	
 	${inc_path}
 	${app_example_inc_path}
 	${sdk_root}/component/os/freertos/${freertos}/Source/portable/GCC/ARM_CM33/non_secure
@@ -820,6 +899,7 @@ target_include_directories(
 	${sdk_root}/component/soc/8735b/fwlib/rtl8735b/lib/source/ram/video/voe_bin
 	${sdk_root}/component/video/driver/RTL8735B
 	
+	${prj_root}/src/test_model/svm
 	${prj_root}/src/test_model
 	${prj_root}/src
 	
@@ -862,6 +942,7 @@ target_include_directories(
 	${sdk_root}/component/bluetooth/rtk_stack/src/ble/privacy
 	${sdk_root}/component/bluetooth/rtk_stack/platform/amebapro2/inc
 	${sdk_root}/component/bluetooth/rtk_stack/platform/amebapro2/lib
+	${sdk_root}/component/bluetooth/rtk_stack/platform/amebapro2/src/vendor_cmd
 	${sdk_root}/component/bluetooth/rtk_stack/platform/common/inc
 	${sdk_root}/component/bluetooth/rtk_stack/example/ble_central
 	${sdk_root}/component/bluetooth/rtk_stack/example/ble_peripheral
@@ -878,7 +959,14 @@ target_include_directories(
 	${sdk_root}/component/wifi/wpa_supplicant/src
 	${sdk_root}/component/network/mqtt/MQTTClient
 	${sdk_root}/component/network/mqtt/MQTTPacket
-	${prj_root}/src/VIPLiteDrv/sdk/inc
+	${sdk_root}/component/network/tftp
+	${sdk_root}/component/network/ftp
+
+	${prj_root}/src/${viplite}/sdk/inc
+	${prj_root}/src/${viplite}/driver/inc
+	${prj_root}/src/${viplite}/hal/inc
+	${prj_root}/src/${viplite}/hal/user
+	${prj_root}/src/${viplite}/hal/user/freeRTOS
 
 	${sdk_root}/component/example/media_framework/inc
 	${prj_root}/src/doorbell-chime
@@ -886,12 +974,19 @@ target_include_directories(
 	${sdk_root}/component/wifi/driver/src/core/option
 	${sdk_root}/component/ssl/ssl_ram_map/rom
 	${sdk_root}/component/audio/3rdparty/faac/libfaac
-	${prj_root}/src/VIPLiteDrv/driver/inc
-	${prj_root}/src/VIPLiteDrv/hal/inc
 	${prj_root}/component/file_system/fatfs/r0.14
 	${sdk_root}/component/soc/8735b/fwlib/rtl8735b/lib/source/ram/video/osd
+	${sdk_root}/component/video/md
 	${sdk_root}/component/wifi/wifi_config
+	
+	${sdk_root}/component/media/framework
+	${sdk_root}/component/soc/8735b/misc/driver
+	${sdk_root}/component/soc/8735b/misc/driver/xmodem
 )
+
+target_include_directories( ${app} PUBLIC ${app_inc_path} )
+target_include_directories( outsrc PUBLIC ${app_inc_path} )
+
 
 if(NOT BUILD_WLANMP)	
 	set( wlanlib wlan)
@@ -906,6 +1001,19 @@ target_link_libraries(
 )
 endif()
 
+if(BUILD_NEWAEC)
+list(
+	APPEND aec_lib
+    ctaec
+    ${sdk_root}/component/audio/3rdparty/AEC/CTAEC/libVQE.a
+)
+else()
+list(
+	APPEND aec_lib
+    aec
+)
+endif()
+
 target_link_libraries(
 	${app}
 	${wlanlib}
@@ -917,7 +1025,7 @@ target_link_libraries(
 	hmp3
 	g711
 	http
-	aec
+ 	${aec_lib}
 	${videolib}
 	mmf
 	bt_upperstack_lib
@@ -930,6 +1038,8 @@ target_link_libraries(
 	qrcode
 	nn
 	lightsensor
+	libface
+	ispfeature
 	${soclib}
     stdc++
 	m
@@ -949,10 +1059,11 @@ endif()
 target_link_options(
 	${app} 
 	PUBLIC
-	"LINKER:SHELL:-L ${CMAKE_CURRENT_SOURCE_DIR}/../ROM/GCC"
+	"LINKER:SHELL:-L ${sdk_root}/component/soc/8735b/cmsis/rtl8735b/source/GCC"
 	"LINKER:SHELL:-L ${CMAKE_CURRENT_BINARY_DIR}"
 	"LINKER:SHELL:-T ${ld_script}"
 	"LINKER:SHELL:-Map=${CMAKE_CURRENT_BINARY_DIR}/${app}.map"
+	"LINKER:-wrap,realloc"
 	#"SHELL:${CMAKE_CURRENT_SOURCE_DIR}/build/import.lib"
 )
 
@@ -996,6 +1107,9 @@ target_link_options(
 	"LINKER:SHELL:-wrap,hal_otp_byte_rd_sys"
 	"LINKER:SHELL:-wrap,hal_crypto_engine_init_s4ns"
 	"LINKER:SHELL:-wrap,hal_sys_get_chip_id"
+	"LINKER:SHELL:-wrap,hal_sys_get_video_img_ld_offset"
+	"LINKER:SHELL:-wrap,hal_sys_cust_pws_val_ctrl"
+	
 )
 endif()
 
@@ -1005,17 +1119,17 @@ set_target_properties(${app} PROPERTIES LINK_DEPENDS ${ld_script})
 add_custom_command(TARGET ${app} POST_BUILD 
 	COMMAND ${CMAKE_NM} $<TARGET_FILE:${app}> | sort > ${app}.nm.map
 	COMMAND ${CMAKE_OBJEDUMP} -d $<TARGET_FILE:${app}> > ${app}.asm
-	COMMAND cp $<TARGET_FILE:${app}> ${app}.axf
+	COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${app}> ${app}.axf
 	COMMAND ${CMAKE_OBJCOPY} -j .bluetooth_trace.text -Obinary ${app}.axf APP.trace
 	COMMAND ${CMAKE_OBJCOPY} -R .bluetooth_trace.text ${app}.axf 
 
 	#COMMAND [ -d output ] || mkdir output
-	COMMAND rm -rf output && mkdir output
-	COMMAND cp -f ${app}.nm.map output
-	COMMAND cp -f ${app}.asm output
-	COMMAND cp -f ${app}.map output
-	COMMAND cp -f ${app}.axf output
-	COMMAND cp -f APP.trace output
+	COMMAND ${CMAKE_COMMAND} -E remove_directory output && ${CMAKE_COMMAND} -E make_directory  output
+	COMMAND ${CMAKE_COMMAND} -E copy ${app}.nm.map output
+	COMMAND ${CMAKE_COMMAND} -E copy ${app}.asm output
+	COMMAND ${CMAKE_COMMAND} -E copy ${app}.map output 
+	COMMAND ${CMAKE_COMMAND} -E copy ${app}.axf output
+	COMMAND ${CMAKE_COMMAND} -E copy APP.trace output 
 	
-	COMMAND cp -f *.a output || true
+	COMMAND ${PLAT_COPY} *.a output
 )

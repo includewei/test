@@ -27,7 +27,7 @@ void uart_irq_example(uint32_t id, SerialIrq event)
 	}
 
 	if (event == TxIrq && rc != 0) {
-		uart_send_str(sobj, "\r\n8735b$");
+		uart_send_str(sobj, (char *)"\r\n8735b$");
 		rc = 0;
 	}
 }
@@ -42,9 +42,9 @@ int main(void)
 	serial_baud(&sobj, 38400);
 	serial_format(&sobj, 8, ParityNone, 1);
 
-	uart_send_str(&sobj, "UART IRQ API Demo...\r\n");
-	uart_send_str(&sobj, "Hello World!!\n");
-	uart_send_str(&sobj, "\r\n8735b$");
+	uart_send_str(&sobj, (char *)"UART IRQ API Demo...\r\n");
+	uart_send_str(&sobj, (char *)"Hello World!!\n");
+	uart_send_str(&sobj, (char *)"\r\n8735b$");
 	serial_irq_handler(&sobj, uart_irq_example, (uint32_t)&sobj);
 	serial_irq_set(&sobj, RxIrq, 1);
 	serial_irq_set(&sobj, TxIrq, 1);

@@ -2,7 +2,7 @@
 #include "wait_api.h"
 
 
-void main()
+void main(void)
 {
 	time_t seconds;
 	struct tm *timeinfo;

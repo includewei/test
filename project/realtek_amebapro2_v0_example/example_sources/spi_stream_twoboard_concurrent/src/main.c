@@ -9,13 +9,13 @@
 #define TEST_BUF_SIZE       512
 #define SCLK_FREQ           4000000
 #define SPI_DMA_DEMO        0
-#define GPIO_SYNC_PIN       PE_1
+#define GPIO_SYNC_PIN       PF_1
 
 // SPI0 (S0)
-#define SPI0_MOSI  PE_7
-#define SPI0_MISO  PE_6
-#define SPI0_SCLK  PE_5
-#define SPI0_CS    PE_8
+#define SPI0_MOSI  PE_3
+#define SPI0_MISO  PE_2
+#define SPI0_SCLK  PE_1
+#define SPI0_CS    PE_4
 
 extern void hal_ssi_toggle_between_frame(phal_ssi_adaptor_t phal_ssi_adaptor, u8 ctl);
 
@@ -138,8 +138,8 @@ int main(void)
 	// wait Slave ready
 	MasterRxDone = 0;
 	wait_ms(1000);
-	rtw_memset(TxBuf, 0, TEST_BUF_SIZE);
-	rtw_memset(RxBuf, 0, TEST_BUF_SIZE);
+	memset(TxBuf, 0, TEST_BUF_SIZE);
+	memset(RxBuf, 0, TEST_BUF_SIZE);
 
 	for (i = 0; i < TEST_BUF_SIZE; i++) {
 		TxBuf[i] = i;
@@ -158,7 +158,7 @@ int main(void)
 	while (MasterRxDone == 0) {
 		wait_ms(1000);
 	}
-	dump_data((u8 *)RxBuf, TEST_BUF_SIZE, "SPI Master Read Data:");
+	dump_data((u8 *)RxBuf, TEST_BUF_SIZE, (char *)"SPI Master Read Data:");
 	spi_free(&spi_master);
 
 #else
@@ -172,8 +172,8 @@ int main(void)
 	}
 	SlaveRxDone = 0;
 
-	rtw_memset(TxBuf, 0, TEST_BUF_SIZE);
-	rtw_memset(RxBuf, 0, TEST_BUF_SIZE);
+	memset(TxBuf, 0, TEST_BUF_SIZE);
+	memset(RxBuf, 0, TEST_BUF_SIZE);
 	for (i = 0; i < TEST_BUF_SIZE; i++) {
 		TxBuf[i] = ~i;
 	}
@@ -200,7 +200,7 @@ int main(void)
 	}
 
 	gpio_write(&GPIO_Syc, 1);
-	dump_data((uint8_t *)RxBuf, TEST_BUF_SIZE, "SPI Slave Read Data:");
+	dump_data((uint8_t *)RxBuf, TEST_BUF_SIZE, (char *)"SPI Slave Read Data:");
 	spi_free(&spi_slave);
 #endif
 

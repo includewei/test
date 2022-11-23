@@ -65,6 +65,7 @@
 #if posixconfigENABLE_PTHREAD_ATTR_T == 1
     typedef struct pthread_attr {
         uint32_t ulpthreadAttrStorage;
+        uint16_t ulpthreadAttrStorageExt;
     } PthreadAttrType_t;
 #else
     typedef void    * PthreadAttrType_t;

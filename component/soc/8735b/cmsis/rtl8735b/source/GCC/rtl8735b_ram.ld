@@ -10,10 +10,12 @@ MEMORY
 
   VECTORS_RAM (rwx)     : ORIGIN = 0x20100000, LENGTH = 0x20100200 - 0x20100000  /* 512B */
   
-  /* Jump cross 0x20100200 ~ 0x20100A00 for NS ROM code used */
-  RAM_FUN_TABLE (rwx)   : ORIGIN = 0x20100A00, LENGTH = 0x20100AF0 - 0x20100A00  /* 240B */
-  RAM_IMG_SIGN (rwx)    : ORIGIN = 0x20100AF0, LENGTH = 0x20100B00 - 0x20100AF0  /*  16B */
-  RAM (rwx)             : ORIGIN = 0x20100B00, LENGTH = 0x20177B00 - 0x20100B00  /* 476KB */
+  /* Jump cross 0x20100200 ~ 0x20101200 for NS ROM code used */
+  /* Jump cross 0x20101200 ~ 0x20105200 for Bootloader RAM code used */
+  /* Jump cross 0x20105200 ~ 0x20106200 for Bootloader RAM BSS  used */
+  RAM_FUN_TABLE (rwx)   : ORIGIN = 0x20106200, LENGTH = 0x201062F0 - 0x20106200  /* 240B */
+  RAM_IMG_SIGN (rwx)    : ORIGIN = 0x201062F0, LENGTH = 0x20106300 - 0x201062F0  /*  16B */
+  RAM (rwx)             : ORIGIN = 0x20106300, LENGTH = 0x20177B00 - 0x20106300  /* 454KB */
   RAM_NC (rwx)          : ORIGIN = 0x20177B00, LENGTH = 0x20179800 - 0x20177B00  /*  7KB*/
   /* Jump cross 0x2017BB00 ~ 0x20180000 for S ROM code used*/
   

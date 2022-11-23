@@ -27,6 +27,7 @@
  ******************************************************************************/
 #include "hal_flash.h"
 #include "hal_spic.h"
+#include "hal_cache.h"
 
 #if !defined(CONFIG_BUILD_NONSECURE)
 extern const hal_flash_func_stubs_t hal_flash_stubs;
@@ -320,7 +321,20 @@ void hal_flash_chip_erase(phal_spic_adaptor_t phal_spic_adaptor)
  */
 void hal_flash_64k_block_erase(phal_spic_adaptor_t phal_spic_adaptor, u32 address)
 {
+	u8 extend_addr_bit = address >> ExtAddrBytesShift;
+
+	/*Switch to the other 128Mbit*/
+	if (extend_addr_bit) {
+		hal_flash_set_extended_addr(phal_spic_adaptor, (u8)extend_addr_bit);
+	}
+
+	address = address & ThreeAddrBytesMask;
 	hal_flash_stubs.hal_flash_64k_block_erase(phal_spic_adaptor, address);
+
+	/*Switch back to the first 128Mbit*/
+	if (extend_addr_bit) {
+		hal_flash_set_extended_addr(phal_spic_adaptor, 0);
+	}
 }
 
 /** \brief Description of hal_flash_32k_block_erase
@@ -336,7 +350,20 @@ void hal_flash_64k_block_erase(phal_spic_adaptor_t phal_spic_adaptor, u32 addres
  */
 void hal_flash_32k_block_erase(phal_spic_adaptor_t phal_spic_adaptor, u32 address)
 {
+	u8 extend_addr_bit = address >> ExtAddrBytesShift;
+
+	/*Switch to the other 128Mbit*/
+	if (extend_addr_bit) {
+		hal_flash_set_extended_addr(phal_spic_adaptor, (u8)extend_addr_bit);
+	}
+
+	address = address & ThreeAddrBytesMask;
 	hal_flash_stubs.hal_flash_32k_block_erase(phal_spic_adaptor, address);
+
+	/*Switch back to the first 128Mbit*/
+	if (extend_addr_bit) {
+		hal_flash_set_extended_addr(phal_spic_adaptor, 0);
+	}
 }
 
 /** \brief Description of hal_flash_sector_erase
@@ -352,7 +379,20 @@ void hal_flash_32k_block_erase(phal_spic_adaptor_t phal_spic_adaptor, u32 addres
  */
 void hal_flash_sector_erase(phal_spic_adaptor_t phal_spic_adaptor, u32 address)
 {
+	u8 extend_addr_bit = address >> ExtAddrBytesShift;
+
+	/*Switch to the other 128Mbit*/
+	if (extend_addr_bit) {
+		hal_flash_set_extended_addr(phal_spic_adaptor, (u8)extend_addr_bit);
+	}
+
+	address = address & ThreeAddrBytesMask;
 	hal_flash_stubs.hal_flash_sector_erase(phal_spic_adaptor, address);
+
+	/*Switch back to the first 128Mbit*/
+	if (extend_addr_bit) {
+		hal_flash_set_extended_addr(phal_spic_adaptor, 0);
+	}
 }
 
 /** \brief Description of hal_flash_query_sector_protect_state
@@ -650,7 +690,50 @@ hal_status_t hal_flash_release_from_power_down(phal_spic_adaptor_t phal_spic_ada
  */
 void hal_flash_stream_read(phal_spic_adaptor_t phal_spic_adaptor, u32 length, u32 addr, u8 *data)
 {
-	hal_flash_stubs.hal_flash_stream_read(phal_spic_adaptor, length, addr, data);
+	u32 extend_addr_bit = addr >> ExtAddrBytesShift;
+	u32 read_length = 0;
+
+	//Not cross 128 Mbit
+	if ((addr + length) <= ((extend_addr_bit + 1) << ExtAddrBytesShift)) {
+		if (extend_addr_bit) {
+			hal_flash_set_extended_addr(phal_spic_adaptor, (u8)extend_addr_bit);
+		}
+
+		dcache_invalidate_by_addr((uint32_t *)(SPI_FLASH_BASE + addr), length);
+		hal_flash_stubs.hal_flash_stream_read(phal_spic_adaptor, length, addr &= ThreeAddrBytesMask, data);
+	} else {
+		read_length = ((extend_addr_bit + 1) << ExtAddrBytesShift) - addr;
+		if (extend_addr_bit) {
+			hal_flash_set_extended_addr(phal_spic_adaptor, (u8)extend_addr_bit);
+		}
+
+		dcache_invalidate_by_addr((uint32_t *)(SPI_FLASH_BASE + addr), read_length);
+		hal_flash_stubs.hal_flash_stream_read(phal_spic_adaptor, read_length, addr & ThreeAddrBytesMask, data);
+		extend_addr_bit++;
+		length -= read_length;
+		data += read_length;
+
+		while (length > 0) {
+			hal_flash_set_extended_addr(phal_spic_adaptor, extend_addr_bit);
+
+			if (length >= 0x1000000) {
+				read_length = 0x1000000;
+				length -= read_length;
+			} else {
+				read_length = length;
+				length = 0;
+			}
+
+			dcache_invalidate_by_addr((uint32_t *)(SPI_FLASH_BASE + (extend_addr_bit << ExtAddrBytesShift)), read_length);
+			hal_flash_stubs.hal_flash_stream_read(phal_spic_adaptor, read_length, 0, data);
+			extend_addr_bit++;
+			data += read_length;
+		}
+	}
+
+	if (extend_addr_bit) {
+		hal_flash_set_extended_addr(phal_spic_adaptor, 0);
+	}
 }
 
 /** \brief Description of hal_flash_stream_write
@@ -698,7 +781,66 @@ void hal_flash_burst_read(phal_spic_adaptor_t phal_spic_adaptor, u32 length, u32
  */
 void hal_flash_burst_write(phal_spic_adaptor_t phal_spic_adaptor, u32 length, u32 addr, u8 *data)
 {
-	hal_flash_stubs.hal_flash_burst_write(phal_spic_adaptor, length, addr, data);
+	u32 existed_data_size;
+	u32 program_size;
+	u32 page_size;
+	u8 extend_addr_bit = addr >> ExtAddrBytesShift;
+	u8 old_extend_addr_bit = extend_addr_bit;
+
+	addr &= ThreeAddrBytesMask;
+	page_size = 256;
+	existed_data_size = addr & 0xFF;
+
+	/*Switch to the other 128Mbit*/
+	if (extend_addr_bit) {
+		hal_flash_set_extended_addr(phal_spic_adaptor, (u8)extend_addr_bit);
+	}
+
+	if ((length >= page_size)
+		|| ((length + existed_data_size) >= page_size)) {
+		program_size = page_size - existed_data_size;
+	} else {
+		program_size = length;
+	}
+
+	while (length > 0) {
+		if (existed_data_size) {
+			hal_flash_page_program(phal_spic_adaptor, program_size, addr, data);
+			addr += program_size;
+			data += program_size;
+			length -= program_size;
+			existed_data_size = 0;
+			extend_addr_bit = addr >> ExtAddrBytesShift;
+			if (extend_addr_bit != old_extend_addr_bit) {
+				hal_flash_set_extended_addr(phal_spic_adaptor, (u8)extend_addr_bit);
+				old_extend_addr_bit = extend_addr_bit;
+			}
+		} else {
+			while (length >= page_size) {
+				hal_flash_page_program(phal_spic_adaptor, page_size, addr, data);
+				addr += page_size;
+				data += page_size;
+				length -= page_size;
+				extend_addr_bit = addr >> ExtAddrBytesShift;
+				if (extend_addr_bit != old_extend_addr_bit) {
+					hal_flash_set_extended_addr(phal_spic_adaptor, (u8)extend_addr_bit);
+					old_extend_addr_bit = extend_addr_bit;
+				}
+			}
+
+			if (length > 0) {
+				hal_flash_page_program(phal_spic_adaptor, length, addr, data);
+				break;
+			}
+		}
+	}
+
+	/*Switch back to the first 128Mbit*/
+	if (extend_addr_bit) {
+		hal_flash_set_extended_addr(phal_spic_adaptor, 0);
+	}
+
+	//hal_flash_stubs.hal_flash_burst_write(phal_spic_adaptor, length, addr, data);
 }
 
 /** \brief Description of hal_flash_page_program

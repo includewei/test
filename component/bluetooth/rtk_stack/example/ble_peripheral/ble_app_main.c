@@ -43,6 +43,7 @@
 #include <wifi_conf.h>
 #include "rtk_coex.h"
 #include "gatt_builtin_services.h"
+#include "vendor_cmd.h"
 
 /** @defgroup  PERIPH_DEMO_MAIN Peripheral Main
     * @brief Main file to initialize hardware and BT stack and start task scheduling
@@ -87,6 +88,9 @@ static const uint8_t adv_data[] = {
 	'B', 'L', 'E', '_', 'P', 'E', 'R', 'I', 'P', 'H', 'E', 'R', 'A', 'L',
 };
 
+#if ((LEGACY_ADV_CONCURRENT == 1) && (F_BT_LE_USE_RANDOM_ADDR == 1))
+extern uint8_t local_static_random_addr[6];
+#endif
 /*============================================================================*
  *                              Functions
  *============================================================================*/
@@ -186,6 +190,37 @@ void app_le_gap_init(void)
 	gaps_set_parameter(GAPS_PARAM_DEVICE_NAME_PROPERTY, sizeof(device_name_prop), &device_name_prop);
 	gatt_register_callback((void *)gap_service_callback);
 #endif
+
+#if (F_BT_LE_USE_RANDOM_ADDR == 1)
+	T_APP_STATIC_RANDOM_ADDR random_addr;
+	bool gen_addr = true;
+	uint8_t local_bd_type = GAP_LOCAL_ADDR_LE_RANDOM;
+	if (ble_peripheral_app_load_static_random_address(&random_addr) == 0)
+	{
+		if (random_addr.is_exist == true)
+		{
+			gen_addr = false;
+		}
+	}
+	if (gen_addr)
+	{
+		if (le_gen_rand_addr(GAP_RAND_ADDR_STATIC, random_addr.bd_addr) == GAP_CAUSE_SUCCESS)
+		{
+			random_addr.is_exist = true;
+			ble_peripheral_app_save_static_random_address(&random_addr);
+		}
+	}
+	printf("random_addr.bd_addr = 0x%02x:0x%02x:0x%02x:0x%02x:0x%02x:0x%02x\r\n", \
+		random_addr.bd_addr[5], random_addr.bd_addr[4], random_addr.bd_addr[3], random_addr.bd_addr[2], random_addr.bd_addr[1], random_addr.bd_addr[0]);
+	le_set_gap_param(GAP_PARAM_RANDOM_ADDR, 6, random_addr.bd_addr);
+#if (LEGACY_ADV_CONCURRENT == 1)
+	memcpy(local_static_random_addr, random_addr.bd_addr, 6);
+#else
+	le_cfg_local_identity_address(random_addr.bd_addr, GAP_IDENT_ADDR_RAND);
+	le_adv_set_param(GAP_PARAM_ADV_LOCAL_ADDR_TYPE, sizeof(local_bd_type), &local_bd_type);
+#endif
+#endif
+
 #if F_BT_LE_5_0_SET_PHY_SUPPORT
 	uint8_t phys_prefer = GAP_PHYS_PREFER_ALL;
 #if defined(CONFIG_PLATFORM_8710C)
@@ -203,8 +238,9 @@ void app_le_gap_init(void)
 	le_set_gap_param(GAP_PARAM_DEFAULT_RX_PHYS_PREFER, sizeof(rx_phys_prefer), &rx_phys_prefer);
 #endif
 #if APP_PRIVACY_EN
-    privacy_init(app_privacy_callback, true);
+	privacy_init(app_privacy_callback, true);
 #endif
+	vendor_cmd_init(app_vendor_callback);
 }
 
 /**
@@ -279,17 +315,16 @@ int ble_app_main(void)
 	return 0;
 }
 
+extern bool rtk_bt_pre_enable(void);
 int ble_app_init(void)
 {
 	//int bt_stack_already_on = 0;
 	//(void) bt_stack_already_on;
 	T_GAP_DEV_STATE new_state;
-
-	/*Wait WIFI init complete*/
-	while (!(wifi_is_running(WLAN0_IDX) || wifi_is_running(WLAN1_IDX))) {
-		os_delay(1000);
+	if (rtk_bt_pre_enable() == false) {
+		printf("%s fail!\r\n", __func__);
+		return -1;
 	}
-
 	//judge BLE central is already on
 	le_get_gap_param(GAP_PARAM_DEV_STATE, &new_state);
 	if (new_state.gap_init_state == GAP_INIT_STATE_STACK_READY) {

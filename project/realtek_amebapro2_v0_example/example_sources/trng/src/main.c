@@ -5,7 +5,7 @@
 
 
 
-int main()
+int main(void)
 {
 	u32 random_number;
 

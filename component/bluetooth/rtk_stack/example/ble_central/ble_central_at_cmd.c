@@ -2,6 +2,9 @@
 #if ((defined(CONFIG_BT_CENTRAL) && CONFIG_BT_CENTRAL) || \
 	(defined(CONFIG_BT_MESH_PROVISIONER_MULTIPLE_PROFILE) && CONFIG_BT_MESH_PROVISIONER_MULTIPLE_PROFILE) || \
 	(defined(CONFIG_BT_MESH_DEVICE_MULTIPLE_PROFILE) && CONFIG_BT_MESH_DEVICE_MULTIPLE_PROFILE))
+#include "platform_opts.h"
+#include <platform_stdlib.h>
+#if SUPPORT_LOG_SERVICE
 #include <string.h>
 #include <trace_app.h>
 #include <gap_bond_le.h>
@@ -14,7 +17,6 @@
 #include "atcmd_bt.h"
 #include "ble_central_at_cmd.h"
 #include "os_msg.h"
-#include <platform_stdlib.h>
 #include "os_sched.h"
 #include "os_mem.h"
 #include "basic_types.h"
@@ -833,9 +835,11 @@ int ble_central_at_cmd_set_phy(int argc, char **argv)
 	return cause;
 }
 #endif
+#endif
 
 int ble_central_app_handle_at_cmd(uint16_t subtype, void *arg)
 {
+#if SUPPORT_LOG_SERVICE
 	int common_cmd_flag = 0;
 	int argc = 0;
 	char *argv[MAX_ARGC] = {0};
@@ -898,5 +902,8 @@ int ble_central_app_handle_at_cmd(uint16_t subtype, void *arg)
 	}
 
 	return common_cmd_flag;
+#else
+	return 0;
+#endif
 }
 #endif

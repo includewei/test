@@ -3,7 +3,7 @@
 * @brief       The HAL API implementation for SYSTEM CONTROL
 *
 * @version     V1.00
-* @date        2022-01-25
+* @date        2022-07-22
 *
 * @note
 *
@@ -40,6 +40,8 @@ extern "C"
 {
 #endif
 
+#define BOOT_LOAD_IMG_VRF_HASH_DIGEST_SIZE      (32)
+#define BOOT_CUSTOM_UID_DERIVED_SIZE            (32)
 #define BOOT_INFO_SW_RESV_MAX_SIZE              (5)
 #define OTP_CHIP_ID_MAX_SIZE                    (4)
 #define OTP_UUID_MAX_DATA_SIZE                  (4)
@@ -52,12 +54,86 @@ extern "C"
 #define SW_BOOT_ROM_TRAP_W_PTN_BITMASK          (0xFF00)
 #define SW_BOOT_ROM_TRAP_CTRL_BITMASK           (0xFF)
 
+#define LFC_MAJOR_CTRL_MASK                 0xFFFFFF00
+#define LFC_MAJOR_CTRL_SHIFT                8
+#define LFC_MINOR_CTRL_MASK                 0x000000FF
+#define LFC_MINOR_CTRL_SHIFT                0
+#define LFC_CTRL_DEF(minor, major)      ((major << LFC_MAJOR_CTRL_SHIFT) | \
+                                         ((minor & LFC_MINOR_CTRL_MASK) << LFC_MINOR_CTRL_SHIFT))
+
 typedef enum {
 	RMA_NORMAL_STATE   = 0x00,
 	RMA_STATE0         = 0xA0,
 	RMA_STATE1         = 0xA1,
 	RMA_STATE2         = 0xA2
 } RMA_STATE_T;
+
+typedef enum {
+	LFC_CHIP_MANU_ID         = 0xFF,
+	LFC_DEVICE_MANU_ID       = 0x7E,
+	LFC_DEVICE_DEPOLYED_ID   = 0x3C,
+	LFC_DEVICE_RMA1_ID       = 0x18,
+	LFC_DEVICE_RMA2_ID       = 0x0,
+	LFC_PROT_DEVICE_DEPY_ID  = 0x5E
+
+} DEVICE_LFC_STS_T;
+
+typedef enum {
+	LFC_UNKNOWN_CTRL         = 0x0,
+	LFC_DEVE_OPEN            = 0x33,
+	LFC_DEVE_CLOSE           = 0x39,
+	LFC_FORC_OPEN            = 0x93,
+	LFC_FORC_CLOSE           = 0x99,
+	LFC_CUST_CTRL            = 0xAA,
+} DEVICE_LFC_CTRL_STS_T;
+
+typedef enum {
+	LFC_CTRL_TEST_M_FUNC   = 0xE73A7E,
+	LFC_CTRL_NORM_M_FUNC   = 0xDB3ABD,
+	LFC_CTRL_COMM_M_FUNC   = 0xBD3ADB,
+} DEVICE_LFC_MAJOR_FUNC_T;
+
+typedef enum {
+	LFC_PG_FLOW_ENTER      =  LFC_CTRL_DEF(0x01, LFC_CTRL_TEST_M_FUNC),
+	LFC_PG_DBG_SUP         =  LFC_CTRL_DEF(0x02, LFC_CTRL_TEST_M_FUNC),
+	LFC_PG_LOG_SUP         =  LFC_CTRL_DEF(0x03, LFC_CTRL_TEST_M_FUNC),
+} DEVICE_LFC_TEST_M_FUNC_T;
+
+typedef enum {
+	LFC_SBL_EN             =  LFC_CTRL_DEF(0x01, LFC_CTRL_NORM_M_FUNC),
+	LFC_NORM_UBOOT         =  LFC_CTRL_DEF(0x02, LFC_CTRL_NORM_M_FUNC),
+	LFC_NORM_DEV_SUP       =  LFC_CTRL_DEF(0x03, LFC_CTRL_NORM_M_FUNC),
+	LFC_IMG_FAIL_RBK_SUP   =  LFC_CTRL_DEF(0x04, LFC_CTRL_NORM_M_FUNC),
+} DEVICE_LFC_NORM_M_FUNC_T;
+
+typedef enum {
+	LFC_COMM_STDIO_EN      =  LFC_CTRL_DEF(0x01, LFC_CTRL_COMM_M_FUNC),
+	LFC_DBGGER_EN          =  LFC_CTRL_DEF(0x02, LFC_CTRL_COMM_M_FUNC),
+	LFC_HIGH_VAL_LOCK_EN   =  LFC_CTRL_DEF(0x03, LFC_CTRL_COMM_M_FUNC),
+	LFC_SAFE_DATA_OP_EN    =  LFC_CTRL_DEF(0x04, LFC_CTRL_COMM_M_FUNC),
+	LFC_FOOT_OP_EN         =  LFC_CTRL_DEF(0x05, LFC_CTRL_COMM_M_FUNC),
+	LFC_ADV_LOG_LVL_EN     =  LFC_CTRL_DEF(0x06, LFC_CTRL_COMM_M_FUNC),
+	LFC_COMM_DBG_EN        =  LFC_CTRL_DEF(0x07, LFC_CTRL_COMM_M_FUNC),
+	LFC_COMM_MEMDBG_EN     =  LFC_CTRL_DEF(0x08, LFC_CTRL_COMM_M_FUNC),
+	LFC_COMM_CRITICMD_SUP  =  LFC_CTRL_DEF(0x09, LFC_CTRL_COMM_M_FUNC),
+} DEVICE_LFC_COMM_M_FUNC_T;
+
+typedef enum {
+	PHY_SBL_DIS_CTRL_ID             = 0x31,
+	PHY_IMG_DIS_LDFAIL_ROLLBACK_ID  = 0x32,
+	PHY_SAFE_DATA_DIS_CTRL_ID       = 0x33,
+	PHY_SAFE_DATA_DLY_DIS_CTRL_ID   = 0x34,
+	PHY_DBGER_CTRL_ID               = 0x35,
+} OTP_PHY_LD_CFG_T;
+
+typedef enum {
+	LFC_AUTOLD_SBL_CTRL_ID                  = 0x51,
+	LFC_AUTOLD_SAFE_DATA_CTRL_ID            = 0x52,
+	LFC_AUTOLD_SAFE_DATA_DLY_CTRL_ID        = 0x53,
+	LFC_AUTOLD_DBGER_CTRL_ID                = 0x54,
+	LFC_AUTOLD_STDIO_EN_CTRL_ID             = 0x55,
+	LFC_AUTOLD_ADV_LOG_LVL_CTRL_ID          = 0x56,
+} OTP_LFC_AUTO_LD_CFG_T;
 
 typedef enum {
 	SJTAG_S_NONFIXED_K      = 0x1,
@@ -344,6 +420,14 @@ uint32_t hal_rtl_sys_get_video_info(uint8_t idx);
 void hal_rtl_sys_set_video_info(uint8_t idx, uint8_t en_ctrl);
 void hal_rtl_sys_get_chip_id(uint32_t *pchip_id);
 uint8_t hal_rtl_sys_get_rma_state(void);
+uint8_t hal_rtl_sys_get_lfc_state(void);
+uint8_t hal_rtl_sys_get_lfc_state4ram(void);
+uint8_t hal_rtl_sys_get_devrma2_lgl_en_sts(void);
+void hal_rtl_sys_lfc_autold_precfg(const uint8_t lfc_state);
+uint8_t hal_rtl_sys_chk_lfc_func_ctrl_sts(const uint32_t lfc_func_op);
+uint8_t hal_rtl_sys_chk_lfc_func_ctrl_sts4ram(const uint32_t lfc_func_op);
+uint8_t hal_rtl_sys_get_atld_cfg(const uint8_t op);
+uint8_t hal_rtl_sys_get_phy_cfg(const uint8_t op_obj);
 void hal_rtl_sys_high_value_assets_otp_lock(const uint8_t lock_obj);
 uint32_t hal_rtl_sys_get_uuid(void);
 uint8_t hal_rtl_sys_get_boot_select(void);
@@ -360,12 +444,14 @@ void hal_rtl_sys_high_val_protect_init_hook(hv_prot_trng_init_func_t trng_init_f
 void hal_rtl_sys_high_val_protect_init(void);
 void hal_rtl_sys_high_val_protect_deinit(void);
 void hal_rtl_sys_high_val_protect_ld(const uint32_t otp_addr, uint8_t *p_otp_v, const uint32_t ld_size);
+void hal_rtl_sys_high_val_mem_protect_ld(void *s1, const void *s2, size_t ld_size);
 void hal_rtl_sys_high_val_protect_ld_delay(uint8_t delay_unit_sel);
 uint8_t hal_rtl_sys_check_high_val_protect_init(void);
 hal_status_t hal_rtl_sys_adc_vref_setting(uint8_t set_value);
 void hal_rtl_sys_get_sw_boot_rom_trap_op(uint8_t op_idx, void *p_m_status);
 void hal_rtl_sys_set_sw_boot_rom_trap_op(uint8_t op_idx, uint8_t ctrl_status);
-
+int hal_rtl_sys_high_val_protect_cmp(const void *a, const void *b, size_t size);
+int hal_rtl_sys_flash_sec_aes_gcm_tag_cmp(const void *a, const void *b, size_t size);
 
 #define ROM_FOOTPH_INIT(idx)                hal_rtl_sys_boot_footpath_init(idx)
 #define ROM_FOOTPH_STORE(idx,fp_v)          hal_rtl_sys_boot_footpath_store(idx,fp_v)
@@ -395,7 +481,10 @@ typedef struct hal_sys_ctrl_func_stubs_s {
 	void (*hal_sys_lxbus_shared_en)(uint8_t used_id, uint8_t en);
 	hal_status_t (*hal_sys_adc_vref_setting)(uint8_t set_value);
 	void (*hal_sys_set_sw_boot_rom_trap_op)(uint8_t op_idx, uint8_t ctrl_status);
-	uint32_t reserved[5];  // reserved space for next ROM code version function table extending.
+	uint8_t (*hal_sys_get_atld_cfg)(const uint8_t op);
+	uint8_t (*hal_sys_get_lfc_state)(void);
+	uint8_t (*hal_sys_chk_lfc_func_ctrl)(const uint32_t lfc_func_op);
+	uint32_t reserved[2];  // reserved space for next ROM code version function table extending.
 } hal_sys_ctrl_func_stubs_t;
 
 /**
@@ -410,9 +499,15 @@ typedef struct hal_sys_ctrl_high_val_prot_func_stubs_s {
 	void (*hal_sys_high_val_protect_ld)(const uint32_t otp_addr, uint8_t *p_otp_v, const uint32_t ld_size);
 	void (*hal_sys_high_val_protect_ld_delay)(uint8_t delay_unit_sel);
 	uint8_t (*hal_sys_check_high_val_protect_init)(void);
-	uint32_t reserved[2];  // reserved space for next ROM code version function table extending.
+	int (*hal_sys_high_val_protect_cmp)(const void *a, const void *b, size_t size);
+	void (*hal_sys_high_val_mem_protect_ld)(void *s1, const void *s2, size_t ld_size);
 } hal_sys_ctrl_high_val_prot_func_stubs_t;
 
+typedef struct hal_sys_ctrl_extend_func_stubs_s {
+	uint8_t *pld_img_bl_vrf_digest;
+	uint8_t *pcust_uid_derived;
+	uint32_t reserved[30];  // reserved space for next ROM code version function table extending.
+} hal_sys_ctrl_extend_func_stubs_t;
 
 /** @} */ /* End of group hs_hal_efuse */
 

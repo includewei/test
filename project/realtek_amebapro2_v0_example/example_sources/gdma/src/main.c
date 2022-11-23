@@ -38,15 +38,15 @@ int main(void)
 	//Set how many blocks we want to transfer (16 at most)
 	gdma.hal_gdma_adaptor.block_num = BLOCK_NUM;
 	//Initialize DMA multi-block mode setting
-	dma_memcpy_init(&gdma, dma_done_handler, (uint32_t) &gdma);
+	dma_memcpy_init(&gdma, (dma_irq_handler)dma_done_handler, (uint32_t) &gdma);
 
-	rtw_memset(TestBuf1, 0, DMA_CPY_LEN);
+	memset(TestBuf1, 0, DMA_CPY_LEN);
 
 	for (i = 0; i < DMA_CPY_LEN; i++) {
 		TestBuf1[i] = DMA_CPY_LEN - 1 - i;
 	}
 
-	rtw_memset(TestBuf2, 0, DMA_CPY_LEN);
+	memset(TestBuf2, 0, DMA_CPY_LEN);
 	dma_done = 0;
 
 	for (i = 0; i < BLOCK_NUM; i++) {
@@ -124,11 +124,11 @@ int main(void)
 
 	dbg_printf("\r\n   GDMA DEMO   \r\n");
 
-	dma_memcpy_init(&gdma, dma_done_handler, (uint32_t)&gdma);
+	dma_memcpy_init(&gdma, (dma_irq_handler)dma_done_handler, (uint32_t)&gdma);
 	for (i = 0; i < 512; i++) {
 		TestBuf1[i] = i;
 	}
-	rtw_memset(TestBuf2, 0xff, 512);
+	memset(TestBuf2, 0xff, 512);
 
 	dma_done = 0;
 	dma_memcpy(&gdma, (TestBuf2 + DMA_DST_OFFSET), (TestBuf1 + DMA_SRC_OFFSET), DMA_CPY_LEN);

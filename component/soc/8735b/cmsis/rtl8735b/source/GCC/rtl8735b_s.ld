@@ -115,6 +115,7 @@ SECTIONS
 		KEEP(*fw_voe_rom_boot.o(.rodata.str1*))
 		KEEP(*fw_snand_boot.o(.rodata*))
 		KEEP(*(.rom.ssl.dtcm))
+		KEEP(*(.rom.lfc_ctrl_sts.dtcm))
 	} > DTCM_ROM
 
 	.rom.itcm.text :
@@ -278,6 +279,7 @@ SECTIONS
 		KEEP(*rom_mbedtls_bignum.o(.rodata.str1*))
 		KEEP(*rom_mbedtls_ecp.o(.rodata.str1*))
 		KEEP(*rom_mbedtls_ecp_curves.o(.rodata.str1*))
+		KEEP(*(.rom.uid_ptn.rommem*))
 
 		
 		KEEP(*(.eh_frame*))
@@ -476,6 +478,11 @@ SECTIONS
 		. = ALIGN(0x10);
 		__rom_stubs_hal_sys_ctrl_hgih_val_prot = .;
 		KEEP(*(.rom.hal_sys_ctrl_high_val_prot.stubs))
+		
+        /**** New stubs for D-Cut ROM start from here ****/
+		. = ALIGN(0x10);
+		__rom_stubs_hal_sys_ctrl_extend = .;
+		KEEP(*(.rom.hal_sys_ctrl_extend.stubs))
 		
 	} > ROM_STUB
 

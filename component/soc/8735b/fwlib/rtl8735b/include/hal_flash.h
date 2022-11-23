@@ -46,6 +46,8 @@ extern "C"
 #define FLASH_CMD_RDSCUR    0x2B            // read security register
 #define FLASH_CMD_WRSCUR    0x2F            // write security register    
 
+#define ExtAddrBytesShift   24              // shift 24 bits of address bytes
+#define ThreeAddrBytesMask  0xFFFFFF        // Mask of  24 bits of address bytes
 /**
 
         \addtogroup hs_hal_gdma_flash_func FLASH HAL RAM APIs

@@ -44,7 +44,9 @@ extern const hal_snand_func_stubs_t hal_snand_stubs;
 #endif
 
 
+/// Size of calibration tuning pattern
 #define SNAND_TUNING_PATTERN_LEN (64/sizeof(uint8_t))
+/// The fixed tuning pattern
 const static uint8_t snandTunningBlockPattern[SNAND_TUNING_PATTERN_LEN] = {
 	0x00, 0xff, 0x0f, 0xff, 0xcc, 0xc3, 0xcc, 0xff, 0xff, 0xcc, 0x3c, 0xc3, 0xef, 0xfe, 0xff, 0xfe,
 	0xdd, 0xff, 0xdf, 0xff, 0xfb, 0xff, 0xfb, 0xff, 0xff, 0x7f, 0xff, 0xbf, 0xef, 0xbd, 0xf7, 0x77,
@@ -56,17 +58,20 @@ const static uint8_t snandTunningBlockPattern[SNAND_TUNING_PATTERN_LEN] = {
 #define SNAFC_MAX_PIPELAT (0x3)
 #define SNAND_BUS_K_IDX (3)
 
-u8 snand_memcpy_buf[NAND_PAGE_MAX_LEN] __ALIGNED(32);
+/// Temporary buffer to load flash data
+static u8 snand_memcpy_buf[NAND_PAGE_MAX_LEN] __ALIGNED(32);
+/// Record which page was loaded into snand_memcpy_buf to reduce redundant load
+static u32 snand_memcpy_buf_cached_page = 0xFFFFFFFF;
 
-// Ctrl info copied from ROM data
+/// Ctrl info copied from ROM data
 snand_ctrl_info_t snand_ctrl_info;
-// Partition table copied from ROM data
+/// Partition table copied from ROM data
 snand_partition_tbl_t snand_part_tbl;
-// Flag indicates if layout info is inited
+/// Flag indicates if layout info is inited
 BOOL snand_layout_info_inited = FALSE;
 
 #ifdef CONFIG_BUILD_NONSECURE
-// This info should be inited by S ram_start, then copied to above structs
+/// This info should be inited by S ram_start, then copied to above structs
 hal_snand_layout_info_t hal_snand_layout_info_ns = {
 	.ctrl_info = {
 		.blk_cnt = 1,       // prevent clean by NS ram_start
@@ -634,21 +639,31 @@ hal_snand_page_read(
 	// DMA dest should be 16 byte-algn, size: 4 byte-align
 	// To deal with cache, extend to 32 byte-align
 	if ((pAdaptor != NULL) && (pAdaptor->dma_en == 1)) {
-		u8 use_pio = FALSE;
+		u8 use_indr_dma = FALSE;
 
 		if ((u32)memAddr & (32 - 1)) {
-			// Unaligned DMA -> use pio
-			use_pio = TRUE;
+			// Unaligned DMA -> use indirect DMA
+			use_indr_dma = TRUE;
 		}
 
 		if (dataLens & 0x3) {
-			use_pio = TRUE;
+			use_indr_dma = TRUE;
 		}
 
-		if (use_pio) {
-			pAdaptor->dma_en = 0;
-			retVal = HAL_SNAND_STUBS.hal_snand_pageRead(pAdaptor, memAddr, dataLens, blkPageAddr);
-			pAdaptor->dma_en = 1;
+		if (use_indr_dma) {
+			u32 padding_size = dataLens;
+			if (dataLens & 0x3) {
+				padding_size += 4;
+			}
+			dcache_clean_invalidate_by_addr((void *)snand_memcpy_buf, padding_size);
+			retVal = HAL_SNAND_STUBS.hal_snand_pageRead(pAdaptor, snand_memcpy_buf, padding_size, blkPageAddr);
+			snand_memcpy_buf_cached_page = blkPageAddr;
+			dcache_invalidate_by_addr((void *)snand_memcpy_buf, padding_size);
+
+			if (retVal == SUCCESS) {
+				memcpy(memAddr, snand_memcpy_buf, dataLens);
+			}
+
 		} else {
 			// Handle cache for DMA
 			dcache_clean_invalidate_by_addr(memAddr, dataLens);
@@ -660,6 +675,28 @@ hal_snand_page_read(
 	}
 	return retVal;
 } /* hal_snand_page_read */
+
+
+// Read NAND page, with caching page in snand_memcpy_buf, dont use with NAND write, Internal use
+static uint32_t
+hal_snand_page_read_w_cache(
+	hal_snafc_adaptor_t *pAdaptor,
+	void *memAddr,
+	uint32_t dataLens,
+	uint32_t blkPageAddr
+)
+{
+	if (memAddr == snand_memcpy_buf && dataLens == NAND_PAGE_LEN) {
+		if (blkPageAddr == snand_memcpy_buf_cached_page) {
+			// All parameter matches cached data
+			return SUCCESS;
+		} else {
+			snand_memcpy_buf_cached_page = blkPageAddr;
+		}
+	}
+
+	return hal_snand_page_read(pAdaptor, memAddr, dataLens, blkPageAddr);
+}
 
 uint32_t
 hal_snand_pio_write(
@@ -732,7 +769,14 @@ hal_snand_dma_write(
 	return retVal;
 } /* hal_snand_dma_write */
 
-// Call this function before hal_snand_init
+/**
+ *  @brief      Select IO mode. Call this function before hal_snand_init
+ *
+ *  @param[in]  snafc_adpt The SNAFC adapter.
+ *  @param[in]  mode Selected mode (snafcBusTypeMode_t)
+ *
+ *  @returns    Void.
+ */
 void hal_snand_io_mode_sel(hal_snafc_adaptor_t *snafc_adpt, snafcBusTypeMode_t mode)
 {
 	if (!snafc_adpt) {
@@ -758,6 +802,16 @@ void hal_snand_io_mode_sel(hal_snafc_adaptor_t *snafc_adpt, snafcBusTypeMode_t m
 	}
 }
 
+/**
+ *  @brief      Configure the adapter clock setting.
+ *
+ *  @param[in]  snafc_adpt The SNAFC adapter.
+ *  @param[in]  idx The index of in-use clock setting slot.
+ *  @param[in]  clkDiv The clock division value
+ *  @param[in]  latchDelay The latch delay value
+ *
+ *  @returns    The result status code.
+ */
 static int32_t hal_snand_bus_cfg(
 	hal_snafc_adaptor_t *snafc_adpt,
 	uint32_t idx,
@@ -785,6 +839,15 @@ static int32_t hal_snand_bus_cfg(
 	return SUCCESS;
 }
 
+/**
+ *  @brief      Run calibration for current NAND Flash.
+ *              Try to read predefined golden pattern from NAND control info block.
+ *              The testing phases are predefined.
+ *
+ *  @param[in]  snafc_adpt The SNAFC adapter.
+ *
+ *  @returns    The result status code.
+ */
 int32_t hal_snand_bus_calibr(
 	hal_snafc_adaptor_t *snafc_adpt
 )
@@ -817,6 +880,8 @@ int32_t hal_snand_bus_calibr(
 	hal_snand_deinit(snafc_adpt);
 
 	for (loopIdx = 0; loopIdx < 4; loopIdx++) {
+
+		// Predefined clock phases
 		switch (loopIdx) {
 		case 0:
 			hal_snand_bus_cfg(snafc_adpt, SNAND_BUS_K_IDX/*idx*/, 0/*clkDiv*/, 1/*latchDelay*/);
@@ -855,13 +920,30 @@ int32_t hal_snand_bus_calibr(
 	return FAIL;
 }
 
-
-__STATIC_FORCEINLINE void snand_addr_clone(snand_addr_t *dest, const snand_addr_t *src)
+/**
+ *  @brief      Clone snand_addr_t object.
+ *
+ *  @param[out] dest The destination object.
+ *  @param[in]  src The source object.
+ *
+ *  @returns    Void.
+ */
+static inline void snand_addr_clone(snand_addr_t *dest, const snand_addr_t *src)
 {
 	memcpy(dest, src, sizeof(snand_addr_t));
 }
 
-// Read flash data from flash address (shouldn't cross page boundary)
+/**
+ *  @brief      Read flash data from specified flash address inside a flash page.
+ *              Caller should not read across page boundary.
+ *
+ *  @param[in]  adpt The SNAFC adapter.
+ *  @param[out] dest The address of data destination.
+ *  @param[in]  addr The source flash address.
+ *  @param[in]  size The size of data to read.
+ *
+ *  @returns    The result status code.
+ */
 s32 hal_snand_addr_cpy(hal_snafc_adaptor_t *adpt, void *dest, const snand_addr_t *addr, u32 size)
 {
 	s32 ret;
@@ -871,7 +953,8 @@ s32 hal_snand_addr_cpy(hal_snafc_adaptor_t *adpt, void *dest, const snand_addr_t
 		return FAIL;
 	}
 
-	ret = hal_snand_page_read(adpt, snand_memcpy_buf, NAND_PAGE_LEN, addr->page);
+	// cache result
+	ret = hal_snand_page_read_w_cache(adpt, snand_memcpy_buf, NAND_PAGE_LEN, addr->page);
 	if (ret != HAL_OK) {
 		return ret;
 	}
@@ -880,6 +963,14 @@ s32 hal_snand_addr_cpy(hal_snafc_adaptor_t *adpt, void *dest, const snand_addr_t
 	return SUCCESS;
 }
 
+/**
+ *  @brief      Move forward the current address of the NAND address object by an offset.
+ *
+ *  @param[in]  snand_addr The NAND address object.
+ *  @param[in]  offset The offset to move in bytes.
+ *
+ *  @returns    Void.
+ */
 void hal_snand_addr_ofst(snand_addr_t *snand_addr, u32 offset)
 {
 	u32 page, col;
@@ -909,14 +1000,14 @@ void hal_snand_addr_ofst(snand_addr_t *snand_addr, u32 offset)
 	snand_addr->col = cur_col;
 }
 
+/**
+ *  @brief      Copy the NAND ctrl info and partition table from ROM stub
+ *              NS domain will have to wait Secure domain copy them to a fixed location.
+ *
+ *  @returns    The result status code.
+ */
 s32 hal_snand_init_ctrl_info(void)
 {
-#if 0
-	if (TRUE == snand_layout_info_inited) {
-		return SUCCESS;
-	}
-#endif
-
 #ifdef CONFIG_BUILD_NONSECURE
 	if (FALSE == hal_snand_layout_info_ns.inited) {
 		// NS domain ctrl info should have been inited by S domain
@@ -942,6 +1033,16 @@ s32 hal_snand_init_ctrl_info(void)
 }
 
 
+/**
+ *  @brief      Init the NAND partition adapter.
+ *              All mapped physical blocks will be checked boundary.
+ *
+ *  @param[in]  part_adpt The NAND partition adapter.
+ *  @param[in]  adpt The SNAFC adapter.
+ *  @param[in]  entry The first partition record of the specified partition.
+ *
+ *  @returns    The result status code.
+ */
 s32 hal_snand_part_adpt_init(hal_snand_part_adpt_t *part_adpt, hal_snafc_adaptor_t *adpt, const snand_part_entry_t *entry)
 {
 	s32 ret;
@@ -1003,13 +1104,20 @@ s32 hal_snand_part_adpt_init(hal_snand_part_adpt_t *part_adpt, hal_snafc_adaptor
 	return SUCCESS;
 }
 
-/* Implementation limitation
- *      (For default Flash config:)
- *      Virtual map size: 0x7FFFF
- *      Record group size: 0x2AA
+/**
+ *  @brief      Convert logical block to physical block index.
+ *              It will automatically load next record if out of boundary.
+ *
+ *              Limitation for default flash size:
+ *              Virtual map size: 0x7FFFF
+ *              Record group size: 0x2AA
+ *
+ *  @param[in]  adpt The SNAFC adapter.
+ *  @param[in]  vmap The virtual map to lookup.
+ *  @param[in]  vblk The logical block to convert.
+ *
+ *  @returns    The mapped physical block. Returns -1 if lookup failed.
  */
-
-// Return -1 if lookup failed;
 static s32 hal_snand_map_blk(hal_snafc_adaptor_t *adpt, snand_vmap_t *vmap, const snand_vblk_idx_t vblk)
 {
 	hal_status_t hal_ret;
@@ -1051,7 +1159,15 @@ static s32 hal_snand_map_blk(hal_snafc_adaptor_t *adpt, snand_vmap_t *vmap, cons
 	return ret;
 }
 
-// Convert partition offset to real flash address
+/**
+ *  @brief      Convert partition offset to flash physical address (does not count spare area)
+ *
+ *  @param[in]  part_adpt The NAND partition adapter.
+ *  @param[in]  part_ofst The offset from partition start to the desired address.
+ *  @param[out] ret_addr The converted address.
+ *
+ *  @returns    The result status code.
+ */
 s32 hal_snand_ofst_2_addr(hal_snand_part_adpt_t *part_adpt, const u32 part_ofst, u32 *ret_addr)
 {
 	u32 cur_vblk, cur_page, cur_vpage;
@@ -1087,6 +1203,19 @@ s32 hal_snand_ofst_2_addr(hal_snand_part_adpt_t *part_adpt, const u32 part_ofst,
 	return SUCCESS;
 }
 
+/**
+ *  @brief      Load data from NAND Flash partition.
+ *              Prefix and postfix page data that is not page aligned will be
+ *              loaded to tmp buffer first.
+ *              Always read entire NAND flash page.
+ *
+ *  @param[in]  part_adpt The NAND partition adapter.
+ *  @param[in]  dest The load destination.
+ *  @param[in]  part_ofst The offset from partition start to the desired address.
+ *  @param[in]  size The size to load in bytes
+ *
+ *  @returns    Void.
+ */
 s32 hal_snand_load_from_part(hal_snand_part_adpt_t *part_adpt, void *dest,
 							 const u32 part_ofst, const u32 size)
 {
@@ -1126,7 +1255,8 @@ s32 hal_snand_load_from_part(hal_snand_part_adpt_t *part_adpt, void *dest,
 	if (cur_col != 0) {
 		u16 page_data_len = NAND_PAGE_LEN - cur_col;
 
-		ret = hal_snand_page_read(snafc_adpt, snand_memcpy_buf, NAND_PAGE_LEN, cur_page);
+		// cache result
+		ret = hal_snand_page_read_w_cache(snafc_adpt, snand_memcpy_buf, NAND_PAGE_LEN, cur_page);
 		if (SUCCESS != ret) {
 			return _ERRNO_BOOT_SNAFC_MEMCPY_FAIL;
 		}
@@ -1178,8 +1308,9 @@ s32 hal_snand_load_from_part(hal_snand_part_adpt_t *part_adpt, void *dest,
 				cur_vblk++;
 			}
 		} else {
+			// cache result
 			// Handle rest data < 1 page
-			ret = hal_snand_page_read(snafc_adpt, snand_memcpy_buf, NAND_PAGE_LEN, cur_page);
+			ret = hal_snand_page_read_w_cache(snafc_adpt, snand_memcpy_buf, NAND_PAGE_LEN, cur_page);
 			if (SUCCESS != ret) {
 				return _ERRNO_BOOT_SNAFC_MEMCPY_FAIL;
 			}
@@ -1192,7 +1323,13 @@ s32 hal_snand_load_from_part(hal_snand_part_adpt_t *part_adpt, void *dest,
 	return SUCCESS;
 }
 
-// Modify clk/latch with OTP value
+/**
+ *  @brief      Modify NAND flash clock division and latch delay with OTP setting.
+ *
+ *  @param[in]  adpt The SNAFC adapter.
+ *
+ *  @returns    The result status code.
+ */
 s32 hal_snand_otp_clk_sel(hal_snafc_adaptor_t *adpt)
 {
 	u8 clk_div, latch;

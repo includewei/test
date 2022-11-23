@@ -18,7 +18,6 @@ int null_handle(void *p, void *input, void *output)
 	mm_queue_item_t *input_item = (mm_queue_item_t *)input;
 	(void)output;
 
-null_handle_end:
 	return ret;
 }
 
@@ -56,15 +55,13 @@ void *null_create(void *parent)
 {
 	null_ctx_t *ctx = malloc(sizeof(null_ctx_t));
 	if (!ctx) {
+		null_destroy((void *)ctx);
 		return NULL;
 	}
 	memset(ctx, 0, sizeof(null_ctx_t));
 	ctx->parent = parent;
 
 	return ctx;
-null_create_fail:
-	null_destroy((void *)ctx);
-	return NULL;
 }
 
 mm_module_t null_module = {

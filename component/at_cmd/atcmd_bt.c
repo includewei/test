@@ -159,18 +159,6 @@ uint8_t bt_command_type(uint16_t command_type)
 		}
 	}
 	break;
-	case BT_COMMAND_RECONFIG: {
-		if (!((bt_cmd_type & SCATTERNET_BIT) >> 5)) {
-			return 0;
-		}
-	}
-	break;
-	case BT_COMMAND_MESH_RECONFIG: {
-		if (!((bt_cmd_type & SCATTERNET_BIT) >> 5) && !((bt_cmd_type & MESH_BIT) >> 1)) {
-			return 0;
-		}
-	}
-	break;
 	default:
 		break;
 	}
@@ -697,6 +685,55 @@ void fATBp(void *arg)
 exit:
 	AT_PRINTK("[ATBp] Start BLE Peripheral: ATBp=1");
 	AT_PRINTK("[ATBp] Stop  BLE Peripheral: ATBp=0");
+}
+
+#if (LEGACY_ADV_CONCURRENT == 1)
+extern void legacy_adv_concurrent_init(uint32_t adv_interval_0, uint32_t adv_interval_1);
+extern void legacy_adv_concurrent_start(void);
+extern void legacy_adv_concurrent_stop(void);
+extern void legacy_adv_concurrent_deinit(void);
+#endif
+void fATBL(void *arg)
+{
+#if (LEGACY_ADV_CONCURRENT == 1)
+	int argc = 0;
+	int param = 0;
+	char *argv[MAX_ARGC] = {0};
+
+	if (arg) {
+		argc = parse_param(arg, argv);
+	} else {
+		goto exit;
+	}
+
+	if ((argc != 2) && (argc != 4)) {
+		AT_PRINTK("[AT_PRINTK] ERROR: input parameter error!\n\r");
+		goto exit;
+	}
+
+	param = atoi(argv[1]);
+	if (param == 1 && argc == 4) {
+		uint32_t adv_int_0 = atoi(argv[2]);
+		uint32_t adv_int_1 = atoi(argv[3]);
+		legacy_adv_concurrent_init(adv_int_0, adv_int_1);
+	} else if (param == 0) {
+		legacy_adv_concurrent_deinit();
+	} else if (param == 2) {
+		legacy_adv_concurrent_start();
+	} else if (param == 3) {
+		legacy_adv_concurrent_stop();
+	} else {
+		goto exit;
+	}
+
+	return;
+
+exit:
+	AT_PRINTK("[ATBL] Init   legacy adv concurrent: ATBL=1,adv_int_0(ms),adv_int_1(ms)");
+	AT_PRINTK("[ATBL] Deinit legacy adv concurrent: ATBL=0");
+	AT_PRINTK("[ATBL] Start  legacy adv concurrent: ATBL=2");
+	AT_PRINTK("[ATBL] Stop   legacy adv concurrent: ATBL=3");
+#endif
 }
 #endif
 
@@ -1944,6 +1981,7 @@ log_item_t at_bt_items[ ] = {
 	(defined(CONFIG_BT_MESH_SCATTERNET) && CONFIG_BT_MESH_SCATTERNET))
 #if defined(CONFIG_BT_PERIPHERAL) && CONFIG_BT_PERIPHERAL
 	{"ATBp", fATBp, {NULL, NULL}}, // Start/stop BLE peripheral
+	{"ATBL", fATBL, {NULL, NULL}}, // Legacy ADV concurrent test
 #endif
 	{"ATBA", fATBA, {NULL, NULL}}, // Modify adv interval
 	{"ATBe", fATBe, {NULL, NULL}}, // BLE send indiaction/notification

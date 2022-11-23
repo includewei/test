@@ -48,7 +48,7 @@ typedef enum {
  * @param [len]:        The pointer to the length of the result string.
  * @return              The parsing result of the image.
  */
-qr_code_scanner_result qr_code_parsing(unsigned char *raw_data, unsigned int width, unsigned int height, int x_density, int y_density, unsigned char *string, unsigned int *len);
+qr_code_scanner_result qr_code_parsing(unsigned char *raw_data, unsigned int width, unsigned int height, int x_density, int y_density, char *string, unsigned int *len);
 
 #endif
 

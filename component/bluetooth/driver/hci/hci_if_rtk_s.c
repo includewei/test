@@ -47,8 +47,9 @@ void hci_tp_open(HCI_OPEN_CB open_cb, HCI_RECV_IND rx_ind)
     hci_uart_set_irq(UART_RX, 0);
     hci_uart_set_rx_ind(NULL);
 
-	/* HCI Transport Close */
-	if (HCI_FAIL == hci_transport_close())
+	/* HCI Transport Close and free */
+	if (HCI_FAIL == hci_transport_close() || 
+		HCI_FAIL == hci_transport_free())
 		goto bailout;
 
 	/* HCI Transport Bridge to RTK Stack 
@@ -71,8 +72,9 @@ void hci_tp_close(void)
 	if (!hci_if_rtk.status)
 		goto bailout;
 
-	/* Platform Deinit First */
-	if (HCI_FAIL == hci_platform_deinit())
+	/* Platform Deinit First and free */
+	if (HCI_FAIL == hci_platform_deinit() || 
+		HCI_FAIL == hci_uart_free())
 		goto bailout;
 
     hci_if_rtk.status = 0;

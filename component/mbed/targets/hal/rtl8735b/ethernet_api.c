@@ -8,27 +8,23 @@
  * @note
  *
  ******************************************************************************
- * @attention
  *
- * Copyright(c) 2007 - 2022 Realtek Corporation. All rights reserved.
+ * Copyright(c) 2007 - 2016 Realtek Corporation. All rights reserved.
  *
- * SPDX-License-Identifier: Apache-2.0
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of version 2 of the GNU General Public License as
+ * published by the Free Software Foundation.
  *
- * Licensed under the Apache License, Version 2.0 (the License); you may
- * not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110, USA
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an AS IS BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- ******************************************************************************
- */
-#if 0
+ ******************************************************************************/
 #include "ethernet_api.h"
 #include "ethernet_ex_api.h"
 #include "hal_eth.h"
@@ -40,7 +36,7 @@
 void ethernet_irq_hook(ethernet_callback callback)
 {
 	if (callback == NULL) {
-		DBG_ETH_ERR("ethernet_irq_hook(): Invalid parameter !!\r\n");
+		DBG_MII_ERR("ethernet_irq_hook(): Invalid parameter !!\r\n");
 		return;
 	}
 
@@ -51,7 +47,7 @@ void ethernet_irq_hook(ethernet_callback callback)
 void ethernet_task_yield_hook(ethernet_task_yield task_yield)
 {
 	if (task_yield == NULL) {
-		DBG_ETH_ERR("ethernet_task_yield_hook(): Invalid parameter !!\r\n");
+		DBG_MII_ERR("ethernet_task_yield_hook(): Invalid parameter !!\r\n");
 		return;
 	}
 
@@ -63,11 +59,11 @@ void ethernet_task_yield_hook(ethernet_task_yield task_yield)
 void ethernet_set_descnum(uint8_t txdescCnt, uint8_t rxdescCnt)
 {
 	if ((txdescCnt == 0) || (rxdescCnt == 0)) {
-		DBG_ETH_ERR("ethernet_set_descnum(): Invalid parameter !!\r\n");
+		DBG_MII_ERR("ethernet_set_descnum(): Invalid parameter !!\r\n");
 		return;
 	}
 	if (((txdescCnt * ETH_TX_DESC_SIZE) % 32) || ((rxdescCnt * ETH_RX_DESC_SIZE) % 32)) {
-		DBG_ETH_ERR("ethernet_set_descnum(): The size of Tx/Rx descriptor ring must be 32-Byte alignment !!\r\n");
+		DBG_MII_ERR("ethernet_set_descnum(): The size of Tx/Rx descriptor ring must be 32-Byte alignment !!\r\n");
 		return;
 	}
 
@@ -79,11 +75,11 @@ void ethernet_set_descnum(uint8_t txdescCnt, uint8_t rxdescCnt)
 void ethernet_trx_pre_setting(uint8_t *TxDescAddr, uint8_t *RxDescAddr, uint8_t *pTxPktBuf, uint8_t *pRxPktBuf)
 {
 	if ((TxDescAddr == NULL) || (RxDescAddr == NULL) || (pTxPktBuf == NULL) || (pRxPktBuf == NULL)) {
-		DBG_ETH_ERR("ethernet_trx_pre_setting(): Invalid parameter !!\r\n");
+		DBG_MII_ERR("ethernet_trx_pre_setting(): Invalid parameter !!\r\n");
 		return;
 	}
 	if ((((uint32_t)TxDescAddr) & 0x1F) || (((uint32_t)RxDescAddr) & 0x1F) || (((uint32_t)pTxPktBuf) & 0x1F) || (((uint32_t)pRxPktBuf) & 0x1F)) {
-		DBG_ETH_ERR("ethernet_trx_pre_setting(): The address must be 32-Byte alignment !!\r\n");
+		DBG_MII_ERR("ethernet_trx_pre_setting(): The address must be 32-Byte alignment !!\r\n");
 		return;
 	}
 
@@ -96,7 +92,7 @@ void ethernet_trx_pre_setting(uint8_t *TxDescAddr, uint8_t *RxDescAddr, uint8_t 
 void ethernet_set_address(char *mac)
 {
 	if (mac == NULL) {
-		DBG_ETH_ERR("ethernet_set_address(): Invalid parameter !!\r\n");
+		DBG_MII_ERR("ethernet_set_address(): Invalid parameter !!\r\n");
 		return;
 	}
 
@@ -104,17 +100,29 @@ void ethernet_set_address(char *mac)
 }
 
 
-int ethernet_init(void)
+void ethernet_detect_phy_state(void)
 {
-	return hal_eth_init(ETH_IF_SEL, ETH_PIN_SEL);
+	hal_eth_detect_phy_state();
 }
 
 
+void ethernet_phy_eee_ctrl(uint8_t en)
+{
+	hal_eth_phy_eee_ctrl(en);
+}
+
+
+int ethernet_init(void)
+{
+	return hal_eth_init();
+}
+
+#if 0
 int ethernet_init_force_spd(void)
 {
 	return hal_eth_init_force_spd(ETH_IF_SEL, ETH_PIN_SEL);
 }
-
+#endif
 
 void ethernet_free(void)
 {
@@ -128,11 +136,11 @@ void ethernet_free(void)
 int ethernet_write(const char *data, int size)
 {
 	if ((data == NULL) || (size == 0)) {
-		DBG_ETH_ERR("ethernet_write(): Invalid parameter !!\r\n");
+		DBG_MII_ERR("ethernet_write(): Invalid parameter !!\r\n");
 		return 0;
 	}
-	if (size > 1514) {
-		DBG_ETH_ERR("ethernet_write(): The size is too big !!\r\n");
+	if (size > ETH_PKT_MAX_SIZE) {
+		DBG_MII_ERR("ethernet_write(): The size is too big !!\r\n");
 		return (-1);
 	}
 
@@ -159,7 +167,7 @@ int ethernet_receive(void)
 int ethernet_read(char *data, int size)
 {
 	if ((data == NULL) || (size == 0)) {
-		DBG_ETH_ERR("ethernet_read(): Invalid parameter !!\r\n");
+		DBG_MII_ERR("ethernet_read(): Invalid parameter !!\r\n");
 		return 0;
 	}
 
@@ -171,7 +179,7 @@ int ethernet_read(char *data, int size)
 void ethernet_address(char *mac)
 {
 	if (mac == NULL) {
-		DBG_ETH_ERR("ethernet_address(): Invalid parameter !!\r\n");
+		DBG_MII_ERR("ethernet_address(): Invalid parameter !!\r\n");
 		return;
 	}
 
@@ -192,6 +200,6 @@ void ethernet_set_link(int speed, int duplex)
 	hal_eth_set_link(speed, duplex);
 }
 #endif  // end of "#if defined(CONFIG_MII_EN) && (CONFIG_MII_EN == 1)"
-#endif
+
 
 

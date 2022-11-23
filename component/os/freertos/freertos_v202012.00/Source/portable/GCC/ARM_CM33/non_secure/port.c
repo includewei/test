@@ -349,7 +349,7 @@ portDONT_DISCARD void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) PRIV
  * @brief Each task maintains its own interrupt status in the critical nesting
  * variable.
  */
-PRIVILEGED_DATA static volatile uint32_t ulCriticalNesting = 0xaaaaaaaaUL;
+PRIVILEGED_DATA static volatile uint32_t ulCriticalNesting = 0x0UL;//0xaaaaaaaaUL;
 
 #if ( configENABLE_TRUSTZONE == 1 )
 

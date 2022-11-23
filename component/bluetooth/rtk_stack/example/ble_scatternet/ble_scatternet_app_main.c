@@ -292,17 +292,15 @@ int ble_scatternet_app_main(void)
 	return 0;
 }
 
+extern bool rtk_bt_pre_enable(void);
 int ble_scatternet_app_init(void)
 {
 	//(void) bt_stack_already_on;
 	T_GAP_DEV_STATE new_state;
-
-	//uint32_t random_1 = 0;
-	/*Wait WIFI init complete*/
-	while (!(wifi_is_running(WLAN0_IDX) || wifi_is_running(WLAN1_IDX))) {
-		os_delay(1000);
-	}
-
+	if (rtk_bt_pre_enable() == false) {
+		printf("%s fail!\r\n", __func__);
+		return -1;
+	}	
 	//judge BLE central is already on
 	le_get_gap_param(GAP_PARAM_DEV_STATE, &new_state);
 	if (new_state.gap_init_state == GAP_INIT_STATE_STACK_READY) {

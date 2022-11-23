@@ -1,4 +1,6 @@
 #include "power_mode_api.h"
+#include "gpio_api.h"
+#include "gpio_ex_api.h"
 #include "gpio_irq_api.h"
 #include "gpio_irq_ex_api.h"
 #include "serial_api.h"
@@ -53,7 +55,7 @@ static void uart_irq(uint32_t id, SerialIrq event)
 		serial_putc(my_UART, rc);
 	}
 	if ((event == TxIrq) && (rc != 0)) {
-		uart_send_string(my_UART, "\r\n8735B$ \r\n");
+		uart_send_string(my_UART, (char *)"\r\n8735B$ \r\n");
 		rc = 0;
 	}
 }
@@ -84,7 +86,7 @@ void gpio_demo_irq_handler(uint32_t id, gpio_irq_event event)
 
 #if (WAKEUP_SOURCE == 5)
 static alarm_t alarm;
-alarm_irq_handler rtc_handler(void)
+void rtc_handler(void)
 {
 	dbg_printf("%s==> \r\n", __FUNCTION__);
 }
@@ -102,7 +104,7 @@ int main(void)
 //set gpio pull control
 	gpio_t my_GPIO1;
 	gpio_init(&my_GPIO1, PA_2);
-	gpio_irq_pull_ctrl(&my_GPIO1, PullDown);
+	gpio_pull_ctrl(&my_GPIO1, PullDown);
 	dbg_printf("Enter Standby, wake up by Stimer \r\n");
 	for (int i = 5; i > 0; i--) {
 		dbg_printf("Enter Standby by %d seconds \r\n", i);
@@ -129,7 +131,7 @@ int main(void)
 
 #elif (WAKEUP_SOURCE == 2)
 	dbg_printf("Enter Standby, wake up by UART \r\n");
-	HAL_WRITE32(0x40009000, 0x18, 0xB5E36001);//4MHz power on
+	HAL_WRITE32(0x40009000, 0x18, 0x1 | HAL_READ32(0x40009000, 0x18)); //SWR 1.35V
 	hal_delay_ms(5);
 
 	serial_init(&my_UART, UART_TX, UART_RX);
@@ -138,7 +140,7 @@ int main(void)
 	serial_irq_handler(&my_UART, uart_irq, (uint32_t)&my_UART);
 	serial_irq_set(&my_UART, RxIrq, 1);
 	serial_irq_set(&my_UART, TxIrq, 1);
-	uart_send_string(&my_UART, "Enter Standby, wake up by UART \r\n");
+	uart_send_string(&my_UART, (char *)"Enter Standby, wake up by UART \r\n");
 	for (int i = 5; i > 0; i--) {
 		dbg_printf("Enter Standby by UART %d seconds \r\n", i);
 		hal_delay_us(1 * 1000 * 1000);
@@ -150,8 +152,8 @@ int main(void)
 //set gpio pull control
 	gpio_t my_GPIO1;
 	gpio_init(&my_GPIO1, PA_2);
-	gpio_irq_pull_ctrl(&my_GPIO1, PullDown);
-	HAL_WRITE32(0x40009000, 0x18, 0xB5E36001);//4MHz power on
+	gpio_pull_ctrl(&my_GPIO1, PullDown);
+	HAL_WRITE32(0x40009000, 0x18, 0x1 | HAL_READ32(0x40009000, 0x18)); //SWR 1.35V
 	hal_delay_ms(5);
 	gtimer_init(&my_Gtimer, WAKEUP_GTIMER);
 
@@ -159,12 +161,12 @@ int main(void)
 		dbg_printf("Enter Standby by %d seconds \r\n", i);
 		hal_delay_us(1 * 1000 * 1000);
 	}
-	gtimer_start_one_shout(&my_Gtimer, GTIMER_SLEEP_DURATION, (void *)Gtimer_timeout_handler, NULL);
+	gtimer_start_one_shout(&my_Gtimer, GTIMER_SLEEP_DURATION, (void *)Gtimer_timeout_handler, (uint32_t)NULL);
 	Standby(SLP_GTIMER, SLEEP_DURATION, 1, 0);
 
 #elif (WAKEUP_SOURCE == 4)
 	dbg_printf("Enter Standby, wake up by PON_GPIO");
-	HAL_WRITE32(0x40009000, 0x18, 0xB5E36001); //4MHz power on
+	HAL_WRITE32(0x40009000, 0x18, 0x1 | HAL_READ32(0x40009000, 0x18)); //SWR 1.35V
 
 	hal_delay_ms(5);
 //if there is no GPIO wakeup source please set a GPIO IRQ for wake up
@@ -193,10 +195,10 @@ int main(void)
 
 	gpio_t my_GPIO1;
 	gpio_init(&my_GPIO1, PA_2);
-	gpio_irq_pull_ctrl(&my_GPIO1, PullDown);
+	gpio_pull_ctrl(&my_GPIO1, PullDown);
 	gpio_t my_GPIO2;
 	gpio_init(&my_GPIO2, PA_3);
-	gpio_irq_pull_ctrl(&my_GPIO2, PullDown);
+	gpio_pull_ctrl(&my_GPIO2, PullDown);
 	Standby(SLP_PON_GPIO, SLEEP_DURATION, CLOCK, 0);
 
 #elif (WAKEUP_SOURCE == 5)

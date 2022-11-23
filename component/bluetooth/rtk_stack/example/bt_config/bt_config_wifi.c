@@ -40,8 +40,8 @@ static void *BC_status_monitor_task_hdl = NULL;
 static uint8_t pscan_channel_2G[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
 static uint8_t pscan_channel_5G[] = {36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 149, 153, 157, 161, 165};
 
-uint8_t last_conn_error = 0;
-rtw_join_status_t last_join_status =RTW_JOINSTATUS_UNKNOWN;
+static uint8_t last_conn_error = 0;
+static rtw_join_status_t last_join_status = RTW_JOINSTATUS_UNKNOWN;
 
 extern uint8_t *lwip_getip_intf(uint8_t idx);
 
@@ -171,7 +171,7 @@ exit:
 	return ret;
 }
 
-void wifi_join_status_callback(rtw_join_status_t join_status)
+static void wifi_join_status_callback(rtw_join_status_t join_status)
 {
 	unsigned short reason;
 	if (join_status == RTW_JOINSTATUS_FAIL) {

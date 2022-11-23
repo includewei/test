@@ -55,7 +55,7 @@ void uart_recv_done(uint32_t id)
 	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
-int uart_tx_thread(void *param)
+void uart_tx_thread(void *param)
 {
 #if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
 	rtw_create_secure_context(configMINIMAL_SECURE_STACK_SIZE);

@@ -68,14 +68,10 @@ typedef struct rtsp2_params_s {
 			uint32_t codec_id;
 			uint32_t channel;
 			uint32_t samplerate;
-		} a;
-		struct rtsp_audio_opus_param_s {
-			uint32_t codec_id;
-			uint32_t channel;
-			uint32_t samplerate;
+			//for opus
 			uint32_t max_average_bitrate;
 			uint32_t frame_size;
-		} a_opus;
+		} a;
 	} u;
 } rtsp2_params_t;
 

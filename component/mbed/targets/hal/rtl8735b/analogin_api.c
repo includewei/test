@@ -35,6 +35,8 @@
 #include "analogin_ex_api.h"
 #include "platform_stdlib.h"
 #include "hal_adc.h"
+#include "hal_otp.h"
+#include "hal_otp_nsc.h"
 
 
 
@@ -220,6 +222,17 @@ uint8_t analogin_read_u16_dma(analogin_t *obj, uint16_t *buf, uint16_t length)
 
 	return 0;
 }
+
+/**
+  * @brief  Read OTP ADC Internal R Data
+  * @param  NA
+  * @retval : ADC Internal R Data
+  */
+uint16_t analogin_read_intl_r(void)
+{
+	return (uint16_t)hal_adc_rd_inter_r();
+}
+
 
 #endif //end of #if (defined(CONFIG_ADC_EN) && (CONFIG_ADC_EN == 1))
 

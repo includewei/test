@@ -1,5 +1,6 @@
 #include "rtw_opt_crypto_ssl.h"
 #include "osdep_service.h"
+#include "mbedtls/platform.h"
 /****************************************************************************************************
 
 
@@ -11,6 +12,7 @@ int rtw_platform_set_calloc_free(void *(*calloc_func)(size_t, size_t),
 								 void (*free_func)(void *))
 {
 	mbedtls_platform_set_calloc_free(calloc_func, free_func);
+	return 0;
 }
 /****************************************************************************************************
 
@@ -323,7 +325,7 @@ cleanup:
 return:    0 if successful
 		   -1 if failed
 *********************************************************************************************/
-int rtw_crypto_ecc_point_read_binary(sae_ecc_crypto *ecc, u8 *buf, size_t buf_len, sae_ecc_point *p)
+int rtw_crypto_ecc_point_read_binary(sae_ecc_crypto *ecc, uint8_t *buf, size_t buf_len, sae_ecc_point *p)
 {
 	int ret = 0;
 	unsigned char *pbuf = NULL;
@@ -371,7 +373,7 @@ cleanup:
 return:    0 if successful
 		   -1 if failed
 *********************************************************************************************/
-int rtw_crypto_ecc_point_write_binary(sae_ecc_point *p, unsigned int buf_len, u8 *x, u8 *y)
+int rtw_crypto_ecc_point_write_binary(sae_ecc_point *p, unsigned int buf_len, uint8_t *x, uint8_t *y)
 {
 	if (x) {
 		if (rtw_crypto_bignum_write_binary(&p->X, x, buf_len) < 0) {

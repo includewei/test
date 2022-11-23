@@ -2,7 +2,7 @@
  * @file      hal_crypto.c
  * @brief     This CRYPTO secure and non-secure HAL API functions.
  * @version   V1.00
- * @date      2022-03-22
+ * @date      2022-08-13
  *
  * @note
  *
@@ -62,29 +62,30 @@
 #include "cmsis_os.h"
 #endif
 
-volatile int crypto_done;
-volatile int crc_done;
-volatile uint8_t sk_used;
-
-//#if defined(CONFIG_BUILD_NONSECURE) && (CONFIG_BUILD_NONSECURE==1)
+#if defined(CONFIG_BUILD_BOOT) && (CONFIG_BUILD_BOOT == 1) // Boot loader only
+#define SECTION_BL_CRYPTO_BSS            SECTION(".ram.hal_crypto.bss")
+SECTION_BL_CRYPTO_BSS hal_crypto_adapter_t g_rtl_cryptoEngine_s;
+#else
 #if !defined(CONFIG_BUILD_NONSECURE)
-
 hal_crypto_adapter_t g_rtl_cryptoEngine_s;
+#else
+hal_crypto_adapter_t g_rtl_cryptoEngine_ns;
+#endif
+#endif
+
+#if !defined(CONFIG_BUILD_NONSECURE)
 extern hal_crypto_func_stubs_t hal_crypto_stubs_s;
 #define HAL_CRYPTO_ADAPTER      (g_rtl_cryptoEngine_s)
 #define HAL_CRYPTO_FUNC_STUBS   (hal_crypto_stubs_s)
-
-
-//hal_crypto_adapter_t g_rtl_cryptoEngine_ns;
-//extern hal_crypto_func_stubs_t hal_crypto_stubs_ns;
-//#define HAL_CRYPTO_ADAPTER      (g_rtl_cryptoEngine_ns)
-//#define HAL_CRYPTO_FUNC_STUBS   (hal_crypto_stubs_ns)
 #else
-hal_crypto_adapter_t g_rtl_cryptoEngine_ns;
 extern hal_crypto_func_stubs_t hal_crypto_stubs_ns;
 #define HAL_CRYPTO_ADAPTER      (g_rtl_cryptoEngine_ns)
 #define HAL_CRYPTO_FUNC_STUBS   (hal_crypto_stubs_ns)
 #endif
+
+volatile int crypto_done;
+volatile int crc_done;
+volatile uint8_t sk_used;
 
 /*
  * 32bytes-aligned buffer that store mix mode hash padding initial values.

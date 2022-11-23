@@ -19,6 +19,7 @@
 #if SAVE_AUDIO_DATA
 #include "audio_tool_command.h"
 #endif
+#include "audio_tool_init.h"
 
 #define AUDIO_TRANSFER_FUNC 0
 
@@ -139,6 +140,7 @@ void audio_save_mass_storage_thread(void *param)
 	} else {
 		printf("USB MSC driver load done, Available heap [0x%x]\n", xPortGetFreeHeapSize());
 	}
+
 exit:
 	vTaskDelete(NULL);
 }
@@ -164,7 +166,7 @@ void audio_ram_sd_thread(void *param)
 	int type_select = 0;
 
 	while (1) {
-		if ((xSemaphoreTake(ram_dump_sd_sema, portMAX_DELAY) == pdTRUE) && (sdsave_status & SD_SAVE_START)) {
+		if ((xSemaphoreTake(ram_dump_sd_sema, portMAX_DELAY) == pdTRUE) && (audiocopy_status & SD_SAVE_START)) {
 			printf("Start trans data from ram to sd card\r\n");
 			type_select = RECORD_MIN;
 
@@ -175,7 +177,7 @@ void audio_ram_sd_thread(void *param)
 					if (record_type & RECORD_RX_DATA) {
 						record_flag = 1;
 						//ram disk data
-						snprintf(ram_r_file, 63, "%s_RX%03d.bin", file_name, recored_count);
+						snprintf(ram_r_file, 63, "%s_RX%03d.wav", file_name, recored_count);
 						printf("RAM record file name: %s\n\r", ram_r_file);
 
 						snprintf(ram_path, sizeof(ram_path), "audio_ram:/%s", ram_r_file);
@@ -183,13 +185,13 @@ void audio_ram_sd_thread(void *param)
 
 						m_ram_file = fopen(ram_path, "r");
 						if (!m_ram_file) {
-							sdsave_status &= ~SD_SAVE_START;
+							audiocopy_status &= ~SD_SAVE_START;
 							printf("Open RAM file failed\r\n");
 							goto open_file_fail;
 						}
 
 						//sd card data
-						snprintf(sd_r_file, 63, "%s_RX%03d.bin", file_name, recored_count);
+						snprintf(sd_r_file, 63, "%s_RX%03d.wav", file_name, recored_count);
 						printf("SD record file name: %s\n\r", sd_r_file);
 
 						snprintf(sd_path, sizeof(sd_path), "audio_sd:/%s", sd_r_file);
@@ -198,7 +200,7 @@ void audio_ram_sd_thread(void *param)
 						m_sd_file = fopen(sd_path, "w");
 						if (!m_sd_file) {
 							printf("Open SD file failed\r\n");
-							sdsave_status &= ~SD_SAVE_START;
+							audiocopy_status &= ~SD_SAVE_START;
 							fclose(m_ram_file);
 							goto open_file_fail;
 						}
@@ -209,7 +211,7 @@ void audio_ram_sd_thread(void *param)
 					if (record_type & RECORD_TX_DATA) {
 						record_flag = 1;
 						//ram disk data
-						snprintf(ram_r_file, 63, "%s_TX%03d.bin", file_name, recored_count);
+						snprintf(ram_r_file, 63, "%s_TX%03d.wav", file_name, recored_count);
 						printf("RAM record file name: %s\n\r", ram_r_file);
 
 						snprintf(ram_path, sizeof(ram_path), "audio_ram:/%s", ram_r_file);
@@ -217,13 +219,13 @@ void audio_ram_sd_thread(void *param)
 
 						m_ram_file = fopen(ram_path, "r");
 						if (!m_ram_file) {
-							sdsave_status &= ~SD_SAVE_START;
+							audiocopy_status &= ~SD_SAVE_START;
 							printf("Open RAM file failed\r\n");
 							goto open_file_fail;
 						}
 
 						//sd card data
-						snprintf(sd_r_file, 63, "%s_TX%03d.bin", file_name, recored_count);
+						snprintf(sd_r_file, 63, "%s_TX%03d.wav", file_name, recored_count);
 						printf("SD record file name: %s\n\r", sd_r_file);
 
 						snprintf(sd_path, sizeof(sd_path), "audio_sd:/%s", sd_r_file);
@@ -232,7 +234,7 @@ void audio_ram_sd_thread(void *param)
 						m_sd_file = fopen(sd_path, "w");
 						if (!m_sd_file) {
 							printf("Open SD file failed\r\n");
-							sdsave_status &= ~SD_SAVE_START;
+							audiocopy_status &= ~SD_SAVE_START;
 							fclose(m_ram_file);
 							goto open_file_fail;
 						}
@@ -242,7 +244,7 @@ void audio_ram_sd_thread(void *param)
 					if (record_type & RECORD_ASP_DATA) {
 						record_flag = 1;
 						//ram disk data
-						snprintf(ram_r_file, 63, "%s_ASP%03d.bin", file_name, recored_count);
+						snprintf(ram_r_file, 63, "%s_ASP%03d.wav", file_name, recored_count);
 						printf("RAM record file name: %s\n\r", ram_r_file);
 
 						snprintf(ram_path, sizeof(ram_path), "audio_ram:/%s", ram_r_file);
@@ -250,13 +252,13 @@ void audio_ram_sd_thread(void *param)
 
 						m_ram_file = fopen(ram_path, "r");
 						if (!m_ram_file) {
-							sdsave_status &= ~SD_SAVE_START;
+							audiocopy_status &= ~SD_SAVE_START;
 							printf("Open RAM file failed\r\n");
 							goto open_file_fail;
 						}
 
 						//sd card data
-						snprintf(sd_r_file, 63, "%s_ASP%03d.bin", file_name, recored_count);
+						snprintf(sd_r_file, 63, "%s_ASP%03d.wav", file_name, recored_count);
 						printf("SD record file name: %s\n\r", sd_r_file);
 
 						snprintf(sd_path, sizeof(sd_path), "audio_sd:/%s", sd_r_file);
@@ -265,7 +267,40 @@ void audio_ram_sd_thread(void *param)
 						m_sd_file = fopen(sd_path, "w");
 						if (!m_sd_file) {
 							printf("Open SD file failed\r\n");
-							sdsave_status &= ~SD_SAVE_START;
+							audiocopy_status &= ~SD_SAVE_START;
+							fclose(m_ram_file);
+							goto open_file_fail;
+						}
+					}
+					break;
+				case RECORD_TXASP_DATA:
+					if (record_type & RECORD_TXASP_DATA) {
+						record_flag = 1;
+						//ram disk data
+						snprintf(ram_r_file, 63, "%s_TXASP%03d.wav", file_name, recored_count);
+						printf("RAM record file name: %s\n\r", ram_r_file);
+
+						snprintf(ram_path, sizeof(ram_path), "audio_ram:/%s", ram_r_file);
+						printf("RAM record file name: %s\n\r", ram_path);
+
+						m_ram_file = fopen(ram_path, "r");
+						if (!m_ram_file) {
+							audiocopy_status &= ~SD_SAVE_START;
+							printf("Open RAM file failed\r\n");
+							goto open_file_fail;
+						}
+
+						//sd card data
+						snprintf(sd_r_file, 63, "%s_TXASP%03d.wav", file_name, recored_count);
+						printf("SD record file name: %s\n\r", sd_r_file);
+
+						snprintf(sd_path, sizeof(sd_path), "audio_sd:/%s", sd_r_file);
+						printf("SD record file name: %s\n\r", sd_path);
+
+						m_sd_file = fopen(sd_path, "w");
+						if (!m_sd_file) {
+							printf("Open SD file failed\r\n");
+							audiocopy_status &= ~SD_SAVE_START;
 							fclose(m_ram_file);
 							goto open_file_fail;
 						}
@@ -283,9 +318,9 @@ void audio_ram_sd_thread(void *param)
 					if (((FRAME_LEN / RECORD_WORDS) * (record_frame_count)) >= 100) {
 						if ((transformcount / (((FRAME_LEN / RECORD_WORDS) * (record_frame_count)) / 100)) >= (record_percent + 1)) {
 							record_percent = (transformcount / (((FRAME_LEN / RECORD_WORDS) * (record_frame_count)) / 100));
-							rt_printf("*");
+							printf("*");
 							if ((record_percent % 10) == 0) {
-								rt_printf(" %d%% is done!\n\r", record_percent);
+								printf(" %d%% is done!\n\r", record_percent);
 							}
 						}
 					}
@@ -301,7 +336,7 @@ void audio_ram_sd_thread(void *param)
 						break;
 					} else {
 						total_read_count += br;
-						bw = fwrite(ramBufferr, 1, RECORD_WORDS * 2, m_sd_file);
+						bw = fwrite(ramBufferr, 1, br, m_sd_file);
 
 						if (bw <= 0) {
 							printf("\r\nWrite END\r\n");
@@ -320,24 +355,194 @@ void audio_ram_sd_thread(void *param)
 			}
 open_file_fail:
 			printf("Start trans data from ram to sd card END\r\n");
-			sdsave_status &= ~SD_SAVE_START;
+			audiocopy_status &= ~SD_SAVE_START;
 		}
 	}
 	vTaskDelete(NULL);
 }
 
+FILE  *tftp_ram_file;
+char tftp_ram_path[64];
+char tftp_ram_r_file[32];
+void tftp_audio_send_handler(unsigned char *buffer, int *len, unsigned int index)
+{
+	int br;
+	memset(buffer, 0x0, BLOCK_SIZE - 4);
+	br = fread(buffer, 1, BLOCK_SIZE - 4, tftp_ram_file);
+	if (br <= 0) {
+		printf("\r\nRead ERROR\r\n");
+		*len = 0;
+	} else {
+		*len = br;
+	}
+	vTaskDelay(30);
+}
+
+void audio_ram_tftp_thread(void *param)
+{
+#if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
+	rtw_create_secure_context(configMINIMAL_SECURE_STACK_SIZE);
+#endif
+	int type_select = 0;
+	tftp tftp_info;
+
+	while (1) {
+		if ((xSemaphoreTake(ram_upload_tftp_sema, portMAX_DELAY) == pdTRUE) && (audiocopy_status & TFTP_UPLOAD_START)) {
+			printf("Start upload data by TFTP\r\n");
+			type_select = RECORD_MIN;
+
+			//setting tftp information
+			tftp_info.send_handle = tftp_audio_send_handler;
+			tftp_info.tftp_mode = AUDIO_TFTP_MODE;
+			tftp_info.tftp_host = audio_tftp_ip;
+			tftp_info.tftp_port = audio_tftp_port;
+			tftp_info.tftp_op = WRQ;//FOR READ OPERATION
+			tftp_info.tftp_retry_num = 5;
+			tftp_info.tftp_timeout = 10;//second
+			printf("tftp retry time = %d timeout = %d seconds\r\n", tftp_info.tftp_retry_num, tftp_info.tftp_timeout);
+
+			while (type_select <= RECORD_MAX) {
+				switch (type_select) {
+				case RECORD_RX_DATA: {
+					if (record_type & RECORD_RX_DATA) {
+						//ram disk data
+						snprintf(tftp_ram_r_file, 63, "%s_RX%03d.wav", file_name, recored_count);
+						printf("RAM record file name: %s\n\r", tftp_ram_r_file);
+
+						snprintf(tftp_ram_path, sizeof(tftp_ram_path), "audio_ram:/%s", tftp_ram_r_file);
+						printf("RAM record file name: %s\n\r", tftp_ram_path);
+
+						tftp_ram_file = fopen(tftp_ram_path, "r");
+						if (!tftp_ram_file) {
+							audiocopy_status &= ~TFTP_UPLOAD_START;
+							printf("Open RAM file failed\r\n");
+							goto open_file_fail;
+						}
+
+						tftp_info.tftp_file_name = tftp_ram_r_file;
+						printf("TFTP File name = %s\r\n", tftp_info.tftp_file_name);
+						if (tftp_client_start(&tftp_info) == 0) {
+							printf("Send file successful\r\n");
+						} else {
+							printf("Send file fail\r\n");
+						}
+						fclose(tftp_ram_file);
+					}
+					break;
+				}
+				case RECORD_TX_DATA:
+					if (record_type & RECORD_TX_DATA) {
+						//ram disk data
+						snprintf(tftp_ram_r_file, 63, "%s_TX%03d.wav", file_name, recored_count);
+						printf("RAM record file name: %s\n\r", tftp_ram_r_file);
+
+						snprintf(tftp_ram_path, sizeof(tftp_ram_path), "audio_ram:/%s", tftp_ram_r_file);
+						printf("RAM record file name: %s\n\r", tftp_ram_path);
+
+						tftp_info.tftp_file_name = tftp_ram_r_file;
+						printf("TFTP File name = %s\r\n", tftp_info.tftp_file_name);
+
+						tftp_ram_file = fopen(tftp_ram_path, "r");
+						if (!tftp_ram_file) {
+							audiocopy_status &= ~TFTP_UPLOAD_START;
+							printf("Open RAM file failed\r\n");
+							goto open_file_fail;
+						}
+
+						tftp_info.tftp_file_name = tftp_ram_r_file;
+						printf("TFTP File name = %s\r\n", tftp_info.tftp_file_name);
+						if (tftp_client_start(&tftp_info) == 0) {
+							printf("Send file successful\r\n");
+						} else {
+							printf("Send file fail\r\n");
+						}
+						fclose(tftp_ram_file);
+					}
+					break;
+				case RECORD_ASP_DATA:
+					if (record_type & RECORD_ASP_DATA) {
+						//ram disk data
+						snprintf(tftp_ram_r_file, 63, "%s_ASP%03d.wav", file_name, recored_count);
+						printf("RAM record file name: %s\n\r", tftp_ram_r_file);
+
+						snprintf(tftp_ram_path, sizeof(tftp_ram_path), "audio_ram:/%s", tftp_ram_r_file);
+						printf("RAM record file name: %s\n\r", tftp_ram_path);
+
+						tftp_info.tftp_file_name = tftp_ram_r_file;
+						printf("TFTP File name = %s\r\n", tftp_info.tftp_file_name);
+
+						tftp_ram_file = fopen(tftp_ram_path, "r");
+						if (!tftp_ram_file) {
+							audiocopy_status &= ~TFTP_UPLOAD_START;
+							printf("Open RAM file failed\r\n");
+							goto open_file_fail;
+						}
+
+						tftp_info.tftp_file_name = tftp_ram_r_file;
+						printf("TFTP File name = %s\r\n", tftp_info.tftp_file_name);
+						if (tftp_client_start(&tftp_info) == 0) {
+							printf("Send file successful\r\n");
+						} else {
+							printf("Send file fail\r\n");
+						}
+						fclose(tftp_ram_file);
+					}
+					break;
+				case RECORD_TXASP_DATA:
+					if (record_type & RECORD_TXASP_DATA) {
+						//ram disk data
+						snprintf(tftp_ram_r_file, 63, "%s_TXASP%03d.wav", file_name, recored_count);
+						printf("RAM record file name: %s\n\r", tftp_ram_r_file);
+
+						snprintf(tftp_ram_path, sizeof(tftp_ram_path), "audio_ram:/%s", tftp_ram_r_file);
+						printf("RAM record file name: %s\n\r", tftp_ram_path);
+
+						tftp_info.tftp_file_name = tftp_ram_r_file;
+						printf("TFTP File name = %s\r\n", tftp_info.tftp_file_name);
+
+						tftp_ram_file = fopen(tftp_ram_path, "r");
+						if (!tftp_ram_file) {
+							audiocopy_status &= ~TFTP_UPLOAD_START;
+							printf("Open RAM file failed\r\n");
+							goto open_file_fail;
+						}
+
+						tftp_info.tftp_file_name = tftp_ram_r_file;
+						printf("TFTP File name = %s\r\n", tftp_info.tftp_file_name);
+						if (tftp_client_start(&tftp_info) == 0) {
+							printf("Send file successful\r\n");
+						} else {
+							printf("Send file fail\r\n");
+						}
+						fclose(tftp_ram_file);
+					}
+					break;
+				}
+				vTaskDelay(10);
+				type_select = type_select << 1;
+			}
+open_file_fail:
+			printf("Start upload data by TFTP END\r\n");
+			audiocopy_status &= ~TFTP_UPLOAD_START;
+		}
+	}
+	vTaskDelete(NULL);
+}
 
 void audio_tool_flow_init(void *param)
 {
 #if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
 	rtw_create_secure_context(configMINIMAL_SECURE_STACK_SIZE);
 #endif
-	ram_dump_sd_sema = xSemaphoreCreateBinary();;
+	ram_dump_sd_sema = xSemaphoreCreateBinary();
+	ram_upload_tftp_sema = xSemaphoreCreateBinary();
 
 	audio_fatfs_drv_open();
 	audio_save_ctx = mm_module_open(&audio_module);
 	if (audio_save_ctx) {
 		mm_module_ctrl(audio_save_ctx, CMD_AUDIO_SET_PARAMS, (int)&audio_save_params);
+		mm_module_ctrl(audio_save_ctx, CMD_AUDIO_SET_TXASP_PARAM, (int)&tx_asp_params);
+		mm_module_ctrl(audio_save_ctx, CMD_AUDIO_SET_RXASP_PARAM, (int)&rx_asp_params);
 		mm_module_ctrl(audio_save_ctx, MM_CMD_SET_QUEUE_LEN, 6);
 		mm_module_ctrl(audio_save_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
 		mm_module_ctrl(audio_save_ctx, CMD_AUDIO_APPLY, 0);
@@ -346,20 +551,13 @@ void audio_tool_flow_init(void *param)
 		printf("audio open fail\n\r");
 		goto audio_save_init_fail;
 	}
-#if 0
-	null_save_ctx = mm_module_open(&null_module);
-	if (null_save_ctx) {
-		printf("NULL open success\n\r");
-	} else {
-		printf("NULL open fail\n\r");
-		goto audio_save_init_fail;
-	}
 
-	printf("NULL MODULE opened\n\r");
-#endif
 	afft_test_ctx = mm_module_open(&afft_module);
 	if (afft_test_ctx) {
 		mm_module_ctrl(afft_test_ctx, CMD_AFFT_SET_PARAMS, (int)&afft_test_params);
+		mm_module_ctrl(afft_test_ctx, CMD_AFFT_SET_OUTPUT, 1);
+		mm_module_ctrl(afft_test_ctx, MM_CMD_SET_QUEUE_LEN, 6);
+		mm_module_ctrl(afft_test_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_STATIC);
 		mm_module_ctrl(afft_test_ctx, CMD_AFFT_APPLY, 0);
 		mm_module_ctrl(afft_test_ctx, CMD_AFFT_SHOWN, 0);
 	} else {
@@ -381,7 +579,6 @@ void audio_tool_flow_init(void *param)
 		goto audio_save_init_fail;
 	}
 
-	printf("\r\n   craete array create  \r\n");
 	array_t array;
 	array.data_addr = (uint32_t) music_sr16k;
 	array.data_len = (uint32_t) music_sr16k_pcm_len;
@@ -398,17 +595,41 @@ void audio_tool_flow_init(void *param)
 		goto audio_save_init_fail;
 	}
 
+	p2p_audio_ctx = mm_module_open(&p2p_audio_module);
+	if (p2p_audio_ctx) {
+		mm_module_ctrl(p2p_audio_ctx, CMD_P2P_AUDIO_SET_PARAMS, (int)&p2p_audio_params);
+		mm_module_ctrl(p2p_audio_ctx, CMD_P2P_AUDIO_APPLY, 1);
+		mm_module_ctrl(p2p_audio_ctx, CMD_P2P_AUDIO_STREAMING, 0);
+
+	} else {
+		printf("P2P AUDIO open fail\n\r");
+		goto audio_save_init_fail;
+	}
+
+	printf("\r\n   siso_audio_afft create  \r\n");
+	siso_audio_afft = siso_create();
+	if (siso_audio_afft) {
+		siso_ctrl(siso_audio_afft, MMIC_CMD_ADD_INPUT, (uint32_t)audio_save_ctx, 0);
+		siso_ctrl(siso_audio_afft, MMIC_CMD_ADD_OUTPUT, (uint32_t)afft_test_ctx, 0);
+		siso_ctrl(siso_audio_afft, MMIC_CMD_SET_TASKPRIORITY, 2, 0);
+		siso_start(siso_audio_afft);
+		printf("siso_start siso_audio_afft\n\r");
+	} else {
+		printf("siso2 open fail\n\r");
+		goto audio_save_init_fail;
+	}
+
 	printf("\r\n   mimo_array_audio create  \r\n");
 	mimo_aarray_audio = mimo_create();
 	if (mimo_aarray_audio) {
-		mimo_ctrl(mimo_aarray_audio, MMIC_CMD_ADD_INPUT0, (uint32_t)audio_save_ctx, 0);
+		mimo_ctrl(mimo_aarray_audio, MMIC_CMD_ADD_INPUT0, (uint32_t)afft_test_ctx, 0);
 		mimo_ctrl(mimo_aarray_audio, MMIC_CMD_ADD_INPUT1, (uint32_t)array_pcm_ctx, 0);
 		mimo_ctrl(mimo_aarray_audio, MMIC_CMD_ADD_INPUT2, (uint32_t)pcm_tone_ctx, 0);
-		//mimo_ctrl(mimo_aarray_audio, MMIC_CMD_ADD_OUTPUT0, (uint32_t)null_save_ctx, MMIC_DEP_INPUT0);//for audio record and playtone
-		mimo_ctrl(mimo_aarray_audio, MMIC_CMD_ADD_OUTPUT0, (uint32_t)afft_test_ctx, MMIC_DEP_INPUT0);//for audio record and playtone
+		mimo_ctrl(mimo_aarray_audio, MMIC_CMD_ADD_OUTPUT0, (uint32_t)p2p_audio_ctx, MMIC_DEP_INPUT0);//for audio record and streaming
 		mimo_ctrl(mimo_aarray_audio, MMIC_CMD_ADD_OUTPUT1, (uint32_t)audio_save_ctx, MMIC_DEP_INPUT0);//for audio playback
 		mimo_ctrl(mimo_aarray_audio, MMIC_CMD_ADD_OUTPUT2, (uint32_t)audio_save_ctx, MMIC_DEP_INPUT1);//for audio playmusic
 		mimo_ctrl(mimo_aarray_audio, MMIC_CMD_ADD_OUTPUT3, (uint32_t)audio_save_ctx, MMIC_DEP_INPUT2);//for audio playtone
+		mimo_ctrl(mimo_aarray_audio, MMIC_CMD_SET_TASKPRIORITY, 2, 0);
 		mimo_start(mimo_aarray_audio);
 		printf("mimo_start mimo_aarray_audio\n\r");
 		mimo_pause(mimo_aarray_audio, MM_OUTPUT1 | MM_OUTPUT2 | MM_OUTPUT3); //disable audio playback and disable audio playtone
@@ -420,21 +641,29 @@ void audio_tool_flow_init(void *param)
 
 	printf("audio_set_done~~~~~\r\n");
 
-	if (xTaskCreate(audio_save_mass_storage_thread, ((const char *)"mass_stor"), 2048, NULL, tskIDLE_PRIORITY + 1, NULL) != pdPASS) {
+	if (xTaskCreate(audio_save_mass_storage_thread, ((const char *)"mass_stor"), 2048, NULL, tskIDLE_PRIORITY + 5, NULL) != pdPASS) {
 		printf("\r\n audio_save_mass_storage_thread: Create Task Error\n");
 	}
 
-	if (xTaskCreate(audio_ram_sd_thread, ((const char *)"ram_sd"), 1024 * 8, NULL, tskIDLE_PRIORITY + 1, NULL) != pdPASS) {
+	if (xTaskCreate(audio_ram_sd_thread, ((const char *)"ram_sd"), 1024 * 8, NULL, tskIDLE_PRIORITY + 5, NULL) != pdPASS) {
 		printf("\r\n audio_ram_sd_thread: Create Task Error\n");
 	}
 
+	if (xTaskCreate(audio_ram_tftp_thread, ((const char *)"ram_tftp"), 1024 * 8, NULL, tskIDLE_PRIORITY + 5, NULL) != pdPASS) {
+		printf("\r\n audio_ram_tftp_thread: Create Task Error\n");
+	}
+
 	audio_save_log_init();
+
 #if AUDIO_TRANSFER_FUNC
 	if (xTaskCreate(audio_data_transfer, ((const char *)"au_trans"), 1024 * 8, NULL, tskIDLE_PRIORITY + 1, NULL) != pdPASS) {
 		printf("\r\n audio_data_transfer: Create Task Error\n");
 	}
 #endif
-
+	vTaskDelay(5000);
+#if P2P_ENABLE
+	//skynet_device_run();
+#endif
 	while (1) {
 		vTaskDelay(1000);
 	}

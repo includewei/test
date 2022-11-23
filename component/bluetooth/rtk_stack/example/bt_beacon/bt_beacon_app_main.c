@@ -231,16 +231,15 @@ int bt_beacon_app_main(void)
 	return 0;
 }
 
+extern bool rtk_bt_pre_enable(void);
 int bt_beacon_app_init(int type)
 {
 	//int bt_stack_already_on = 0;
 	T_GAP_DEV_STATE new_state;
-
-	/*Wait WIFI init complete*/
-	while (!(wifi_is_running(WLAN0_IDX) || wifi_is_running(WLAN1_IDX))) {
-		os_delay(1000);
+	if (rtk_bt_pre_enable() == false) {
+		printf("%s fail!\r\n", __func__);
+		return -1;
 	}
-
 	//judge BLE Beacon is already on
 	le_get_gap_param(GAP_PARAM_DEV_STATE, &new_state);
 	if (new_state.gap_init_state == GAP_INIT_STATE_STACK_READY) {

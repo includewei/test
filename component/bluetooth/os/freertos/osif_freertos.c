@@ -15,7 +15,7 @@
 
 #include <osif.h>
 
-#if defined(CONFIG_PLATFORM_AMEBAD2) && CONFIG_PLATFORM_AMEBAD2
+#if defined(CONFIG_PLATFORM_AMEBAD2) || defined(CONFIG_PLATFORM_AMEBALITE)
 #include "platform_autoconf.h"
 #include "ameba_soc.h"
 #endif
@@ -28,6 +28,8 @@
 #elif defined ( __GNUC__ )
 #if defined(ARM_CORE_CA7) && ARM_CORE_CA7
 #include "cmsis_gcc_ca.h"
+#elif defined(ARM_CORE_CM4) && ARM_CORE_CM4
+#include "cmsis_gcc.h"
 #else
 #include "cmsis_gcc.h"
 #endif
@@ -36,7 +38,7 @@
  */
 #elif defined ( __ICCARM__ )
 
-#ifdef CONFIG_PLATFORM_8710C
+#if defined(CONFIG_PLATFORM_8710C) || defined(CONFIG_PLATFORM_AMEBAD2) || defined(CONFIG_PLATFORM_AMEBALITE)
 #include "cmsis.h"
 #else
 #include "cmsis_iar.h"
@@ -54,7 +56,15 @@ static inline bool osif_task_context_check(void)
 #if defined(__ICCARM__)
 	return (__get_PSR() & 0x1FF) == 0;
 #elif defined(__GNUC__)
+
+#ifdef ARM_CORE_CM4
 	return (__get_xPSR() & 0x1FF) == 0;
+#elif defined(RSICV_CORE_KR4)
+	return plic_get_active_irq_id_ram() == 0;
+#else
+	return (__get_xPSR() & 0x1FF) == 0;
+#endif
+
 #endif
 #endif
 }

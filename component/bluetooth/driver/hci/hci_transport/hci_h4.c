@@ -16,7 +16,9 @@
 #define BT_HCI_EVT_LE_ADVERTISING_REPORT 0x02
 
 #if defined (__ICCARM__)
+#ifndef __PACKED
 #define __PACKED 
+#endif
 #else
 #define __PACKED __attribute__ ((packed))
 #endif
@@ -115,8 +117,10 @@ static void h4_rx_thread(void *context)
             hdr_len = sizeof(struct bt_hci_evt_hdr);
         else if (type == H4_ACL)
             hdr_len = sizeof(struct bt_hci_acl_hdr);
+#if HCI_ISO_DATA_PACKET
         else if (type == H4_ISO)
             hdr_len = sizeof(struct bt_hci_iso_hdr);
+#endif
         else if (type == H4_SCO)
             hdr_len = sizeof(struct bt_hci_sco_hdr);
         else
@@ -168,6 +172,7 @@ static void h4_rx_thread(void *context)
                 break;
             memcpy(buf, &hdr, hdr_len);
         }
+#if HCI_ISO_DATA_PACKET
         else if (H4_ISO == type)
         {
             body_len = hdr.iso.len;
@@ -177,6 +182,7 @@ static void h4_rx_thread(void *context)
                 break;
             memcpy(buf, &hdr, hdr_len);
         }
+#endif
         else if (H4_SCO == type)
         {
             body_len = hdr.sco.len;
@@ -193,7 +199,7 @@ static void h4_rx_thread(void *context)
         if (body_len != h4_recv_data(buf + hdr_len, body_len))
             break;
 
-        HCI_DUMP(type, 1, buf, hdr_len + body_len);
+        //HCI_DUMP(type, 1, buf, hdr_len + body_len);
 
         if(hci_h4->recv)
             hci_h4->recv(type, buf, hdr_len + body_len);
@@ -235,7 +241,7 @@ static uint8_t h4_open(void)
 {
     if (!hci_h4)
     {
-        hci_h4 = osif_mem_alloc(0, sizeof(struct hci_h4_t));
+        hci_h4 = osif_mem_alloc(RAM_TYPE_DATA_ON, sizeof(struct hci_h4_t));
         if (!hci_h4)
             return HCI_FAIL;
         memset(hci_h4, 0, sizeof(struct hci_h4_t));
@@ -252,10 +258,20 @@ static uint8_t h4_open(void)
 
 static uint8_t h4_close(void)
 {
-    /* Need Stop UART Before Here */
+    if (!hci_h4)
+        return HCI_FAIL;
+
     hci_h4->rx_run = 0;
     osif_sem_give(hci_h4->rx_ind_sema);
     osif_sem_take(hci_h4->rx_run_sema, 0xffffffffUL);
+
+    return HCI_SUCCESS;
+}
+
+static uint8_t h4_free(void)
+{
+    if (!hci_h4)
+        return HCI_FAIL;
 
     osif_sem_delete(hci_h4->rx_run_sema);
     osif_sem_delete(hci_h4->rx_ind_sema);
@@ -270,6 +286,7 @@ static uint8_t h4_close(void)
 HCI_TRANSPORT_OPS hci_transport_ops = {
     .open        = h4_open,
     .close       = h4_close,
+    .free_ops    = h4_free,
     .send        = h4_send,
     .set_recv    = h4_set_recv,
     .set_get_buf = h4_set_get_buf,

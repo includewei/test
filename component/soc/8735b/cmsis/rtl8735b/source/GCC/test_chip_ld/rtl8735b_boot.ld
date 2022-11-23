@@ -12,7 +12,8 @@ MEMORY
   /* Use Secure RAM last 60KB for boot loader used */
   VECTORS_RAM (rwx)		: ORIGIN = 0x20166000, LENGTH = 0x20166200 - 0x20166000  /* 512B */
   RAM_FUN_TABLE (rwx)	: ORIGIN = 0x20166200, LENGTH = 0x20166300 - 0x20166200  /* 240B */ 
-  RAM (rwx)				: ORIGIN = 0x20166300, LENGTH = 0x20176300 - 0x20166300  /* 64 KB */
+  RAM_BSS (rwx)			: ORIGIN = 0x20166300, LENGTH = 0x20167300 - 0x20166300  /* 4 KB */
+  RAM (rwx)				: ORIGIN = 0x20167300, LENGTH = 0x20176300 - 0x20167300  /* 60 KB */
   VOE           (rwx)	: ORIGIN = 0x70000000, LENGTH = 0x70100000 - 0x70000000	/*  1MB */
 }
 
@@ -99,6 +100,15 @@ SECTIONS
 
 	} > RAM_FUN_TABLE
 
+    .ram.bss :
+	{
+		. = ALIGN(4);
+		__ram_bss_start__ = .;        
+		KEEP(*(.ram.hal_crypto.bss))
+		. = ALIGN(4);
+		__ram_bss_end__ = .;
+    } > RAM_BSS
+
 	.bss :
 	{
 		. = ALIGN(4);
@@ -106,6 +116,7 @@ SECTIONS
 		*(.bss*)
 		*(COMMON)
 		*hal_dram_init.o(.bss*)
+       	*(.ram.hal_pmc.bss*)
 		. = ALIGN(4);
 		__bss_end__ = .;
 	} > RAM
@@ -116,6 +127,7 @@ SECTIONS
 		__fw_img_start__ = .;
 		__data_start__ = .;
 		*(vtable)
+       	*(.ram.hal_pmc.data*)
 		*(.data*)
 
 		. = ALIGN(4);
@@ -160,8 +172,7 @@ SECTIONS
 		*hal_flash.o(.text*)
 		*hal_timer.o(.text*)
 		*hal_uart.o(.text*)
-		
-		
+        *(.ram.hal_pmc.text*)
 		__ram_code_text_end__ = .;
 	} > RAM
 
@@ -173,6 +184,7 @@ SECTIONS
 		*(.rodata.str1*)
 		*hal_sys_ctrl.o(.rodata*)
 		*hal_dram_init.o(.rodata*)
+       	*(.ram.hal_pmc.rodata*)
 		__ram_code_rodata_end__ = .;
 	} > RAM
 

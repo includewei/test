@@ -3,11 +3,11 @@
  * Copyright(c) 2021, Realtek Semiconductor Corporation. All rights reserved.
  *******************************************************************************
  */
-
+#include <osif.h>
 #include "hci/hci_transport.h"
 #include "hci/hci_process.h"
 
-static void* recv_sem;
+static void* recv_sem = NULL;
 static uint8_t* hci_buf;
 //static uint16_t hci_buf_len;
 
@@ -52,6 +52,7 @@ uint8_t hci_sa_send(uint8_t type, uint8_t* buf, uint16_t len, uint8_t is_sync)
 
     osif_sem_take(recv_sem, 0xffffffffUL);
     osif_sem_delete(recv_sem);
+    recv_sem = NULL;
     hci_buf = NULL;
 
     /* Then We can process Response */

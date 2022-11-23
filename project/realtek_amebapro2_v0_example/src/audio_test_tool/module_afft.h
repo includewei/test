@@ -11,6 +11,8 @@
 #define CMD_AFFT_GET_PARAMS     		MM_MODULE_CMD(0x01)  // get parameter
 #define CMD_AFFT_SAMPLERATE 			MM_MODULE_CMD(0x02)
 #define CMD_AFFT_CHANNEL				MM_MODULE_CMD(0x03)
+#define CMD_AFFT_RESET_FFT_RESULT		MM_MODULE_CMD(0x04)
+#define CMD_AFFT_SET_OUTPUT				MM_MODULE_CMD(0x05)
 #define CMD_AFFT_SHOWN		        	MM_MODULE_CMD(0x0c)
 
 #define CMD_AFFT_APPLY					MM_MODULE_CMD(0x20)  // for hardware module
@@ -40,8 +42,9 @@ typedef struct fft_cal_bk_s {
 } fft_cal_bk_t;
 
 typedef struct afft_param_s {
-	uint32_t sample_rate;	// 8000
-	uint32_t channel;		// 1
+	uint32_t sample_rate;
+	uint32_t channel;
+	uint32_t pcm_frame_size;
 
 } afft_params_t;
 
@@ -55,6 +58,9 @@ typedef struct afft_ctx_s {
 	uint8_t *cache;
 	uint32_t cache_idx;
 	uint32_t stop;
+	float accumlated_output[FFT_BK_SIZE];
+	uint32_t accumlated_times;
+	bool pcm_out_en;
 } afft_ctx_t;
 
 extern mm_module_t afft_module;

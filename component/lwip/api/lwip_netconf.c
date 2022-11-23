@@ -6,6 +6,7 @@
 #endif
 
 #include <platform_stdlib.h>
+#include "osdep_service.h"
 
 #if defined(CONFIG_FAST_DHCP) && CONFIG_FAST_DHCP
 #include "wifi_fast_connect.h"
@@ -100,7 +101,7 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
-#ifdef CONFIG_INIC_IPC
+#ifdef CONFIG_AS_INIC_AP
 #include "inic_ipc.h"
 extern rtw_mode_t wifi_mode;
 #endif
@@ -286,7 +287,7 @@ uint8_t LwIP_DHCP(uint8_t idx, uint8_t dhcp_state)
 		switch (DHCP_state) {
 		case DHCP_START: {
 			/*acqurie wakelock to guarantee dhcp*/
-#ifndef CONFIG_INIC_IPC
+#ifndef CONFIG_AS_INIC_AP
 			rtw_wakelock_timeout(4 * 1000);
 #endif
 

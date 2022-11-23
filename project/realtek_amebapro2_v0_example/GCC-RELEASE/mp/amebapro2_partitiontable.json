@@ -47,46 +47,58 @@
             },
             "usr_len": 256,
             "usr_bin":"user.bin",
-            "records":["boot_p", "boot_s","fw1","fw2","iq","nn","mp"]
+            "records":["boot_p", "boot_s","fw1","fw2","iq","nn","sysdata","fcsdata","mp"]
         },
         "boot_p":{
-            "start_addr" : "0x8000",
-            "length" : "0x18000",
+            "start_addr" : "0x9000",
+            "length" : "0x27000",
             "type": "PT_BL_PRI",
             "valid": true
         },
         "boot_s":{
-            "start_addr" : "0x20000",
-            "length" : "0xC000",
+            "start_addr" : "0x30000",
+            "length" : "0x27000",
             "type": "PT_BL_SEC",
             "valid": true
         },
         "fw1":{
             "start_addr" : "0x100000",
-            "length" : "0x300000",
+            "length" : "0x400000",
             "type": "PT_FW1",
             "valid": true
         },
 		"iq":{
-            "start_addr" : "0x400000",
-            "length" : "0x70000",
+            "start_addr" : "0x500000",
+            "length" : "0xC0000",
             "type": "PT_ISP_IQ",
             "valid": true
         },
         "fw2":{
-            "start_addr" : "0x470000",
-            "length" : "0x300000",
+            "start_addr" : "0x5C0000",
+            "length" : "0x400000",
             "type": "PT_FW2",
             "valid": true
         },
         "nn":{
-            "start_addr" : "0x770000",
+            "start_addr" : "0x9C0000",
             "length" : "0x700000",
             "type": "PT_NN_MDL",
             "valid": true
         },
+		"sysdata":{
+			"start_addr" : "0x7000",
+            "length" : "0x1000",
+            "type": "PT_SYSDATA",
+            "valid": true
+		},
+		"fcsdata":{
+			"start_addr" : "0x8000",
+            "length" : "0x1000",
+            "type": "PT_FCSDATA",
+            "valid": true
+		},
         "mp":{
-        	"start_addr" : "0xD70000",
+            "start_addr" : "0xFC0000",
         	"length" : "0x1000",
         	"type": "PT_MP",
         	"valid": false

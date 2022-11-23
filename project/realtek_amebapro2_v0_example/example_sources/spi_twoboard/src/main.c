@@ -6,10 +6,10 @@
 #define SPI_IS_AS_MASTER 0
 
 // SPI0 (S0)
-#define SPI0_MOSI  PE_7
-#define SPI0_MISO  PE_6
-#define SPI0_SCLK  PE_5
-#define SPI0_CS    PE_8
+#define SPI0_MOSI  PE_3
+#define SPI0_MISO  PE_2
+#define SPI0_SCLK  PE_1
+#define SPI0_CS    PE_4
 
 extern void hal_ssi_toggle_between_frame(phal_ssi_adaptor_t phal_ssi_adaptor, u8 ctl);
 

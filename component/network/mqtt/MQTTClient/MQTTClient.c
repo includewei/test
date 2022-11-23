@@ -14,6 +14,7 @@
  *    Allan Stockdill-Mander/Ian Craggs - initial API and implementation and/or initial documentation
  *******************************************************************************/
 #include "MQTTClient.h"
+
 const char *const msg_types_str[] = {
 	"Reserved",
 	"CONNECT",
@@ -618,7 +619,11 @@ void MQTTSetStatus(MQTTClient *c, int mqttstatus)
 	mqtt_printf(MQTT_INFO, "Set mqtt status to %s", mqtt_status_str[mqttstatus]);
 }
 
-int MQTTDataHandle(MQTTClient *c, fd_set *readfd, MQTTPacket_connectData *connectData, messageHandler messageHandler, char *address, char *topic)
+static int isSubscribed = 0;
+static unsigned short currentpacketid = 0;
+
+int MQTTDataHandle(MQTTClient *c, fd_set *readfd, MQTTPacket_connectData *connectData, messageHandler messageHandler, char *address, char *topic[],
+				   int topic_num)
 {
 	short packet_type = 0;
 	int rc = 0;
@@ -684,12 +689,20 @@ int MQTTDataHandle(MQTTClient *c, fd_set *readfd, MQTTPacket_connectData *connec
 				mqtt_printf(MQTT_INFO, "MQTT Connected");
 				TimerInit(&c->cmd_timer);
 				TimerCountdownMS(&c->cmd_timer, c->command_timeout_ms);
-				if ((rc = MQTTSubscribe(c, topic, c->qos_limit, messageHandler)) != 0) {
-					mqtt_printf(MQTT_INFO, "Return code from MQTT subscribe is %d\n", rc);
+				isSubscribed = 0;
+
+				if (sessionPresent == 1) {
+					printf("sessionPresent = %d\r\n", sessionPresent);
+					MQTTSetStatus(c, MQTT_RUNNING);
 				} else {
-					mqtt_printf(MQTT_INFO, "Subscribe to Topic: %s", topic);
-					MQTTSetStatus(c, MQTT_SUBTOPIC);
+					if ((rc = MQTTSubscribe(c, topic[0], c->qos_limit, messageHandler)) != 0) {
+						mqtt_printf(MQTT_INFO, "Return code from MQTT subscribe is %d\n", rc);
+					} else {
+						mqtt_printf(MQTT_INFO, "Subscribe to Topic: %s", topic[0]);
+						MQTTSetStatus(c, MQTT_SUBTOPIC);
+					}
 				}
+
 			} else {
 				mqtt_printf(MQTT_DEBUG, "Deserialize CONNACK failed");
 				rc = FAILURE;
@@ -706,29 +719,29 @@ int MQTTDataHandle(MQTTClient *c, fd_set *readfd, MQTTPacket_connectData *connec
 		if (packet_type == SUBACK) {
 			int count = 0, grantedQoS = -1;
 			unsigned short mypacketid;
-			int isSubscribed = 0;
+
 			if (MQTTDeserialize_suback(&mypacketid, 1, &count, &grantedQoS, c->readbuf, c->readbuf_size) == 1) {
 				rc = grantedQoS; // 0, 1, 2 or 0x80
 				mqtt_printf(MQTT_DEBUG, "grantedQoS: %d", grantedQoS);
+				mqtt_printf(MQTT_DEBUG, "mypacketid = %d", mypacketid);
 			}
-			if (rc != 0x80) {
+			if (rc != 0x80 && mypacketid > currentpacketid) {
 				int i;
-				for (i = 0; i < MAX_MESSAGE_HANDLERS; ++i) {
-					if (c->messageHandlers[i].topicFilter == topic) {
-						isSubscribed = 1;
-						break;
+				isSubscribed++;
+				currentpacketid = mypacketid;
+				if (isSubscribed < topic_num) {
+					if ((rc = MQTTSubscribe(c, topic[isSubscribed], c->qos_limit, messageHandler)) != 0) {
+						mqtt_printf(MQTT_INFO, "Return code from MQTT subscribe is %d\n", rc);
+					} else {
+						mqtt_printf(MQTT_INFO, "Subscribe to Topic: %s", topic[isSubscribed]);
+						MQTTSetStatus(c, MQTT_SUBTOPIC);
 					}
 				}
-				if (!isSubscribed)
-					for (i = 0; i < MAX_MESSAGE_HANDLERS; ++i) {
-						if (c->messageHandlers[i].topicFilter == 0) {
-							c->messageHandlers[i].topicFilter = topic;
-							c->messageHandlers[i].fp = messageHandler;
-							break;
-						}
-					}
 				rc = 0;
-				MQTTSetStatus(c, MQTT_RUNNING);
+
+				if (isSubscribed == topic_num) {
+					MQTTSetStatus(c, MQTT_RUNNING);
+				}
 			}
 		} else if (TimerIsExpired(&c->cmd_timer)) {
 			mqtt_printf(MQTT_DEBUG, "Not received SUBACK");

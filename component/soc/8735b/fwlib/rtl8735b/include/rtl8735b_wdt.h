@@ -3,7 +3,7 @@
  * @brief    The HAL related definition and macros for the UART device.
  *           Includes Registers and data type definition.
  * @version  V1.00
- * @date     2021-01-04
+ * @date     2021-06-07
  *
  * @note
  *
@@ -36,6 +36,11 @@ extern "C" {
 
 #include "rtl8735b_vndr_s_type.h"
 #include "rtl8735b_pon_type.h"
+
+enum {
+	WDT_AON_CTRL = 0x11,
+	WDT_VNDR_CTRL = 0x12
+};
 
 /**
  * @addtogroup hs_hal_wdt WDT
@@ -73,6 +78,7 @@ void hal_rtl_wdt_ctrl_aon_enable(void);
 void hal_rtl_wdt_ctrl_aon_disable(void);
 void hal_rtl_wdt_ctrl_all_enable(void);
 void hal_rtl_wdt_ctrl_all_disable(void);
+uint8_t hal_rtl_wdt_check_wdt_en(const uint8_t wdt_obj);
 
 typedef struct hal_wdt_func_stubs_s {
 	void (*wdt_set_timeout)(uint32_t time_us);

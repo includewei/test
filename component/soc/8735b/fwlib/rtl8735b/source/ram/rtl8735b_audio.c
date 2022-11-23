@@ -2397,6 +2397,8 @@ void hal_rtl_audio_sport_init(hal_audio_adapter_t *paudio_adapter)
 
 	hal_rtl_sport_set_mclk(psport_adapter, SPORT_SRC_DIV_1, ENABLE);
 
+	hal_rtl_sport_rx_same_mono_stereo(psport_adapter, DISABLE);
+
 	//IRQ
 	hal_rtl_sport_tx_fifo_th(psport_adapter, 16);
 	hal_rtl_sport_rx_fifo_th(psport_adapter, 16);

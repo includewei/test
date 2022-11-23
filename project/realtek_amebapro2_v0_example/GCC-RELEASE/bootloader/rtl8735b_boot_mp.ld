@@ -4,6 +4,15 @@
 /* this symbol file is from S & NS symbol merged */
 INCLUDE "romsym_is.so"
 
+/* unit - Mega byte */
+
+DDR_SIZE = 128;
+DRAM_SIZE =(DDR_SIZE - 2);
+NN_SIZE = 16;
+
+DRAM_END = 0x70000000 + (DRAM_SIZE - NN_SIZE)*1024*1024;
+NN_END   = 0x70000000 + (DRAM_SIZE)*1024*1024;
+
 MEMORY
 {
   /* Internal RAM for boot temp use to load image1, will be recycle when leave ROM code */
@@ -13,13 +22,15 @@ MEMORY
   VECTORS_RAM   (rwx)	: ORIGIN = 0x00018000, LENGTH = 0x00018200 - 0x00018000  /* 512B */
   RAM_FUN_TABLE (rwx)	: ORIGIN = 0x00018200, LENGTH = 0x00018300 - 0x00018200  /* 240B */ 
   ITCM_RAM_BSS  (rwx)	: ORIGIN = 0x00018300, LENGTH = 0x00020300 - 0x00018300  /* 32 KB */
-  ITCM_RAM      (rwx)	: ORIGIN = 0x00020300, LENGTH = 0x00030000 - 0x00020300  /* 63.25KB */
-  VOE           (rwx)	: ORIGIN = 0x70000000, LENGTH = 0x70100000 - 0x70000000  /* 1MB */
+  ITCM_RAM      (rwx)	: ORIGIN = 0x00020300, LENGTH = 0x00040000 - 0x00020300  /* 63.25KB */
+  RAM           (rwx)	: ORIGIN = 0x20101200, LENGTH = 0x20105200 - 0x20101200  /* 16 KB */
+  RAM_BSS       (rwx)	: ORIGIN = 0x20105200, LENGTH = 0x20106200 - 0x20105200  /* 4 KB */
+  VOE           (rwx)	: ORIGIN = 0x70000000, LENGTH = 0x70100000 - 0x70000000  /* 1MB */ 
   NN     (rwx)          : ORIGIN = 0x72C00000, LENGTH = 0x74000000 - 0x72C00000	 /* 20MB For FCS*/
   /* DDR 64M */
-  DDR    (rwx) 		    : ORIGIN = 0x70100000, LENGTH = 0x73600000 - 0x70100000 /* 53MB */
-  /* DDR 128M */
-  /*DDR    (rwx) 		: ORIGIN = 0x70100000, LENGTH = 0x77600000 - 0x70100000*/ /* 53 + 64MB */
+  /*DDR    (rwx) 		: ORIGIN = 0x70100000, LENGTH = 0x73600000 - 0x70100000*/ /* 53MB */
+  /* DDR */
+  DDR    (rwx) 			: ORIGIN = 0x70100000, LENGTH = DRAM_END - 0x70100000 /* 55 + 64MB */
 }
 
 /* Library configurations */
@@ -114,6 +125,15 @@ SECTIONS
 
 	} > RAM_FUN_TABLE
 
+	.ram.bss :
+	{
+		. = ALIGN(4);
+		__ram_bss_start__ = .;        
+		KEEP(*(.ram.hal_crypto.bss))
+		. = ALIGN(4);
+		__ram_bss_end__ = .;
+	} > RAM_BSS
+
 	.bss :
 	{
 		. = ALIGN(4);
@@ -122,6 +142,7 @@ SECTIONS
 		*(.bss*)
 		*(COMMON)
 		*hal_dram_init.o(.bss*)
+		*(.ram.hal_pmc.bss*)
 		. = ALIGN(4);
 		__bss_end__ = .;
 	} > ITCM_RAM_BSS
@@ -131,6 +152,7 @@ SECTIONS
 		. = ALIGN(4);
 		__data_start__ = .;
 		*(vtable)
+		*(.ram.hal_pmc.data*)
 		*(.data*)
 
 		. = ALIGN(4);
@@ -174,6 +196,7 @@ SECTIONS
 		*hal_flash.o(.text*)
 		*hal_timer.o(.text*)
 		*hal_uart.o(.text*)	
+		*(.ram.hal_pmc.text*)
 		__ram_code_text_end__ = .;
 
 	} > ITCM_RAM
@@ -185,9 +208,10 @@ SECTIONS
 		*(.rodata.str1*)
 		*hal_sys_ctrl.o(.rodata*)
 		*hal_dram_init.o(.rodata*)	
+		*(.ram.hal_pmc.rodata*)
 		__ram_code_rodata_end__ = .;	/*	This locate define is important!!! erase boot loader will reference this as end */
 
-	} > ITCM_RAM
+	} > RAM
 	
 	.heap (COPY):
 	{

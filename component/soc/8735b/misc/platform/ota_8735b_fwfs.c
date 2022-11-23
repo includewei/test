@@ -6,10 +6,52 @@
 #include "sys_api.h"
 #include "fwfs.h"
 
-static void *taskOTA = NULL;
+static TaskHandle_t taskOTA = NULL;
 
 #define STACK_SIZE		1024
 #define TASK_PRIORITY	tskIDLE_PRIORITY + 1
+
+#define PROGRESS_BAR_WIDTH 40
+#include <time.h>
+static void ota_draw_progress(const char *desc, int curr, int max)
+{
+	static char buf[PROGRESS_BAR_WIDTH + 1];
+
+	static time_t last_time;
+	time_t curr_time = time(NULL);
+	int last_progress = -1;
+	int progress;
+	int x;
+
+	/* check for not known maximum */
+	if (max < curr) {
+		max = curr;
+	}
+	/* make none out of none give zero */
+	if (max == 0 && curr == 0) {
+		max = 1;
+	}
+
+	progress = (PROGRESS_BAR_WIDTH * curr) / max;
+	if (progress > PROGRESS_BAR_WIDTH) {
+		progress = PROGRESS_BAR_WIDTH;
+	}
+
+	for (x = 0; x != PROGRESS_BAR_WIDTH; x++) {
+		if (x < progress) {
+			buf[x] = '=';
+		} else {
+			buf[x] = ' ';
+		}
+	}
+	buf[x] = 0;
+
+	printf("\r%s\t[%s] %3lld%% %12d/%12d bytes", desc, buf, (100ULL * curr) / max, curr, max);
+	if (progress == PROGRESS_BAR_WIDTH) {
+		printf("\n\r%s done.\n\r", desc);
+	}
+}
+
 
 // Checksum check before make fw valid
 // Please make sure target OTA firmware did contains 4 bytes checksum value, or the checksum check would always fail
@@ -23,7 +65,7 @@ typedef struct update_cfg_fwfs_s {
 
 static void update_ota_local_task(void *param)
 {
-	int server_socket;
+	int server_socket = -1;
 	uint8_t *buf;
 	int read_bytes = 0;
 	uint32_t idx = 0;
@@ -69,6 +111,7 @@ static void update_ota_local_task(void *param)
 		// !W checksum !W padding 0 !W file size !W
 		// !X!X!X!X!X!X!X!X!X!X!X!X!X!X!X!X!X!X!X!X
 		printf("\n\r[%s] info %d bytes", __FUNCTION__, read_bytes);
+		printf("\n\r[%s] tx checksum  0x%x", __FUNCTION__, file_info[0]);
 		printf("\n\r[%s] tx file size 0x%x", __FUNCTION__, file_info[2]);
 		if (file_info[2] == 0) {
 			printf("\n\r[%s] No file size", __FUNCTION__);
@@ -105,28 +148,17 @@ static void update_ota_local_task(void *param)
 			break;    // Read end
 		}
 
-		printf("..");
-
 		if ((idx + read_bytes) > ota_len) {
 			printf("\n\r[%s] Redundant bytes received", __FUNCTION__);
 			read_bytes = ota_len - idx;
 			data_len = read_bytes;
 		}
 
-#if USE_CHECKSUM
-		// checksum attached at file end
-		if ((idx + read_bytes) > (ota_len - 4)) {
-			file_checksum.c[0] = buf[read_bytes - 4];
-			file_checksum.c[1] = buf[read_bytes - 3];
-			file_checksum.c[2] = buf[read_bytes - 2];
-			file_checksum.c[3] = buf[read_bytes - 1];
-		}
-#endif
 		// check final block
 		cur_block = idx / buf_size;
 		if (cur_block == (total_blocks - 1)) {
 			data_len -= 4; // remove final 4 bytes checksum
-			memset(buf + data_len, 0xFF, buf_size - data_len);
+			//	memset(buf + data_len, 0xFF, buf_size - data_len);
 		}
 
 		int wr_status = pfw_write(fp, buf, data_len);
@@ -137,6 +169,20 @@ static void update_ota_local_task(void *param)
 		}
 
 		idx += read_bytes;
+
+		ota_draw_progress("programming", idx, ota_len);
+
+#if USE_CHECKSUM
+		// checksum attached at file end
+		if (idx == ota_len) {
+			file_checksum.c[0] = buf[read_bytes - 4];
+			file_checksum.c[1] = buf[read_bytes - 3];
+			file_checksum.c[2] = buf[read_bytes - 2];
+			file_checksum.c[3] = buf[read_bytes - 1];
+
+			printf("attached checksum %x\n\r", file_checksum.u);
+		}
+#endif
 
 		if (idx == ota_len) {
 			break;

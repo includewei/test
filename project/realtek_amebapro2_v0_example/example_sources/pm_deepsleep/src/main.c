@@ -1,4 +1,6 @@
 #include "power_mode_api.h"
+#include "gpio_api.h"
+#include "gpio_ex_api.h"
 #include "gpio_irq_api.h"
 #include "gpio_irq_ex_api.h"
 
@@ -29,9 +31,9 @@ int main(void)
 	gpio_t my_GPIO1;
 	gpio_t my_GPIO2;
 	gpio_init(&my_GPIO1, PA_2);
-	gpio_irq_pull_ctrl(&my_GPIO1, PullDown);
+	gpio_pull_ctrl(&my_GPIO1, PullDown);
 	gpio_init(&my_GPIO2, PA_3);
-	gpio_irq_pull_ctrl(&my_GPIO2, PullDown);
+	gpio_pull_ctrl(&my_GPIO2, PullDown);
 
 	for (int i = 5; i > 0; i--) {
 		dbg_printf("Enter DeepSleep by %d seconds \r\n", i);
@@ -46,7 +48,7 @@ int main(void)
 //if there is no GPIO wakeup source please set a GPIO pin for wake up
 	gpio_t my_GPIO2;
 	gpio_init(&my_GPIO2, PA_3);
-	gpio_irq_pull_ctrl(&my_GPIO2, PullDown);
+	gpio_pull_ctrl(&my_GPIO2, PullDown);
 	gpio_irq_init(&my_GPIO_IRQ, WAKUPE_GPIO_PIN, NULL, (uint32_t)&my_GPIO_IRQ);
 	gpio_irq_pull_ctrl(&my_GPIO_IRQ, PullDown);
 	gpio_irq_set(&my_GPIO_IRQ, IRQ_RISE, 1);

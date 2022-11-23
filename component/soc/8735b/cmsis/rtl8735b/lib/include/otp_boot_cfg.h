@@ -2,7 +2,7 @@
  * @file     otp_boot_cfg.h
  * @brief    Define the structure types for boot flow configuration those from OTP.
  * @version  V1.00
- * @date     2022-01-25
+ * @date     2022-07-27
  *
  * @note
  *
@@ -65,6 +65,14 @@ extern "C" {
 #define HIGH_VAL_SSZ_LOCK_CHK_MAX_SIZE      (1)
 #define HIGH_VAL_SZ_LOCK_CHK_MAX_SIZE       (32)
 #define HIGH_VAL_SZ_WLOCK_ENTRY_VAL         (0x0)
+
+#define OTP_PHY_CTRL_TEST_M_FUNC_ADDR       (0x5B0)
+#define OTP_PHY_CTRL_NORM_M_FUNC_ADDR       (0x5B4)
+#define OTP_PHY_CTRL_NORM_M_CUST_FUNC_ADDR  (0x5B5)
+
+#define OTP_KC_VANTI_ADDR                   (0x548)
+#define OTP_BL_VANTI_ADDR                   (0x550)
+#define OTP_FW_VANTI_ADDR                   (0x570)
 
 enum high_val_assets_lock_sel {
 	HighVal_SSZ_R_W_LOCK        = 0x1,
@@ -354,21 +362,6 @@ __IOM uint8_t ld_rng_delay_en         :
 		1;       /*!< [7..7] Load high value assets random delay enable: 1'b0: disable random delay, 1'b1: enable random delay */
 	} bit;
 } otp_boot_cfg10_t, *potp_boot_cfg10_t;
-
-/**
-  \brief Union type to access super_sec_otp_ctrl (@ 0x50002c80).
-*/
-typedef union {
-	__OM  uint32_t w;                           /*!< (@ 0x50002c80) Super Secure otp Control Register                        */
-
-	struct {
-		__OM  uint32_t sec_super_sec_otp_lock : 1; /*!< [0..0] When this bit is written to '1', this bit can not be
-                                                   written to '0'. Beside the high speed platform is reset.
-                                                   1: Super secure zone can not be accessed. 0: Super secure
-                                                   zone just can be accessed by secure state. (AXI_PORT[1]
-                                                   = 0)                                                                      */
-	} b;
-} super_sec_otp_ctrl_t, *psuper_sec_otp_ctrl_t;
 
 /**
   \brief  Define the device life cycle state in eFuse.

@@ -86,6 +86,8 @@ void fATSD(void *arg)
 	if (argc == 2 || argc == 3) {
 		CmdDumpWord(argc - 1, (unsigned char **)(argv + 1));
 	}
+#else
+	(void) arg;
 #endif
 }
 
@@ -104,6 +106,8 @@ void fATSE(void *arg)
 	if (argc == 3) {
 		CmdWriteWord(argc - 1, (unsigned char **)(argv + 1));
 	}
+#else
+	(void) arg;
 #endif
 }
 
@@ -343,7 +347,6 @@ void fATSA(void *arg)
 	printf("RTL8730A_WL_TODO \n");
 #elif defined(CONFIG_PLATFORM_AMEBALITE)
 	printf("RTL8720E_WL_TODO \n");
-
 #endif
 }
 
@@ -815,7 +818,6 @@ void fATSG(void *arg)
 	printf("RTL8730A_WL_TODO \n");
 #elif defined(CONFIG_PLATFORM_AMEBALITE)
 	printf("RTL8720E_WL_TODO \n");
-
 #endif
 }
 
@@ -996,8 +998,10 @@ void fATSc(void *arg)
 	AT_PRINTK("[ATS!] ConfigDebugInfo = 0x%08X", ConfigDebug[LEVEL_INFO]);
 	AT_PRINTK("[ATS!] ConfigDebugWarn = 0x%08X", ConfigDebug[LEVEL_WARN]);
 #elif defined(CONFIG_PLATFORM_AMEBAD2)
+	(void) arg;
 	printf("RTL8730A_WL_TODO \n");
 #elif defined(CONFIG_PLATFORM_AMEBALITE)
+	(void) arg;
 	printf("RTL8720E_WL_TODO \n");
 #else
 	int argc = 0, config = 0;
@@ -1173,7 +1177,7 @@ void fATSJ(void *arg)
 }
 
 
-#if WIFI_LOGO_CERTIFICATION_CONFIG
+#if defined(WIFI_LOGO_CERTIFICATION_CONFIG) && WIFI_LOGO_CERTIFICATION_CONFIG
 
 #define FLASH_ADDR_SW_VERSION 	FAST_RECONNECT_DATA+0x900
 #define SW_VERSION_LENGTH 	32
@@ -1235,7 +1239,7 @@ void fATSx(void *arg)
 	strcat(buf, ".4.0." RTL_FW_COMPILE_DATE);
 #endif
 
-#if WIFI_LOGO_CERTIFICATION_CONFIG
+#if defined(WIFI_LOGO_CERTIFICATION_CONFIG) && WIFI_LOGO_CERTIFICATION_CONFIG
 	flash_t		flash;
 	unsigned char sw_version[SW_VERSION_LENGTH + 1];
 
@@ -1774,7 +1778,7 @@ void fATSL(void *arg)
 			lock_id = strtoul(argv[2], NULL, 16);
 			pmu_acquire_wakelock(lock_id);
 		}
-		AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "[ATSL] wakelock:0x%08x", pmu_get_wakelock_status());
+		AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "[ATSL] wakelock:0x%08x", (unsigned int)pmu_get_wakelock_status());
 		break;
 	}
 
@@ -1783,12 +1787,12 @@ void fATSL(void *arg)
 			lock_id = strtoul(argv[2], NULL, 16);
 			pmu_release_wakelock(lock_id);
 		}
-		AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "[ATSL] wakelock:0x%08x", pmu_get_wakelock_status());
+		AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "[ATSL] wakelock:0x%08x", (unsigned int) pmu_get_wakelock_status());
 		break;
 	}
 
 	case '?': // get status
-		AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "[ATSL] wakelock:0x%08x", pmu_get_wakelock_status());
+		AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "[ATSL] wakelock:0x%08x", (unsigned int) pmu_get_wakelock_status());
 #if (configGENERATE_RUN_TIME_STATS == 1)
 		//pmu_get_wakelock_hold_stats((char *)cBuffer);
 		AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "%s", cBuffer);
@@ -1928,7 +1932,7 @@ log_item_t at_sys_items[] = {
 	{"ATS#", fATSt, {NULL, NULL}},	// test command
 #endif
 	{"ATS?", fATSx, {NULL, NULL}},	// Help
-#if WIFI_LOGO_CERTIFICATION_CONFIG
+#if defined(WIFI_LOGO_CERTIFICATION_CONFIG) && WIFI_LOGO_CERTIFICATION_CONFIG
 	{"ATSV", fATSV},				// Write SW version for wifi logo test
 #endif
 #elif ATCMD_VER == ATVER_2 //#if ATCMD_VER == ATVER_1

@@ -13,13 +13,14 @@ MEMORY
   VECTORS_RAM (rwx)     : ORIGIN = 0x20100000, LENGTH = 0x20100200 - 0x20100000		/*  512B */
   
   /* 0x20100200 ~ 0x20101200 4KB is reserved for ROM used RAM bss */
+  /* 0x20101200 ~ 0x20105200 16KB is reserved for Bootloader RAM code used */
   
   /* RAM functions entry table */
-  RAM_FUN_TABLE (rwx)   : ORIGIN = 0x20101200, LENGTH = 0x201012F0 - 0x20101200		/*  240B */
-  RAM_IMG_SIGN (rwx)    : ORIGIN = 0x201012F0, LENGTH = 0x20101300 - 0x201012F0  	/*   16B */
+  RAM_FUN_TABLE (rwx)   : ORIGIN = 0x20105200, LENGTH = 0x201052F0 - 0x20105200		/*  240B */
+  RAM_IMG_SIGN (rwx)    : ORIGIN = 0x201052F0, LENGTH = 0x20105300 - 0x201052F0  	/*   16B */
   
   /* Internal SRAM for text, rodata & data */
-  RAM (rwx)             : ORIGIN = 0x20101300, LENGTH = 0x2015E000 - 0x20101300		/*  371.25KB */
+  RAM (rwx)             : ORIGIN = 0x20105300, LENGTH = 0x20156000 - 0x20105300		/*  323.25KB */
 
   /* DDR memory */
   VOE (rwx)          	: ORIGIN = 0x70000000, LENGTH = 0x70100000 - 0x70000000		/*  1MB */
@@ -150,10 +151,14 @@ SECTIONS
 	   __fw_img_start__ = .;
 	    __etext = .; 
 		__data_start__ = .;
+		__bl4voe_data_start__ = .;
+        KEEP(*(.bl4voe.ram.data))
+        __bl4voe_data_end__ = .;
 		*(vtable)
 		*lib_a*(.data*)
 		*hal_sys_ctrl.o(.data*)
 		*hal_dram*.o(.data*)
+		*(.ram.data)
 
 		. = ALIGN(4);
 		/* preinit data */
@@ -321,6 +326,7 @@ SECTIONS
 		. = ALIGN(4);
 		__eram_data_start__ = .;	
 		*(.data*)							
+		*(.ddr.data)
 		__eram_data_end__ = .;	
 	} > DDR
 

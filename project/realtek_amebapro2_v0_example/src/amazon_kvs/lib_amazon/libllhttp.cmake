@@ -29,6 +29,7 @@ list(
 )
 
 target_compile_definitions(${llhttp} PRIVATE ${llhttp_flags} )
+target_compile_options(${llhttp} PRIVATE ${LIBS_WARN_ERR_FLAGS} )
 
 include(../includepath.cmake)
 target_include_directories(

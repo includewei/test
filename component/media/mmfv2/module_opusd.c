@@ -20,10 +20,10 @@
 void opusd_bypass_parser(void *p, void *input, int len)
 {
 	opusd_ctx_t *ctx = (opusd_ctx_t *)p;
-	int newlen;
+	uint32_t newlen;
 	if (len > 0) {
 		newlen = opus_packet_unpad(input, len);
-		//printf("olen: %d newlen:%d\r\n",len, newlen);
+		//mm_printf("olen: %d newlen:%d\r\n",len, newlen);
 		if (newlen >= 0) {
 			if (newlen == 1) {
 				memcpy(ctx->data_cache + ctx->data_cache_len, input, newlen);
@@ -46,17 +46,6 @@ int opusd_handle(void *p, void *input, void *output)
 	mm_queue_item_t *input_item = (mm_queue_item_t *)input;
 	mm_queue_item_t *output_item = (mm_queue_item_t *)output;
 
-	//static uint32_t pretimestamp;
-	//printf("pre %u, now %u\r\n",pretimestamp,input_item->timestamp);
-	/*
-	if(pretimestamp == input_item->timestamp)// || input_item->timestamp == 0)
-	{
-	    pretimestamp = input_item->timestamp;
-	    return -1;
-	}else{
-	    pretimestamp = input_item->timestamp;
-	}
-	*/
 
 	if (input_item->size == 0)	{
 		return -1;
@@ -78,11 +67,8 @@ int opusd_handle(void *p, void *input, void *output)
 
 	ctx->parser((void *)ctx, (void *)input_item->data_addr, input_item->size);
 	remain_len = ctx->data_cache_len;
-	/*
-	if(ctx->params.with_opus_enc){
-	    xSemaphoreTake(opus_progress_sema, portMAX_DELAY);
-	}
-	*/
+
+
 	while (1) {
 
 		if (ctx->last_frame_idx < 0 || remain_len <= 0) {
@@ -92,7 +78,8 @@ int opusd_handle(void *p, void *input, void *output)
 		}
 		numofsamplesperframe = opus_packet_get_samples_per_frame((const unsigned char *)ctx->data_cache, ctx->params.sample_rate);
 		numofsamples = opus_packet_get_nb_samples((const unsigned char *)ctx->data_cache, ctx->frame_len_buf[ctx->last_frame_idx], ctx->params.sample_rate);
-		//numofframes = opus_packet_get_nb_frames((const unsigned char *)ctx->data_cache, ctx->params.sample_rate);
+		//mm_printf("opus decode numofsamplesperframe = %d, numofsamples = %d\r\n", numofsamplesperframe, numofsamples);
+		//mm_printf("opus decode outputframesize = %d\r\n", outputframesize);
 		if (outputframesize + numofsamples * ctx->params.bit_length / 8  > 1024) {
 			break;
 		}
@@ -101,8 +88,9 @@ int opusd_handle(void *p, void *input, void *output)
 
 
 			ret = opus_decode(ctx->opus_dec, (const unsigned char *)ctx->data_cache, ctx->frame_len_buf[ctx->last_frame_idx], (opus_int16 *)ctx->decode_buf,
-							  numofsamplesperframe, 0);
+							  numofsamples, 0);
 
+			//mm_printf("ret = %d\r\n",ret);
 			if (ret >= 0) {
 				memcpy((void *)(output_item->data_addr + outputframesize), (void *)ctx->decode_buf, ret * ctx->params.bit_length / 8);
 				memmove(ctx->data_cache, ctx->data_cache + ctx->data_cache_len - ctx->frame_len_buf[ctx->last_frame_idx], ctx->frame_len_buf[ctx->last_frame_idx]);
@@ -110,28 +98,21 @@ int opusd_handle(void *p, void *input, void *output)
 					remain_len -= ctx->frame_len_buf[ctx->last_frame_idx];
 				}
 				outputframesize += ret * ctx->params.bit_length / 8;
-				memmove(ctx->frame_len_buf, ctx->frame_len_buf + sizeof(uint32_t), ctx->last_frame_idx * sizeof(uint32_t));
+				//move the frame size for the new frame//
+				memmove(ctx->frame_len_buf, ctx->frame_len_buf + 1, ctx->last_frame_idx * sizeof(uint32_t));
 				ctx->last_frame_idx --;
-			} else if (ret < 0) {
-				//printf("ret < 0\r\n");
+			} else {
 				memmove(ctx->data_cache, ctx->data_cache + ctx->data_cache_len - ctx->frame_len_buf[ctx->last_frame_idx], ctx->frame_len_buf[ctx->last_frame_idx]);
 				if (ctx->frame_len_buf[ctx->last_frame_idx] != 0) {
 					remain_len -= ctx->frame_len_buf[ctx->last_frame_idx];
 				}
-				memmove(ctx->frame_len_buf, ctx->frame_len_buf + sizeof(uint32_t), ctx->last_frame_idx * sizeof(uint32_t));
+				memmove(ctx->frame_len_buf, ctx->frame_len_buf + 1, ctx->last_frame_idx * sizeof(uint32_t));
 				ctx->last_frame_idx --;
 				break;
 			}
 		}
-		if (ret == 0) {
-			break;
-		}
 	}
-	/*
-	if(ctx->params.with_opus_enc){
-	    xSemaphoreGive(opus_progress_sema);
-	}
-	*/
+	//mm_printf("opus decode frame_size = %d\r\n", outputframesize);
 	ctx->data_cache_len = remain_len;
 
 	output_item->size = outputframesize;
@@ -164,26 +145,19 @@ int opusd_control(void *p, int cmd, int arg)
 		ctx->params.opus_application = arg;
 		break;
 	case CMD_OPUSD_RESET:
-		//AACDeInitDecoder(ctx->opusd);
-		//ctx->opusd = AACInitDecoder();
-		ctx->data_cache_len = 0;
 	case CMD_OPUSD_APPLY:
-		opus_decoder_init(ctx->opus_dec, ctx->params.sample_rate, ctx->params.channel);
+		if (cmd == CMD_OPUSD_RESET) {
+			ctx->data_cache_len = 0;
+		}
+		if (opus_decoder_init(ctx->opus_dec, ctx->params.sample_rate, ctx->params.channel) != OPUS_OK) {
+			return -1;
+		}
 		ctx->parser = opusd_bypass_parser;
 		opus_decoder_ctl(ctx->opus_dec, OPUS_SET_SIGNAL(ctx->params.opus_application));
 		opus_decoder_ctl(ctx->opus_dec, OPUS_SET_GAIN(0));
 
 
 		//opus_decoder_ctl(ctx->opus_dec, OPUS_SET_GAIN(10));
-
-		/*
-		if(ctx->params.type == TYPE_RTP_RAW){
-			ctx->parser = opusd_rtp_raw_parser;
-		}else if(ctx->params.type == TYPE_TS)
-			ctx->parser = opusd_ts_parser;
-		else
-			ctx->parser = opusd_bypass_parser;
-		*/
 
 		break;
 	}

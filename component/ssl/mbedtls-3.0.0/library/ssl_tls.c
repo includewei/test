@@ -6771,4 +6771,132 @@ exit:
 
 #endif /* MBEDTLS_SSL_PROTO_TLS1_2 */
 
+/* Added by Realtek start */
+#if defined(CONFIG_SSL_RESUME) && (CONFIG_SSL_RESUME == 1)
+#include <hal_cache.h>
+#include "mbedtls/aes.h"
+
+struct retention_ssl {
+	mbedtls_ssl_context ssl;
+	mbedtls_ssl_session session;
+	mbedtls_ssl_transform transform;
+	uint8_t mac_key_enc[48]; // sha384
+	uint8_t mac_key_dec[48]; // sha384
+	uint8_t cipher_key_enc[32]; // aes256
+	uint8_t cipher_key_dec[32]; // aes256
+	uint8_t in_ctr[8];
+};
+
+__attribute__((section (".retention.data"))) struct retention_ssl retention_ssl;
+
+int mbedtls_ssl_retain(mbedtls_ssl_context *ssl)
+{
+	// ssl context
+	memcpy(&retention_ssl.ssl, ssl, sizeof(retention_ssl.ssl));
+	// ssl session
+	memcpy(&retention_ssl.session, ssl->session, sizeof(retention_ssl.session));
+	// ssl transform
+	memcpy(&retention_ssl.transform, ssl->transform, sizeof(retention_ssl.transform));
+	// mac key
+	for (int i = 0; i < 48; i ++) {
+		retention_ssl.mac_key_enc[i] = ((uint8_t *) ssl->transform->md_ctx_enc.hmac_ctx)[i] ^ 0x36;
+		retention_ssl.mac_key_dec[i] = ((uint8_t *) ssl->transform->md_ctx_dec.hmac_ctx)[i] ^ 0x36;
+	}
+	// cipher key
+	memcpy(retention_ssl.cipher_key_enc, ((mbedtls_aes_context *) ssl->transform->cipher_ctx_enc.cipher_ctx)->rk, 32);
+	memcpy(retention_ssl.cipher_key_dec, ((mbedtls_aes_context *) ssl->transform->cipher_ctx_dec.cipher_ctx)->rk, 32);
+	// in_ctr
+	memcpy(retention_ssl.in_ctr, ssl->in_ctr, 8);
+
+	dcache_clean_invalidate_by_addr((uint32_t *) &retention_ssl, sizeof(retention_ssl));
+	return 0;
+}
+
+int mbedtls_ssl_resume(mbedtls_ssl_context *ssl, uint8_t in_ctr[8], uint8_t out_ctr[8])
+{
+	// ssl session
+	ssl->session = ssl->session_negotiate;
+	ssl->session_in = ssl->session;
+	ssl->session_out = ssl->session;
+	ssl->session_negotiate = NULL;
+	ssl->session->ciphersuite = retention_ssl.session.ciphersuite;
+	ssl->session->compression = retention_ssl.session.compression;
+	ssl->session->id_len = retention_ssl.session.id_len;
+	memcpy(ssl->session->id, retention_ssl.session.id, 32);
+	memcpy(ssl->session->master, retention_ssl.session.master, 48);
+	ssl->session->verify_result = retention_ssl.session.verify_result;
+	ssl->session->mfl_code = retention_ssl.session.mfl_code;
+	ssl->session->encrypt_then_mac = retention_ssl.session.encrypt_then_mac;
+
+	// transform
+	ssl->transform = ssl->transform_negotiate;
+	ssl->transform_in = ssl->transform;
+	ssl->transform_out = ssl->transform;
+	ssl->transform_negotiate = NULL;
+	ssl->transform->minlen = retention_ssl.transform.minlen;
+	ssl->transform->ivlen = retention_ssl.transform.ivlen;
+	ssl->transform->fixed_ivlen = retention_ssl.transform.fixed_ivlen;
+	ssl->transform->maclen = retention_ssl.transform.maclen;
+	ssl->transform->taglen = retention_ssl.transform.taglen;
+	ssl->transform->encrypt_then_mac = retention_ssl.transform.encrypt_then_mac;
+	ssl->transform->minor_ver = retention_ssl.transform.minor_ver;
+	const mbedtls_ssl_ciphersuite_t *ciphersuite_info = mbedtls_ssl_ciphersuite_from_id(ssl->session->ciphersuite);
+	const mbedtls_cipher_info_t *cipher_info = mbedtls_cipher_info_from_type(ciphersuite_info->cipher);
+	const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(ciphersuite_info->mac);
+	// mac
+	if (cipher_info->mode == MBEDTLS_MODE_CBC) {
+		mbedtls_md_setup(&ssl->transform->md_ctx_enc, md_info, 1);
+		mbedtls_md_setup(&ssl->transform->md_ctx_dec, md_info, 1);
+	}
+	size_t mac_key_len = ssl->transform->maclen;
+	if (mac_key_len != 0) {
+		mbedtls_md_hmac_starts(&ssl->transform->md_ctx_enc, retention_ssl.mac_key_enc, mac_key_len);
+		mbedtls_md_hmac_starts(&ssl->transform->md_ctx_dec, retention_ssl.mac_key_dec, mac_key_len);
+	}
+	// cipher
+	mbedtls_cipher_setup(&ssl->transform->cipher_ctx_enc, cipher_info);
+	mbedtls_cipher_setup(&ssl->transform->cipher_ctx_dec, cipher_info);
+	mbedtls_cipher_setkey(&ssl->transform->cipher_ctx_enc, retention_ssl.cipher_key_enc, cipher_info->key_bitlen, MBEDTLS_ENCRYPT);
+	mbedtls_cipher_setkey(&ssl->transform->cipher_ctx_dec, retention_ssl.cipher_key_dec, cipher_info->key_bitlen, MBEDTLS_DECRYPT);
+	if (cipher_info->mode == MBEDTLS_MODE_CBC) {
+		mbedtls_cipher_set_padding_mode(&ssl->transform->cipher_ctx_enc, MBEDTLS_PADDING_NONE);
+		mbedtls_cipher_set_padding_mode(&ssl->transform->cipher_ctx_dec, MBEDTLS_PADDING_NONE);
+	}
+
+	// ssl context
+	ssl->state = MBEDTLS_SSL_HANDSHAKE_OVER;
+	ssl->major_ver = MBEDTLS_SSL_MAJOR_VERSION_3;
+	ssl->minor_ver = MBEDTLS_SSL_MINOR_VERSION_3;
+	ssl->badmac_seen = retention_ssl.ssl.badmac_seen;
+
+	mbedtls_ssl_update_out_pointers(ssl, ssl->transform);
+
+	if (ssl->handshake != NULL) {
+		mbedtls_ssl_handshake_free(ssl);
+		mbedtls_free(ssl->handshake);
+		ssl->handshake = NULL;
+	}
+
+	// ctr
+	uint16_t ctr_carry = 0;
+	for (int i = 8; i > 0; i --) {
+		uint16_t ctr_prev = (uint16_t) retention_ssl.in_ctr[i - 1];
+		uint16_t ctr_inc = (uint16_t) in_ctr[i - 1];
+		in_ctr[i - 1] = (uint8_t) ((ctr_prev + ctr_inc + ctr_carry) & 0x00ff);
+		ctr_carry = ((ctr_prev + ctr_inc + ctr_carry) & 0xff00) >> 8;
+	}
+	for (int i = 8; i > 0; i --) {
+		if (++ out_ctr[i - 1] != 0) {
+			break;
+		}
+	}
+	memcpy(ssl->in_ctr, in_ctr, 8);
+	memcpy(ssl->out_ctr, out_ctr, 8);
+	memcpy(ssl->cur_out_ctr, out_ctr, 8);
+
+	return 0;
+}
+#endif /* CONFIG_SSL_RESUME */
+/* Added by Realtek end */
+
 #endif /* MBEDTLS_SSL_TLS_C */

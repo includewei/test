@@ -11,7 +11,16 @@
 #include "osd/osd_custom.h"
 #include "osd/osd_api.h"
 #include "md/md2_api.h"
+#include "video_api.h"
 
+#if CONFIG_TUNING
+#include "../example/media_uvcd/example_media_uvcd.h"
+#include "isp_ctrl_api.h"
+#include "module_video.h"
+#include "../../usb/usb_class/device/class/uvc/tuning-server.h"
+#endif
+
+#define ENABLE_OSD_CMD 0
 
 //-------- AT SYS commands ---------------------------------------------------------------
 #define CMD_DATA_SIZE 65536
@@ -422,6 +431,7 @@ void fATIX(void *arg)
 }
 
 #include "isp_ctrl_api.h"
+#include "ftl_common_api.h"
 void fATII(void *arg)
 {
 	int i;
@@ -436,7 +446,7 @@ void fATII(void *arg)
 
 	argc = parse_param(arg, argv);
 
-	if (argc < 3) {
+	if (argc < 1) {
 		return;
 	}
 
@@ -455,21 +465,66 @@ void fATII(void *arg)
 		isp_set_gray_mode(atoi(argv[2]));
 		isp_get_gray_mode(&mode);
 		printf("isp gray mode: %d.\r\n", mode);
+#if CONFIG_TUNING
+	} else if (strcmp(argv[1], "log") == 0) {
+		extern void tuning_set_log_level(int level);
+		if (strcmp(argv[2], "all") == 0) {
+			hal_video_print(atoi(argv[3]));
+			isp_ctrl_enable_log(atoi(argv[3]));
+			printf("log-all: %d.\r\n", atoi(argv[3]));
+		} else if (strcmp(argv[2], "voe") == 0) {
+			hal_video_print(atoi(argv[3]));
+			printf("log-voe: %d.\r\n", atoi(argv[3]));
+		} else if (strcmp(argv[2], "ispctrl") == 0) {
+			isp_ctrl_enable_log(atoi(argv[3]));
+			printf("log-ispctrl: %d.\r\n", atoi(argv[3]));
+		} else if (strcmp(argv[2], "tuning") == 0) {
+			tuning_set_log_level(atoi(argv[3]));
+			printf("log-tuning: %d.\r\n", atoi(argv[3]));
+		}
+	} else if (strcmp(argv[1], "delay") == 0) {
+		int is_tuning_delay;
+		extern void tuning_command_delay(int enable);
+		is_tuning_delay = atoi(argv[2]);
+		tuning_command_delay(is_tuning_delay);
+		printf("is_tuning_delay: %d.\r\n", is_tuning_delay);
+	} else if (strcmp(argv[1], "v2") == 0) {
+		example_tuning_rtsp_video_v2_init();
+	} else if (strcmp(argv[1], "fps") == 0) {
+		if (strcmp(argv[2], "show") == 0) {
+			video_show_fps(1);
+		} else if (strcmp(argv[2], "hide") == 0) {
+			video_show_fps(0);
+		}
 	} else if (strcmp(argv[1], "flash") == 0) {
-		flash_t flash;
 		int fw_size = 0;
+		unsigned char iq_header[28] = {0};
 		if (strcmp(argv[2], "read") == 0) {
-			flash_stream_read(&flash, 0x400000, sizeof(int), (u8 *) &fw_size);
+			ftl_common_read(TUNING_IQ_FW, (u8 *) &fw_size, sizeof(int));
 			printf("IQ FW size: 0x%04X.\r\n", fw_size);
+		} else if (strcmp(argv[2], "timestamp") == 0) {
+			ftl_common_read(TUNING_IQ_FW, (u8 *) iq_header, 28);
+			int *diq_header = (int *)(iq_header + 8);
+			printf("IQ header: 0x%08X 0x%08X 0x%08X 0x%08X.\r\n", diq_header[0], diq_header[1], diq_header[2], diq_header[3]);
+			printf("iq timestamp: %04d/%02d/%02d %02d:%02d:%02d\r\n", *(unsigned short *)(iq_header + 12), iq_header[14], iq_header[15], iq_header[16],
+				   iq_header[17], *(unsigned short *)(iq_header + 18));
 		} else if (strcmp(argv[2], "erase") == 0) {
-			int *iq_tmp = malloc(CMD_DATA_SIZE);
-			if (iq_tmp) {
-				memset(iq_tmp, 0, CMD_DATA_SIZE);
-				flash_erase_block(&flash, 0x400000);
-				flash_stream_write(&flash, 0x400000, CMD_DATA_SIZE, iq_tmp);
-				free(iq_tmp);
+			if (strcmp(argv[3], "ap") == 0) {
+				extern int Erase_Fastconnect_data(void);
+				Erase_Fastconnect_data();
+				printf("[ATII] erase AP info.\r\n");
+			} else {
+				int *iq_tmp = malloc(CMD_DATA_SIZE);
+				if (iq_tmp) {
+					memset(iq_tmp, 0, CMD_DATA_SIZE);
+					printf("[ATII] erase 64K.\r\n");
+					ftl_common_write(TUNING_IQ_FW, (u8*)iq_tmp, CMD_DATA_SIZE);
+					free(iq_tmp);
+				}
 			}
 		}
+		printf("[atcmd_isp] not CONFIG_TUNING.\r\n");
+#endif
 	} else if (strcmp(argv[1], "i2c") == 0) {
 		struct rts_isp_i2c_reg reg;
 		int ret;
@@ -500,6 +555,7 @@ void fATII(void *arg)
 #include <sntp/sntp.h>
 void fATIO(void *arg)
 {
+#if ENABLE_OSD_CMD
 	int argc = 0;
 	char *argv[MAX_ARGC] = {0};
 	argc = parse_param(arg, argv);
@@ -519,6 +575,7 @@ void fATIO(void *arg)
 	} else if (strcmp(argv[1], "close") == 0) {
 		rts_osd_deinit(atoi(argv[2]));
 	}
+#endif
 }
 
 extern void md_output_cb(void *param1, void  *param2, uint32_t arg);
@@ -532,7 +589,7 @@ void fATID(void *arg)
 	if (strcmp(argv[1], "start") == 0) {
 		if (hal_video_md_cb(md_output_cb) != OK) {
 			printf("hal_video_md_cb_register fail\n");
-			return NULL;
+			return;
 		}
 		md_start();
 	} else if (strcmp(argv[1], "set") == 0) {
@@ -554,7 +611,7 @@ void fATID(void *arg)
 		md_stop();
 	}
 }
-
+#include "sensor_service.h"
 void fATIR(void *arg)
 {
 	volatile int argc, error_no = 0;

@@ -57,6 +57,7 @@ void hal_wdt_aon_enable(void);
 void hal_wdt_aon_disable(void);
 void hal_wdt_all_enable(void);
 void hal_wdt_all_disable(void);
+uint8_t hal_wdt_check_wdt_en(const uint8_t wdt_obj);
 
 /** @} */ /* End of group hal_wdt*/
 

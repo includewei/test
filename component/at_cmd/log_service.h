@@ -96,7 +96,7 @@ extern unsigned int   gDbgFlag;
 typedef void (*log_init_t)(void);
 typedef void (*log_act_t)(void *);
 typedef struct _at_command_item_ {
-	char *log_cmd;
+	const char *log_cmd;
 	log_act_t at_act;
 	struct list_head node;
 } log_item_t;

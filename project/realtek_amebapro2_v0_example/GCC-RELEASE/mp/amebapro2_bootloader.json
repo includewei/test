@@ -37,14 +37,19 @@
 			"s_jtag_ns_key": "auto",
 			"entry": "__ram_start_table_start__"
 		},
-		"blocks" : ["itcm"],
+		"blocks" : ["itcm", "sram"],
 		"itcm": {
 			"type":"SIMG_ITCM",
 			"sections": [
 				".ram.img.signature",
 				".ram.func.table",
 				".ram.data",
-				".ram.code_text",
+				".ram.code_text"
+			]
+		},
+		"sram": {
+			"type":"SIMG_SRAM",
+			"sections": [
 				".ram.code_rodata"
 			]
 		}

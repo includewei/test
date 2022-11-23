@@ -132,8 +132,7 @@ struct rxi316_dram_mode_reg_info rxi316_ddr3_mode_reg = {
 
 struct rxi316_dram_timing_info rxi316_ddr2_timing = {
 	105000,     //trfc_ps; //G0102
-	//7800000,    // trefi_ps, T < 85;
-	1950000,    // trefi_ps
+	1950000,    // trefi_ps, 7800000 if T < 85
 	13125,      // trcd_ps; //G0102
 	13125,      // trp_ps; //G0102
 	45000,      // tras_ps;
@@ -161,8 +160,7 @@ struct rxi316_dram_timing_info rxi316_ddr2_timing = {
 
 struct rxi316_dram_timing_info rxi316_ddr3_timing = {  //G0102
 	160000,     // trfc_ps;
-	//7800000,    // trefi_ps, T < 85;
-	1950000,    // trefi_ps;
+	1950000,    // trefi_ps; 7800000 if T < 85
 	13500,      // trcd_ps; //G0102
 	13500,      // trp_ps; //G0102
 	36000,      // tras_ps; //G0102
@@ -331,6 +329,42 @@ struct bus_addr_remap_info ddr3_bus_addr_remap_info = {
 	UNREAMP          // bus_addr[31]
 }; //ddr3_dq16_bus_addr_remap_info
 
+struct bus_addr_remap_info ddr3_bus_addr_remap_info_256MB = {
+	UNREAMP,         // bus_addr[0]
+	UNREAMP,         // bus_addr[1]
+	UNREAMP,         // bus_addr[2]
+	COLU2_REMAP,     // bus_addr[3]
+	COLU3_REMAP,     // bus_addr[4]
+	COLU4_REMAP,     // bus_addr[5]
+	COLU5_REMAP,     // bus_addr[6]
+	COLU6_REMAP,     // bus_addr[7]
+	COLU7_REMAP,     // bus_addr[8]
+	COLU8_REMAP,     // bus_addr[9]
+	COLU9_REMAP,     // bus_addr[10]
+	BANK0_REMAP,     // bus_addr[11]
+	BANK1_REMAP,     // bus_addr[12]
+	BANK2_REMAP,     // bus_addr[13]
+	ROW0_REMAP,      // bus_addr[14]
+	ROW1_REMAP,      // bus_addr[15]
+	ROW2_REMAP,      // bus_addr[16]
+	ROW3_REMAP,      // bus_addr[17]
+	ROW4_REMAP,      // bus_addr[18]
+	ROW5_REMAP,      // bus_addr[19]
+	ROW6_REMAP,      // bus_addr[20]
+	ROW7_REMAP,      // bus_addr[21]
+	ROW8_REMAP,      // bus_addr[22]
+	ROW9_REMAP,      // bus_addr[23]
+	ROW10_REMAP,     // bus_addr[24]
+	ROW11_REMAP,     // bus_addr[25]
+	ROW12_REMAP,     // bus_addr[26]
+	ROW13_REMAP,     // bus_addr[27]
+	UNREAMP,         // bus_addr[28]
+	UNREAMP,         // bus_addr[29]
+	UNREAMP,         // bus_addr[30]
+	UNREAMP          // bus_addr[31]
+}; //ddr3_dq16_bus_addr_remap_info
+
+
 
 struct slot_starve_reg_info slot_starve_info = {
 	// cr_slot_park
@@ -430,7 +464,7 @@ struct rxi316_dram_ctrl_info rxi316_ddr3_dramc_info = {
 	0,          // cke_nop;
 	0,          // stc_cke;  // default 0: dynamic cke for power saving; 1: for performance profile
 	0,          // stc_odt;
-	1,          // cmd_2t_en; (dfi_ratio=2,cmd_2t_en=1)
+	0,          // cmd_2t_en; (dfi_ratio=2,cmd_2t_en=1)
 	0,          // rtw_2t_dis;
 	0,          // half_csn;
 	2,          // rd_pipe;
@@ -2011,8 +2045,7 @@ void hal_ddr2_phy_init(uint32_t dram_period_ps)
 	cpu_read_modify_write(&dpi_dev_map->DPI_AFIFO_STR_2, 0x2222,
 						  DPI_MASK_RX_RD_STR_NUM_0 | DPI_MASK_RX_RD_STR_NUM_1 | DPI_MASK_RX_RD_STR_NUM_2 | DPI_MASK_RX_RD_STR_NUM_3);//533, CAS = 7
 
-	//dram_init_clk_frequency(ddr_freq);
-	dram_init_clk_frequency_dss(ddr_freq,0);
+	dram_init_clk_frequency_dss(ddr_freq, 0);
 
 	//Set DCC/DLL
 	cpu_read_modify_write(&dpi_dev_map->DPI_DCC_CMD, 0x3, DPI_MASK_DCC_CMD_DUTY_PRESETA | DPI_BIT_DCC_CMD_DUTY_SEL);
@@ -2082,6 +2115,25 @@ void hal_ddr2_phy_init(uint32_t dram_period_ps)
 
 	/*Enable PAD*/
 	cpu_read_modify_write((volatile uint32_t *)REG_SYS_DDRPHY_CTRL, 0x2, 0x2);
+
+	// No CA Pad 0x18, CA Pad 0x11
+	dpi_dev_map->DPI_OCDP0_SET0 = 0x11111111;
+	dpi_dev_map->DPI_OCDP1_SET0 = 0x18111111;
+	dpi_dev_map->DPI_OCDN0_SET0 = 0x11111111;
+	dpi_dev_map->DPI_OCDN1_SET0 = 0x18111111;
+	dpi_dev_map->DPI_OCDP0_SET1 = 0x11111111;
+	dpi_dev_map->DPI_OCDP1_SET1 = 0x18111111;
+	dpi_dev_map->DPI_OCDN0_SET1 = 0x11111111;
+	dpi_dev_map->DPI_OCDN1_SET1 = 0x18111111;
+
+	dpi_dev_map->DPI_DQ_OCD_SEL_0 = 0xFFFF7777;
+	dpi_dev_map->DPI_DQ_OCD_SEL_1 = 0xFFFF7777;
+	dpi_dev_map->DPI_DQS_OCD_SEL_0 = 0x77777777;
+	dpi_dev_map->DPI_DQS_OCD_SEL_1 = 0x77777777;
+	dpi_dev_map->DPI_CKE_OCD_SEL = 0xffffff77;
+	dpi_dev_map->DPI_ADR_OCD_SEL = 0x77ff77ff;
+	dpi_dev_map->DPI_CK_OCD_SEL = 0x77777777;
+
 #if 0
 	dram_r480_calibration(DDR_2);
 	dram_zq_calibration(DDR_2);
@@ -2233,8 +2285,7 @@ void hal_ddr3_phy_init(uint32_t dram_period_ps)
 	cpu_read_modify_write(&dpi_dev_map->DPI_AFIFO_STR_2, 0x2222,
 						  DPI_MASK_RX_RD_STR_NUM_0 | DPI_MASK_RX_RD_STR_NUM_1 | DPI_MASK_RX_RD_STR_NUM_2 | DPI_MASK_RX_RD_STR_NUM_3);//533, CAS = 7
 
-	//dram_init_clk_frequency(ddr_freq);
-	dram_init_clk_frequency_dss(ddr_freq,0);
+	dram_init_clk_frequency_dss(ddr_freq, 0);
 
 	//Set DCC/DLL
 	cpu_read_modify_write(&dpi_dev_map->DPI_DCC_CMD, 0x3, DPI_MASK_DCC_CMD_DUTY_PRESETA | DPI_BIT_DCC_CMD_DUTY_SEL);
@@ -2487,7 +2538,17 @@ void hal_init_dram()
 
 		dram_type = DDR_2;
 	} else {
-		dbg_printf("DRAM_TYPE is DDR3L.\r\n");
+		if ((((chip_id >> 2) & 0x3) == 0x3)
+			|| (((chip_id >> 2) & 0x3) == 0x0)) {
+			if (((chip_id >> 4) & 0x3) == 0x2) {
+				dbg_printf("DRAM_TYPE is DDR3L 128MB.\r\n");
+			} else {
+				(rxi316_ddr3_info_m.dramc_info)->bus_addr_bit = &ddr3_bus_addr_remap_info_256MB;
+				dbg_printf("DRAM_TYPE is DDR3L 256MB.\r\n");
+			}
+		} else {
+			dbg_printf("DRAM_TYPE is DDR3L 128MB.\r\n");
+		}
 		dram_type = DDR_3;
 	}
 #endif

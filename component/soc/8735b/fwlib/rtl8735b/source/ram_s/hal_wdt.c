@@ -158,6 +158,32 @@ void hal_wdt_all_disable()
 	hal_wdt_stubs.wdt_ctrl_all_disable();
 }
 
+uint8_t hal_wdt_check_wdt_en(const uint8_t wdt_obj)
+{
+	AON_TypeDef *aon = AON;
+	VNDR_S_TypeDef *vendor_s = VNDR_S;
+	volatile uint32_t reg_val;
+	uint32_t mask_val;
+	uint8_t mask_shift;
+	uint8_t en_status = DISABLE;
+
+	if (WDT_AON_CTRL == wdt_obj) {
+		reg_val    = (aon->AON_REG_AON_WDT_TIMER);
+		mask_val   = (AON_BIT_WDT_EN_BYTE);
+		mask_shift = (AON_SHIFT_WDT_EN_BYTE);
+	} else if (WDT_VNDR_CTRL == wdt_obj) {
+		reg_val    = (vendor_s->VNDR_S_REG_SECURE_WATCH_DOG_TIMER);
+		mask_val   = (VNDR_S_BIT_WDT_EN_BYTE);
+		mask_shift = (VNDR_S_SHIFT_WDT_EN_BYTE);
+	} else {
+		en_status = DISABLE;
+		return en_status;
+	}
+	en_status = ((reg_val & mask_val) >> mask_shift);
+
+	return en_status;
+}
+
 /** *@} */ /* End of group hal_wdt_func */
 
 /// @endcond /* End of condition DOXYGEN_ROM_HAL_API */

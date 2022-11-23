@@ -12,10 +12,10 @@ In this example, we use config SPI_IS_AS_Master to decide if the device is Maste
 
 Connections:
     Master board                <---------->       Slave board
-    Master's MOSI (PE_7)        <---------->       Slave's MOSI (PE_7)
-    Master's MISO (PE_6)        <---------->       Slave's MISO (PE_6)
-    Master's SCLK (PE_5)        <---------->       Slave's SCLK (PE_5)
-    Master's CS   (PE_8)        <---------->       Slave's CS   (PE_8)
+    Master's MOSI (PE_3)        <---------->       Slave's MOSI (PE_3)
+    Master's MISO (PE_2)        <---------->       Slave's MISO (PE_2)
+    Master's SCLK (PE_1)        <---------->       Slave's SCLK (PE_1)
+    Master's CS   (PE_4)        <---------->       Slave's CS   (PE_4)
 
 This example shows Master sends data to Slave in DMA mode.
 We bootup Slave first, and then bootup Master.

@@ -35,6 +35,14 @@ extern s32 shell_task(void);
 
 //void app_start (void) __attribute__ ((noreturn));
 
+#if defined(__GNUC__)
+__weak void _init(void)
+{
+
+}
+void __libc_init_array(void);
+#endif
+
 #if !defined ( __CC_ARM ) && !(defined(__ARMCC_VERSION) && (__ARMCC_VERSION >= 6010050)) /* ARM Compiler 4/5 */
 // for __CC_ARM compiler, it will add a __ARM_use_no_argv symbol for every main() function, that cause linker report error
 /// default main
@@ -50,6 +58,15 @@ __weak int main(void)
 void app_start(void)
 {
 	dbg_printf("Build @ %s, %s\r\n", __TIME__, __DATE__);
+
+#if defined (__ICCARM__)
+	// __iar_data_init3 replaced by __iar_cstart_call_ctors, just do c++ constructor
+	__iar_cstart_call_ctors(NULL);
+#elif defined(__GNUC__)
+	__libc_init_array();
+
+#endif
+
 	shell_cmd_init();
 	main();
 }

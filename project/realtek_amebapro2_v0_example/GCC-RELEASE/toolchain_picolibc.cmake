@@ -22,16 +22,49 @@ set(CMAKE_STRIP "arm-none-eabi-strip" )
 set(CMAKE_AR "arm-none-eabi-ar" )
 set(CMAKE_AS "arm-none-eabi-as" )
 set(CMAKE_NM "arm-none-eabi-nm" )
+#set(CMAKE_LD "arm-none-eabi-gcc" )
+#set(CMAKE_LD "arm-none-eabi-ld" )
 
 add_definitions(-D__thumb2__ -DCONFIG_PLATFORM_8735B -DARM_MATH_ARMV8MML -D__FPU_PRESENT -D__ARM_ARCH_7M__=0 -D__ARM_ARCH_7EM__=0 -D__ARM_ARCH_8M_MAIN__=1 -D__ARM_ARCH_8M_BASE__=0 -D__ARM_FEATURE_FP16_SCALAR_ARITHMETIC=1 -D__DSP_PRESENT=1 -D__ARMVFP__)
 
 #set(CMAKE_C_FLAGS "-march=armv8-m.main+dsp+fp -mcpu=real-m500+fp -mthumb -mcmse -mfpu=fpv5-sp-d16 -mfp16-format=ieee -mfloat-abi=softfp ")
 set(CMAKE_C_FLAGS "-march=armv8-m.main+dsp -mthumb -mcmse -mfpu=fpv5-sp-d16 -mfp16-format=ieee -mfloat-abi=softfp -fno-common -fsigned-char")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os -fstack-usage -fdata-sections -ffunction-sections  -fno-optimize-sibling-calls -std=gnu99")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os -fstack-usage -fdata-sections -ffunction-sections  -fno-optimize-sibling-calls")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -gdwarf-3 -MMD -nostartfiles -nodefaultlibs -nostdlib ")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wpointer-arith -Wstrict-prototypes -Wundef -Wno-write-strings -Wno-maybe-uninitialized -fdiagnostics-color=always ")
+
+#set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++11 -Wall -Wpointer-arith -Wundef -Wno-write-strings -Wno-maybe-uninitialized -fdiagnostics-color=always -fno-PIC")#-fPIC -fexceptions
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -Wpointer-arith -Wstrict-prototypes -Wundef -Wno-write-strings -Wno-maybe-uninitialized -fdiagnostics-color=always")
+
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++11 -fdiagnostics-color=always -fno-PIC")#-fPIC -fexceptions
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -fdiagnostics-color=always")
 
 set(CMAKE_ASM_FLAGS "-march=armv8-m.main -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=softfp -x assembler-with-cpp")
+
+set(OUTSRC_WARN_ERR_FLAGS -Wall -Wpointer-arith -Wstrict-prototypes -Wundef -Wno-write-strings -Wno-maybe-uninitialized)
+set(LIBS_WARN_ERR_FLAGS -Wall -Wpointer-arith -Wstrict-prototypes -Wundef -Wno-write-strings -Wno-maybe-uninitialized)
+set(WARN_ERR_FLAGS -Wall -Wpointer-arith -Wstrict-prototypes -Wundef -Wno-write-strings -Wno-maybe-uninitialized)
+
+if(NOT CONSOLE STREQUAL "UART")
+list(
+    APPEND _wrapper
+#		"-Wl,-wrap,puts"
+#		"-Wl,-wrap,printf"
+#		"-Wl,-wrap,sprintf"
+#		"-Wl,-wrap,snprintf"
+#		"-Wl,-wrap,vsnprintf"
+#		"-Wl,-wrap,vprintf"	
+)
+else()
+list(
+    APPEND _wrapper
+#		"-Wl,-wrap,puts"
+#		"-Wl,-wrap,printf"
+#		"-Wl,-wrap,sprintf"
+#		"-Wl,-wrap,snprintf"
+#		"-Wl,-wrap,vsnprintf"
+#		"-Wl,-wrap,vprintf"	
+)
+endif()
 
 list(
     APPEND _wrapper
@@ -52,6 +85,7 @@ list(
 		"-Wl,-wrap,strtok"
 		"-Wl,-wrap,strxfrm"
 		"-Wl,-wrap,strsep"
+#		"-Wl,-wrap,strdup"
 		"-Wl,-wrap,strtod"
 		"-Wl,-wrap,strtof"
 		"-Wl,-wrap,strtold"
@@ -68,15 +102,13 @@ list(
 		"-Wl,-wrap,memcpy"
 		"-Wl,-wrap,memmove"
 		"-Wl,-wrap,memset"
-		"-Wl,-wrap,puts"
-		"-Wl,-wrap,printf"
-#		"-Wl,-wrap,sprintf"
-		"-Wl,-wrap,snprintf"
-		"-Wl,-wrap,vsnprintf"
-		"-Wl,-wrap,vprintf"
+		"-Wl,-wrap,_malloc_r"
+		"-Wl,-wrap,_free_r"
+#		"-Wl,-wrap,_realloc_r"
+		"-Wl,-wrap,_calloc_r"			
 		"-Wl,-wrap,malloc"
 		"-Wl,-wrap,free"
-		"-Wl,-wrap,realloc"
+#		"-Wl,-wrap,realloc"
 		"-Wl,-wrap,calloc" 
 		"-Wl,-wrap,abort"
 		"-Wl,-wrap,fopen"

@@ -15,19 +15,15 @@
 #define TRACE_UART_BAUDRATE 1500000
 
 typedef struct _TraceUartInfo {
-	uint8_t  *tx_buffer;
-	uint16_t tx_len;
-	uint8_t  tx_busy;
-	bool     tx_switch;
-	UART_TX_CB  tx_cb;
+	bool tx_switch;
 } TRACE_UART_INFO;
 
-static TRACE_UART_INFO   g_uart_obj;
-serial_t    trace_sobj;
+static TRACE_UART_INFO g_uart_obj;
+serial_t trace_sobj;
 
 bool trace_uart_init(void)
 {
-	if (!CHECK_CFG_SW(EFUSE_SW_TRACE_SWITCH)) {
+	if (!CHECK_CFG_SW(CFG_SW_BT_TRACE_LOG)) {
 		printf("trace_uart_init: TRACE LOG OPEN\r\n");
 		hal_pinmux_unregister(TRACE_TX, 0x01 << 4);
 		hal_pinmux_unregister(TRACE_RX, 0x01 << 4);
@@ -49,7 +45,7 @@ bool trace_uart_init(void)
 
 bool trace_uart_deinit(void)
 {
-	if (!CHECK_CFG_SW(EFUSE_SW_TRACE_SWITCH)) {
+	if (!CHECK_CFG_SW(CFG_SW_BT_TRACE_LOG)) {
 		if (g_uart_obj.tx_switch == true) {
 			serial_free(&trace_sobj);
 			g_uart_obj.tx_switch = false;
@@ -64,19 +60,19 @@ bool trace_uart_deinit(void)
 
 bool trace_uart_tx(uint8_t *pstr, uint16_t len, UART_TX_CB tx_cb)
 {
-	if (g_uart_obj.tx_switch == true) {
-		serial_send_blocked(&trace_sobj, (char *)pstr, len, len);
+	if (g_uart_obj.tx_switch == false) {
+		if (tx_cb) {
+			tx_cb();
+		}
+		return true;
 	}
 
-	g_uart_obj.tx_cb = tx_cb;
-	if (g_uart_obj.tx_cb) {
-		g_uart_obj.tx_cb();
+	serial_send_blocked(&trace_sobj, (char *)pstr, len, len);
+
+	if (tx_cb) {
+		tx_cb();
 	}
 
 	return true;
 }
 
-void bt_trace_set_switch(bool flag)
-{
-	g_uart_obj.tx_switch = flag;
-}

@@ -54,6 +54,7 @@ list(
 )
 
 target_compile_definitions(${srtp2} PRIVATE ${srtp2_flags} )
+target_compile_options(${srtp2} PRIVATE ${LIBS_WARN_ERR_FLAGS} )
 
 include(../includepath.cmake)
 target_include_directories(

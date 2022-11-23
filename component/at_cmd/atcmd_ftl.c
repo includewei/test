@@ -55,7 +55,7 @@ void hexDump(void *addr, int len)
 	printf("  %s\n", buff);
 }
 
-unsigned int str_to_value(const unsigned char *str)
+static inline unsigned int str_to_value(const unsigned char *str)
 {
 	if (str[0] == '0' && (str[1] == 'x' || str[1] == 'X')) {
 		return strtol((char const *)str, NULL, 16);

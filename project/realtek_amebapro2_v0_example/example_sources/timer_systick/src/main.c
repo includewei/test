@@ -39,7 +39,7 @@ static void example_my_timer1(void *param)
 							 1000 / portTICK_RATE_MS, /* Tick every 1 sec */
 							 pdTRUE,     /* The timer will auto-reload themselves when they expire. */
 							 NULL,     /* In this case this is not used as the timer has its own callback. */
-							 timer1_timeout_handler);  /* The callback to be called when the timer expires. */
+							 (TimerCallbackFunction_t)timer1_timeout_handler);  /* The callback to be called when the timer expires. */
 
 	xTimerStart(my_timer1, (TickType_t) 0);
 	while (1) {

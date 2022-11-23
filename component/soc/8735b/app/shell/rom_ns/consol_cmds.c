@@ -3,7 +3,7 @@
  * @brief    Some commands implementation for the shell command. It provides
  *           some basic memory write and dump commands.
  * @version  V1.00
- * @date     2016-05-30
+ * @date     2022-06-09
  *
  * @note
  *
@@ -36,9 +36,6 @@
 
 extern u32 _strtoul(const char *nptr, char **endptr, int base);
 extern void dump_for_one_bytes(u8 *pdata, u32 len);
-//extern void hal_misc_rst_by_wdt_rtl8735b (void);
-//#define _hal_misc_rst_by_wdt    hal_misc_rst_by_wdt_rtl8710c
-#define _hal_misc_rst_by_wdt
 
 s32 cmd_dump_byte(u32 argc, u8 *argv[]);
 s32 cmd_dump_helfword(u32 argc, u8 *argv[]);
@@ -53,6 +50,7 @@ s32 cmd_bit_write(u32 argc, u8 *argv[]);
 
 SECTION_CCMD_RODATA
 const shell_command_entry_t rom_cmd_table[] = {
+#if CONFIG_FPGA && (CONFIG_SIMU_ASIC_FLOW_EN == 0) // FPGA  
 	{
 		"ROM", (const char *)"DB", (shell_program_t)cmd_dump_byte, (const char *)"DB <Address, Hex> <Len, Dec>: \r\n"
 		"\t\t\t\tDump memory byte or Read Hw byte register"
@@ -77,14 +75,29 @@ const shell_command_entry_t rom_cmd_table[] = {
 		"\t\t\t\tSupports multiple word writting by a single command \r\n"
 		"\t\t\t\tEx: EW Address Value0 Value1"
 	},
-#if 1
 	{"ROM", (const char *)"BR", (shell_program_t)cmd_bit_read, (const char *)"BR <Address, Hex> <Bit2, Dec>  <Bit1, Dec> [:] [exp data]"},
 	{"ROM", (const char *)"BW", (shell_program_t)cmd_bit_write, (const char *)"BW <Address, Hex> <Bit2, Dec>  <Bit1, Dec> <Value, Hex>"},
-#endif
-#if 0
+#else   // PXP & ASIC
 	{
-		"ROM", (const char *)"WDTRST", (shell_program_t)_hal_misc_rst_by_wdt, (const char *)" WDTRST: \r\n"
-		"\t\t\t\tTo trigger a reset by WDT timeout"
+		"ROM", (const char *)"DB", (shell_program_t)cmd_dump_byte, (const char *)" ???\r\n"
+	},
+	{
+		"ROM", (const char *)"DHW", (shell_program_t)cmd_dump_helfword, (const char *)" ???\r\n"
+	},
+	{
+		"ROM", (const char *)"DW", (shell_program_t)cmd_dump_word, (const char *)" ???\r\n"
+	},
+	{
+		"ROM", (const char *)"EB", (shell_program_t)cmd_write_byte, (const char *)" ???\r\n"
+	},
+	{
+		"ROM", (const char *)"EW", (shell_program_t)cmd_write_word, (const char *)" ???\r\n"
+	},
+	{
+		"ROM", (const char *)"BR", (shell_program_t)cmd_bit_read, (const char *)" ???\r\n"
+	},
+	{
+		"ROM", (const char *)"BW", (shell_program_t)cmd_bit_write, (const char *)" ???\r\n"
 	},
 #endif
 	{"ROM", (const char *)NULL, (shell_program_t)NULL, (const char *)NULL}    // end of table

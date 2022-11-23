@@ -12,8 +12,9 @@
 // The first started board will be the TX side, the othse one will be the RX side
 // The RX side will make some delay every 16-bytes received,
 // by this way we can trigger the flow control mechanism.
-
+#include <string.h>
 #include "serial_api.h"
+#include "wait_api.h"
 #include "main.h"
 
 #define UART_TX    PE_1
@@ -80,7 +81,7 @@ void main(void)
 
 	if (rx_side) {
 		dbg_printf("UART Flow Control: RX ==> \r\n");
-		rtw_memset(buffer, 0, UART_BUF_SIZE);
+		memset(buffer, 0, UART_BUF_SIZE);
 
 		i = 0;
 		j = 0;

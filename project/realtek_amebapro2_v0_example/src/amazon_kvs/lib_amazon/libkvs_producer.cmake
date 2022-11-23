@@ -31,6 +31,7 @@ list(
 	${prj_root}/src/amazon_kvs/lib_amazon/producer/src/source/misc/json_helper.c
 	${prj_root}/src/amazon_kvs/lib_amazon/producer/src/source/mkv/mkv_generator.c
 	${prj_root}/src/amazon_kvs/lib_amazon/producer/src/source/net/http_helper.c
+	${prj_root}/src/amazon_kvs/lib_amazon/producer/src/source/net/http_parser_adapter_llhttp.c
 	${prj_root}/src/amazon_kvs/lib_amazon/producer/src/source/net/netio.c
 	${prj_root}/src/amazon_kvs/lib_amazon/producer/src/source/os/allocator.c
 	${prj_root}/src/amazon_kvs/lib_amazon/producer/src/source/restful/iot/iot_credential_provider.c
@@ -73,6 +74,7 @@ list(
 )
 
 target_compile_definitions(${kvs_producer} PRIVATE ${kvs_producer_flags} )
+target_compile_options(${kvs_producer} PRIVATE ${LIBS_WARN_ERR_FLAGS} )
 
 target_include_directories(
 	${kvs_producer}

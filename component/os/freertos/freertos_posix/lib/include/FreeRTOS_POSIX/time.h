@@ -40,9 +40,9 @@
 #undef CLOCKS_PER_SEC
 #else
 #include "time_gcc.h"
-#undef CLOCKS_PER_SEC   // ARLO: avoid redefined error below
-#undef CLOCK_REALTIME   // ARLO: avoid redefined error below
-#undef TIMER_ABSTIME    // ARLO: avoid redefined error below
+#undef CLOCKS_PER_SEC
+#undef CLOCK_REALTIME
+#undef TIMER_ABSTIME
 #endif
 
 /* FreeRTOS+POSIX platform-specific configuration headers. */
@@ -292,12 +292,7 @@ struct timezone
         int  tz_dsttime;     /* type of dst correction */
 };
 
-// ARLO: timeval is either defined here or in sockets.h
-#ifndef LWIP_TIMEVAL_PRIVATE
-#define LWIP_TIMEVAL_PRIVATE 0
-#endif
-
-#if !LWIP_TIMEVAL_PRIVATE
+#if !defined(LWIP_TIMEVAL_PRIVATE) || !LWIP_TIMEVAL_PRIVATE
 #define _TIMEVAL_DEFINED
 struct timeval {
   long    tv_sec;         /* seconds */

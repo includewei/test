@@ -3,6 +3,15 @@
 #include "diag.h"
 #include "main.h"
 #include "log_service.h"
+#include "osdep_service.h"
+#include <platform_opts.h>
+#include <platform_opts_bt.h>
+#include "sys_api.h"
+
+#if CONFIG_WLAN
+#include <wifi_fast_connect.h>
+extern void wlan_network(void);
+#endif
 
 #include "wifi_conf.h"
 #include <lwip_netconf.h>
@@ -12,13 +21,17 @@
 #include "hal_power_mode.h"
 #include "power_mode_api.h"
 
-#define MQTTSSL_KEEPALIVE 0
+#define MQTTSSL_KEEPALIVE 1
+// ignore mqtt header check
+#define TCPSSL_MODE       0
+#define TCP_SERVER_KEEP_ALIVE 0
 #define AWS_IOT_MQTT      0
 
 #if MQTTSSL_KEEPALIVE
 #include "MQTTClient.h"
 #endif
 
+#include "gpio_api.h"
 #include "gpio_irq_api.h"
 #include "gpio_irq_ex_api.h"
 
@@ -35,14 +48,37 @@ extern void console_init(void);
 
 extern struct netif xnetif[NET_IF_NUM];
 
+extern void wifi_wowlan_set_pstune_param(uint8_t set_pstimeout,
+		uint8_t set_pstimeout_retry,
+		uint8_t set_rx_bcn_limit,
+		uint8_t set_dtimtimeout,
+		uint8_t set_bcn_to_limit);
+
+extern int wifi_wowlan_set_fwdecision_param(u8  fwdis_period,
+		u8  fwdis_trypktnum,
+		u8  pno_enable,
+		u8  pno_timeout,
+		u8  l2_keepalive_period);
+
+extern int rtl8735b_suspend(int mode);
+
+extern void rtl8735b_set_lps_pg(void);
+
+extern void wifi_set_publish_wakeup(void);
+
+extern void wifi_set_tcpssl_keepalive(void);
+
+extern int wifi_set_dhcp_offload(void);
+extern int wifi_set_ssl_offload(uint8_t *ctr, uint8_t *iv, uint8_t *enc_key, uint8_t *dec_key, uint8_t *hmac_key, uint8_t *content, size_t len, uint8_t is_etm);
+
 /**
  * Lunch a thread to send AT command automatically for a long run test
  */
 #define LONG_RUN_TEST   (0)
 //Clock, 1: 4MHz, 0: 100kHz
 #define CLOCK 0
-//SLEEP_DURATION, 5s
-#define SLEEP_DURATION (5 * 1000 * 1000)
+//SLEEP_DURATION, 120s
+#define SLEEP_DURATION (120 * 1000 * 1000)
 
 static char your_ssid[33]   = "your_ssid";
 static char your_pw[33]     = "your_pw";
@@ -57,6 +93,9 @@ static uint32_t interval_ms = 60000;
 static uint32_t resend_ms = 10000;
 
 static int enable_wowlan_pattern = 0;
+
+#define KEEP_ALIVE_FINE_TUNE 1
+#define WOWLAN_GPIO_WDT      0
 
 void print_PS_help(void)
 {
@@ -248,23 +287,28 @@ int keepalive_cnt = 0;
 int keepalive_offload_test(void)
 {
 #if MQTTSSL_KEEPALIVE
+//step 1: connect to ssl server
+//component\example\ssl_client\ssl_client.c
 	int ret = 0;
 	MQTTClient client;
 	Network network;
 	int rc = 0, count = 0;
 	MQTTPacket_connectData connectData = MQTTPacket_connectData_initializer;
 #if AWS_IOT_MQTT
-	char *address = "a2zweh2b7yb784-ats.iot.ap-southeast-1.amazonaws.com";
+	char address[256] = "a2zweh2b7yb784-ats.iot.ap-southeast-1.amazonaws.com";
 #else
-	//char *address = "test.mosquitto.org";
-
-	//char* address = "broker.emqx.io";
-
-	char *address = "192.168.1.68";
+	char address[32] = "192.168.1.68";
 #endif
 
-	char *sub_topic = "wakeup";
-	char *pub_topic = "wakeup";
+	char *sub_topic[3];
+	char topic1[32] = "wakeup";
+	char topic2[32] = "wakeup1";
+	char topic3[32] = "wakeup2";
+	sub_topic[0] = topic1;
+	sub_topic[1] = topic2;
+	sub_topic[2] = topic3;
+
+	char pub_topic[32] = "wakeup";
 
 	NetworkInit(&network);
 	network.use_ssl = 1;
@@ -281,13 +325,17 @@ int keepalive_offload_test(void)
 
 	MQTTClientInit(&client, &network, 30000, sendbuf, sizeof(sendbuf), readbuf, sizeof(readbuf));
 
-#if AWS_IOT_MQTT
+//#if AWS_IOT_MQTT
 	client.qos_limit = QOS1;
-#endif
+//#endif
 
 	connectData.MQTTVersion = 3;
-	connectData.clientID.cstring = "ameba-iot";
+	//connectData.clientID.cstring = "ameba-iot";
+	//connectData.clientID.lenstring.data = "ameba-iot";
+	sprintf(connectData.clientID.lenstring.data, "%s", "ameba-iot");
+	connectData.clientID.lenstring.len = 9;
 	connectData.keepAliveInterval = 15 * 60;
+	connectData.cleansession = 0;
 
 	int mqtt_pub_count = 0;
 
@@ -298,8 +346,13 @@ int keepalive_offload_test(void)
 
 		FD_ZERO(&read_fds);
 		FD_ZERO(&except_fds);
-		timeout.tv_sec = 1;
-		timeout.tv_usec = 0;
+		if (client.mqttstatus == MQTT_RUNNING) {
+			timeout.tv_sec = 0;
+			timeout.tv_usec = 100000;
+		} else {
+			timeout.tv_sec = 1;
+			timeout.tv_usec = 0;
+		}
 
 		if (network.my_socket >= 0) {
 			FD_SET(network.my_socket, &read_fds);
@@ -320,19 +373,21 @@ int keepalive_offload_test(void)
 			}
 		}
 
-		MQTTDataHandle(&client, &read_fds, &connectData, messageArrived, address, sub_topic);
+		MQTTDataHandle(&client, &read_fds, &connectData, messageArrived, address, sub_topic, 3);
 		int timercount = 0;
 		if (client.mqttstatus == MQTT_RUNNING) {
-			vTaskDelay(2000);
-			// mqtt_pub_count++;
+			mqtt_pub_count++;
 			// if(keepalive_cnt>=5)
-			break;
+			//MQTTStringFormat_connect(sendbuf, sizeof(sendbuf), &connectData);
+			//printf("MQTT format: %s\r\n", sendbuf);
+			if (mqtt_pub_count > 2) {
+				break;
+			}
 		}
 	}
 
-
-	netif_set_link_down(&xnetif[0]); // simulate system enter sleep
-
+//step 2: set ssl offload
+//use mbedtls_ssl_context
 	if (network.use_ssl == 1) {
 		//ssl
 		uint8_t iv[16];
@@ -341,6 +396,7 @@ int keepalive_offload_test(void)
 		set_ssl_offload(network.ssl, iv, keepalive_content, keepalive_len);
 	}
 
+//step 3: set keep alive packet offload
 	// ssl offload: must after mbedtls_platform_set_calloc_free() and wifi_set_ssl_offload()
 	uint8_t *ssl_record = NULL;
 	if (network.use_ssl == 1) {
@@ -592,6 +648,15 @@ void set_tcp_connected_pattern(wowlan_pattern_t *pattern)
 
 }
 
+u32 bcnearly = 0x1200;
+uint8_t dtimtimeout2 = 2;
+uint8_t rx_bcn_limit2 = 2;
+uint8_t l2_keepalive_period2 = 50;
+uint8_t ps_timeout2 = 6;
+uint8_t ps_retry2 = 10;
+uint8_t sd_period = 30;
+uint8_t sd_threshold = 15;
+
 void wowlan_thread(void *param)
 {
 	int ret;
@@ -605,31 +670,84 @@ void wowlan_thread(void *param)
 	while (1) {
 
 		if (enable_tcp_keep_alive) {
+			wifi_set_dhcp_offload();
+			wifi_wowlan_set_arpreq_keepalive(1, 1);
+
+#if KEEP_ALIVE_FINE_TUNE
+			wifi_wowlan_set_pstune_param(ps_timeout2, ps_retry2, rx_bcn_limit2, dtimtimeout2, 20);
+			wifi_wowlan_set_fwdecision_param(40, 20, 0, 0, l2_keepalive_period2);
+#endif
+
+#if WOWLAN_GPIO_WDT
+			wifi_wowlan_set_wdt(2, 2); //gpiof_2, io trigger interval 2 min
+#endif
+
 			while (keepalive_offload_test() != 0) {
 				vTaskDelay(4000);
 			}
+
+//step 4: set wakeup pattern
+#if MQTTSSL_KEEPALIVE
+#if TCPSSL_MODE
+			wifi_set_tcpssl_keepalive();
+
+			//"mqtt topic wakeup"
+			//char *data = "wakeup";
+			//wifi_wowlan_set_ssl_pattern(data, strlen(data), 4); //offset mqtt header 4bytes
+
+			//"mqtt topic wakeup1"
+			char *data1 = "wakeup1";
+			wifi_wowlan_set_ssl_pattern(data1, strlen(data1), 4);
+
+			//"mqtt topic wakeup2"
+			char *data2 = "wakeup2";
+			wifi_wowlan_set_ssl_pattern(data2, strlen(data2), 4);
+
+#if TCP_SERVER_KEEP_ALIVE
+			char *server_keepalive_content = "wakeup";
+			wifi_wowlan_set_serverkeepalive(100, server_keepalive_content, strlen(server_keepalive_content), 4);
+#endif
+
+#else
+#if 0
+			//"test123456789"
+			char *data = "123456789";
+			wifi_wowlan_set_ssl_pattern(data, strlen(data), 4);
+			//"wakeupabcd"
+			char *data2 = "abcd";
+			wifi_wowlan_set_ssl_pattern(data2, strlen(data2), 6);
+
+			//"12did"
+			char *data5 = "did";
+			wifi_wowlan_set_ssl_pattern(data5, strlen(data5), 2);
+
+			//"1234did"
+			char *data6 = "did";
+			wifi_wowlan_set_ssl_pattern(data6, strlen(data6), 4);
+
+#if TCP_SERVER_KEEP_ALIVE
+			char *server_keepalive_content = "keepalive";
+			wifi_wowlan_set_serverkeepalive(100, server_keepalive_content, strlen(server_keepalive_content), 0);
+#endif
+
+#else
+			wifi_set_publish_wakeup();
+#endif
+#endif
+#else
+			wowlan_pattern_t data_pattern;
+			set_tcp_connected_pattern(&data_pattern);
+			wifi_wowlan_set_pattern(data_pattern);
+#endif
 
 			// while(1)
 			// {
 			// vTaskDelay(1000);
 			// }
 
-
-#if MQTTSSL_KEEPALIVE
-#if 0
-			//"test123456789"
-			char *data = "123456789";
-			wifi_wowlan_set_ssl_pattern(data, strlen(data), 4);
-			//"wakeupabcdefgh"
-			char *data2 = "abcdefgh";
-			wifi_wowlan_set_ssl_pattern(data2, strlen(data2), 6);
-#else
-			wifi_set_publish_wakeup();
-#endif
-#else
-			wowlan_pattern_t data_pattern;
-			set_tcp_connected_pattern(&data_pattern);
-			wifi_wowlan_set_pattern(data_pattern);
+#if KEEP_ALIVE_FINE_TUNE
+			//wifi_wowlan_set_dtimto(1,1,20,3);
+			//wifi_wowlan_set_smartdtim(sd_period, sd_threshold, 3, 10);
 #endif
 
 		}
@@ -646,13 +764,6 @@ void wowlan_thread(void *param)
 		wifi_wowlan_set_pattern(ping_pattern);
 #endif
 
-		//wifi_set_dhcp_offload();
-
-		//wifi_wowlan_set_dtimto(1,1,50,10);
-		//rtw_set_lps_dtim(10);
-
-		//wifi_wowlan_set_arp_rsp_keep_alive(1);
-
 		if (!((wifi_get_join_status() == RTW_JOINSTATUS_SUCCESS) && (*(u32 *)LwIP_GetIP(0) != IP_ADDR_INVALID))) {
 			printf("wifi disconnect into standby mode\r\n");
 			gpio_irq_init(&my_GPIO_IRQ, WAKUPE_GPIO_PIN, gpio_demo_irq_handler, (uint32_t)&my_GPIO_IRQ);
@@ -663,11 +774,15 @@ void wowlan_thread(void *param)
 			Standby(DSTBY_AON_GPIO | DSTBY_AON_TIMER, SLEEP_DURATION, CLOCK, 0);
 		}
 
+		printf("start suspend\r\n");
+		rtl8735b_set_lps_pg();
+		printf("rtl8735b_set_lps_pg\r\n");
 		rtw_enter_critical(NULL, NULL);
 		if (rtl8735b_suspend(0) == 0) { // should stop wifi application before doing rtl8735b_suspend(
 			if (((wifi_get_join_status() == RTW_JOINSTATUS_SUCCESS) && (*(u32 *)LwIP_GetIP(0) != IP_ADDR_INVALID))) {
 
 				printf("rtl8735b_suspend\r\n");
+				HAL_WRITE32(0x40080000, 0x88, bcnearly);
 #if LONG_RUN_TEST
 				gpio_irq_init(&my_GPIO_IRQ, WAKUPE_GPIO_PIN, gpio_demo_irq_handler, (uint32_t)&my_GPIO_IRQ);
 				gpio_irq_pull_ctrl(&my_GPIO_IRQ, PullDown);
@@ -675,7 +790,33 @@ void wowlan_thread(void *param)
 
 				Standby(DSTBY_AON_GPIO | DSTBY_WLAN | DSTBY_AON_TIMER, SLEEP_DURATION, CLOCK, 0);
 #else
+#if WOWLAN_GPIO_WDT
+				HAL_WRITE32(0x40009000, 0x18, 0xB5E36001); //4MHz power on
+				hal_delay_ms(5);
+
+				//set gpio pull control
+				// HAL_WRITE32(0x40009850, 0x0, 0x4f004f); //GPIOF_1/GPIOF_0
+				// HAL_WRITE32(0x40009854, 0x0, 0x8f004f); //GPIOF_3/GPIOF_2
+				// HAL_WRITE32(0x40009858, 0x0, 0x4f008f); //GPIOF_5/GPIOF_4
+				// HAL_WRITE32(0x4000985c, 0x0, 0x4f004f); //GPIOF_7/GPIOF_6
+				// HAL_WRITE32(0x40009860, 0x0, 0x4f004f); //GPIOF_9/GPIOF_8
+				// HAL_WRITE32(0x40009864, 0x0, 0x4f004f); //GPIOF_11/GPIOF_10
+				// HAL_WRITE32(0x40009868, 0x0, 0x4f004f); //GPIOF_13/GPIOF_12
+				// HAL_WRITE32(0x4000986C, 0x0, 0x4f004f); //GPIOF_15/GPIOF_14
+				// HAL_WRITE32(0x40009870, 0x0, 0x4f004f); //GPIOF_17/GPIOF_16
+
+				gpio_t my_GPIO1;
+				gpio_init(&my_GPIO1, PA_2);
+				gpio_irq_pull_ctrl((gpio_irq_t *)&my_GPIO1, PullDown);
+				Standby(DSTBY_PON_GPIO | DSTBY_WLAN, 0, CLOCK, 0);
+#else
+
+
+				gpio_t my_GPIO1;
+				gpio_init(&my_GPIO1, PA_2);
+				gpio_irq_pull_ctrl((gpio_irq_t *)&my_GPIO1, PullDown);
 				Standby(DSTBY_WLAN, 0, 0, 0);
+#endif
 #endif
 			} else {
 				printf("wifi disconnect into standby mode\r\n");
@@ -686,6 +827,8 @@ void wowlan_thread(void *param)
 			sys_reset();
 		}
 		rtw_exit_critical(NULL, NULL);
+
+		printf("end suspend\r\n");
 
 		while (1) {
 			vTaskDelay(2000);
@@ -719,25 +862,113 @@ void fPS(void *arg)
 			}
 			enable_tcp_keep_alive = 1;
 			printf("setup tcp keep alive to %s:%d\r\n", server_ip, server_port);
+		} else if (strcmp(argv[1], "arp") == 0) {
+			if (argc >= 3) {
+				char cp[16] = "192.168.1.100";
+				sprintf(cp, "%s", argv[2]);
+				ip4_addr_t dst_ip;
+				if (ip4addr_aton(cp, &dst_ip) == 1) {
+					printf("\n\r Success dst_ip: %s", ip4addr_ntoa(&dst_ip));
+				}
+				//for(int i = 0;i<1;i++){
+				//arq request
+				etharp_request(&xnetif[0], &dst_ip);
+				//}
+			}
 		} else if (strcmp(argv[1], "mqtt_keep_alive") == 0) {
 			enable_tcp_keep_alive = 1;
 			printf("setup mqtt keep alive\r\n");
+		} else if (strcmp(argv[1], "interval_ms") == 0) {
+			if (argc == 3) {
+				printf("interval_ms=%02d", atoi(argv[2]));
+				interval_ms = atoi(argv[2]);
+			}
+		} else if (strcmp(argv[1], "resend_ms") == 0) {
+			if (argc == 3) {
+				printf("resend_ms=%02d", atoi(argv[2]));
+				resend_ms = atoi(argv[2]);
+			}
 		} else if (strcmp(argv[1], "standby") == 0) {
 			printf("into standby\r\n");
 			gpio_t my_GPIO1;
 			gpio_init(&my_GPIO1, PA_2);
-			gpio_irq_pull_ctrl(&my_GPIO1, PullDown);
+			gpio_irq_pull_ctrl((gpio_irq_t *)&my_GPIO1, PullDown);
 			Standby(SLP_AON_TIMER, SLEEP_DURATION, CLOCK, 0);
+		} else if (strcmp(argv[1], "deepsleep") == 0) {
+			printf("into deepsleep\r\n");
+			gpio_t my_GPIO1;
+			gpio_t my_GPIO2;
+			gpio_init(&my_GPIO1, PA_2);
+			gpio_irq_pull_ctrl((gpio_irq_t *)&my_GPIO1, PullDown);
+			gpio_init(&my_GPIO2, PA_3);
+			gpio_irq_pull_ctrl((gpio_irq_t *)&my_GPIO2, PullDown);
+
+			for (int i = 5; i > 0; i--) {
+				dbg_printf("Enter DeepSleep by %d seconds \r\n", i);
+				hal_delay_us(1 * 1000 * 1000);
+			}
+
+			DeepSleep(DS_AON_TIMER, SLEEP_DURATION, CLOCK);
+
 		} else if (strcmp(argv[1], "dtim10") == 0) {
 			printf("dtim=10\r\n");
-			rtw_set_lps_dtim(10);
+			wifi_wowlan_set_dtimto(0, 0, 0, 10);
 		} else if (strcmp(argv[1], "dtim") == 0) {
 			if (argc == 3 && atoi(argv[2]) >= 1 && atoi(argv[2]) <= 15) {
 				printf("dtim=%02d", atoi(argv[2]));
-				rtw_set_lps_dtim(atoi(argv[2]));
+				wifi_wowlan_set_dtimto(0, 0, 0, atoi(argv[2]));
 			} else {
 				printf("dtim=10\r\n");
-				rtw_set_lps_dtim(10);
+				wifi_wowlan_set_dtimto(0, 0, 0, 10);
+			}
+		} else if (strcmp(argv[1], "dtimto") == 0) {
+			printf("dtim = 10 keep alive fine tune\r\n");
+			wifi_wowlan_set_dtimto(1, 1, 50, 10);
+		} else if (strcmp(argv[1], "dhcp_renew") == 0) {
+			printf("dhcp renew\r\n");
+			wifi_set_dhcp_offload();
+		} else if (strcmp(argv[1], "arp_keep_alive") == 0) {
+			printf("arp keep alive\r\n");
+			wifi_wowlan_set_arp_rsp_keep_alive(1);
+		} else if (strcmp(argv[1], "bcnearly") == 0) {
+			if (argc == 3) {
+				printf("bcnearly=0x%X", atoi(argv[2]));
+				bcnearly = atoi(argv[2]);
+			}
+		} else if (strcmp(argv[1], "dto") == 0) {
+			if (argc == 3) {
+				printf("dtimtimeout=%02d", atoi(argv[2]));
+				dtimtimeout2 = atoi(argv[2]);
+			}
+		} else if (strcmp(argv[1], "rx_bcn") == 0) {
+			if (argc == 3) {
+				printf("rx_bcn_limit=%02d", atoi(argv[2]));
+				rx_bcn_limit2 = atoi(argv[2]);
+			}
+		} else if (strcmp(argv[1], "l2") == 0) {
+			if (argc == 3) {
+				printf("l2_keepalive_period=%02d", atoi(argv[2]));
+				l2_keepalive_period2 = atoi(argv[2]);
+			}
+		} else if (strcmp(argv[1], "ps_timeout") == 0) {
+			if (argc == 3) {
+				printf("ps_timeout=%02d", atoi(argv[2]));
+				ps_timeout2 = atoi(argv[2]);
+			}
+		} else if (strcmp(argv[1], "ps_retry") == 0) {
+			if (argc == 3) {
+				printf("ps_retry=%02d", atoi(argv[2]));
+				ps_retry2 = atoi(argv[2]);
+			}
+		} else if (strcmp(argv[1], "sd_p") == 0) {
+			if (argc == 3) {
+				printf("sd_period=%02d", atoi(argv[2]));
+				sd_period = atoi(argv[2]);
+			}
+		} else if (strcmp(argv[1], "sd_th") == 0) {
+			if (argc == 3) {
+				printf("sd_threshold=%02d", atoi(argv[2]));
+				sd_threshold = atoi(argv[2]);
 			}
 		} else {
 			print_PS_help();
@@ -771,33 +1002,50 @@ log_item_t at_power_save_items[ ] = {
 };
 
 //char wakeup_packet[1024];
+extern uint8_t rtl8735b_wowlan_wake_reason(void);
+extern uint8_t rtl8735b_wowlan_wake_pattern(void);
+extern uint8_t *rtl8735b_read_wakeup_packet(uint32_t *size, uint8_t wowlan_reason);
 
 void main(void)
 {
 
 	/* Must have, please do not remove */
+	/* *************************************
+		RX_DISASSOC = 0x04,
+		RX_DEAUTH = 0x08,
+		FW_DECISION_DISCONNECT = 0x10,
+	    RX_PATTERN_PKT = 0x23,
+		TX_TCP_SEND_LIMIT = 0x69,
+		RX_DHCP_NAK = 0x6A,
+		DHCP_RETRY_LIMIT = 0x6B,
+		RX_MQTT_PATTERN_MATCH = 0x6C,
+		RX_MQTT_PUBLISH_WAKE = 0x6D,
+		RX_MQTT_MTU_LIMIT_PACKET = 0x6E,
+	*************************************** */
+
 	uint8_t wowlan_wake_reason = rtl8735b_wowlan_wake_reason();
 	if (wowlan_wake_reason != 0) {
 		printf("\r\nwake fom wlan: 0x%02X\r\n", wowlan_wake_reason);
-		if (wowlan_wake_reason == 0x6C) {
+		if (wowlan_wake_reason == 0x6C || wowlan_wake_reason == 0x6D) {
 			uint8_t wowlan_wakeup_pattern = rtl8735b_wowlan_wake_pattern();
 			printf("\r\nwake fom wlan pattern index: 0x%02X\r\n", wowlan_wakeup_pattern);
 		}
 
 		if (wowlan_wake_reason == 0x23 || wowlan_wake_reason == 0x6C || wowlan_wake_reason == 0x6D) {
-			//read_wakeup_packet(wakeup_packet);
 			uint32_t packet_len = 0;
-			//uint8_t* wakeup_packet = read_wakeup_packet_by_malloc(&packet_len);
-			uint8_t *wakeup_packet = read_wakeup_packet_with_index_by_malloc(&packet_len, wowlan_wake_reason);
+			uint8_t *wakeup_packet = rtl8735b_read_wakeup_packet(&packet_len, wowlan_wake_reason);
+			//uint8_t *wakeup_packet = rtl8735b_read_wakeup_payload(&packet_len, 1);
 
-			//do packet_parser
-			free(wakeup_packet);
-		} else if (wowlan_wake_reason == 0x6E) {
-			//read_wakeup_packet(wakeup_packet);
-			uint32_t packet_len = 0;
-			//uint8_t* wakeup_packet = read_wakeup_packet_by_malloc(&packet_len);
-			uint8_t *wakeup_packet = read_wakeup_packet_with_index_by_malloc(&packet_len, wowlan_wake_reason);
-
+#if 0
+			int i = 0;
+			do {
+				printf("packet content[%d] = 0x%02X%02X%02X%02X\r\n", i, wakeup_packet[i + 3], wakeup_packet[i + 2], wakeup_packet[i + 1], wakeup_packet[i]);
+				if (i >= packet_len) {
+					break;
+				}
+				i += 4;
+			} while (1);
+#endif
 
 			//do packet_parser
 			free(wakeup_packet);
@@ -814,12 +1062,15 @@ void main(void)
 	/* wlan intialization */
 	wlan_network();
 
+	sys_backtrace_enable();
 
 #if LONG_RUN_TEST
 	if (xTaskCreate(long_run_test_thread, ((const char *)"long_run_test_thread"), 1024, NULL, tskIDLE_PRIORITY + 1, NULL) != pdPASS) {
 		printf("\r\n long_run_test_thread: Create Task Error\n");
 	}
 #endif
+
+	//app_example();
 
 
 	/*Enable Schedule, Start Kernel*/

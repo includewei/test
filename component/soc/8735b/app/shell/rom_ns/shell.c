@@ -388,11 +388,20 @@ SECTION_SHELL_TEXT void shell_print_commands(shell_command_t *pshell_cmd)
 //              shell_print(pshell_cmd, pshell_cmd->cmd_table[i].shell_command_string);
 //              shell_print(pshell_cmd, "\t: ");
 //              shell_println(pshell_cmd, pshell_cmd->cmd_table[i].help_string);
-
+#if CONFIG_FPGA && (CONFIG_SIMU_ASIC_FLOW_EN == 0) // FPGA  
 				_rtl_printf("[%6s]%16s : %s \r\n"\
 							, pshell_cmd->cmd_table[i].shell_command_type\
 							, pshell_cmd->cmd_table[i].shell_command_string\
 							, pshell_cmd->cmd_table[i].help_string);
+#else   // PXP & ASIC
+				// Consider secure issue
+				if (shell_strcmp((pshell_cmd->cmd_table[i].shell_command_type), "ROM") != 0) {
+					_rtl_printf("[%6s]%16s : %s \r\n"\
+								, pshell_cmd->cmd_table[i].shell_command_type\
+								, pshell_cmd->cmd_table[i].shell_command_string\
+								, pshell_cmd->cmd_table[i].help_string);
+				}
+#endif
 			}
 		}
 	}
@@ -403,12 +412,21 @@ SECTION_SHELL_TEXT void shell_print_commands(shell_command_t *pshell_cmd)
 				(pshell_cmd->cmd_list[i].shell_command_string != (const char *)0) &&
 				(shell_strcmp(pshell_cmd->current_type, pshell_cmd->cmd_list[i].shell_command_type) == 0 ||
 				 *pshell_cmd->current_type == 0x0)) {
-
+#if CONFIG_FPGA && (CONFIG_SIMU_ASIC_FLOW_EN == 0) // FPGA                   
 				_rtl_printf("[%6s]%16s : %s \r\n"\
 							, pshell_cmd->cmd_list[i].shell_command_type\
 							, pshell_cmd->cmd_list[i].shell_command_string\
 							, pshell_cmd->cmd_list[i].help_string);
-
+#else   // PXP & ASIC
+				// Consider secure issue
+				if ((shell_strcmp((pshell_cmd->cmd_list[i].shell_command_type), "BOOT_ROM") != 0) &&
+					(shell_strcmp((pshell_cmd->cmd_list[i].shell_command_type), "PG Tool") != 0)) {
+					_rtl_printf("[%6s]%16s : %s \r\n"\
+								, pshell_cmd->cmd_list[i].shell_command_type\
+								, pshell_cmd->cmd_list[i].shell_command_string\
+								, pshell_cmd->cmd_list[i].help_string);
+				}
+#endif
 //              shell_print(pshell_cmd, pshell_cmd->cmd_list[i].shell_command_string);
 //              shell_print(pshell_cmd, "\t: ");
 //              shell_println(pshell_cmd, pshell_cmd->cmd_list[i].help_string);

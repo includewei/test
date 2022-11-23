@@ -2,7 +2,7 @@
 #define __ATCMD_WIFI_H__
 #include "main.h"
 #if CONFIG_LWIP_LAYER
-#include "lwip_netconf.h"
+//#include "lwip_netconf.h"
 #endif
 
 #ifndef WLAN0_NAME
@@ -72,11 +72,11 @@
 #include "wifi_structures.h"
 #include <wifi_fast_connect.h>
 typedef struct _UART_LOG_CONF_ {
-	u32 BaudRate;
-	u8 DataBits;
-	u8 StopBits;
-	u8 Parity;
-	u8 FlowControl;
+	uint32_t BaudRate;
+	uint8_t DataBits;
+	uint8_t StopBits;
+	uint8_t Parity;
+	uint8_t FlowControl;
 } UART_LOG_CONF, *PUART_LOG_CONF;
 
 #define ATCMD_WIFI_CONN_STORE_MAX_NUM (1)
@@ -139,7 +139,7 @@ typedef enum {
 #define LWIP_CONF_DATA_OFFSET			(WIFI_CONF_DATA_OFFSET+WIFI_CONF_DATA_SIZE)
 #define LWIP_CONF_DATA_SIZE				((((sizeof(struct atcmd_lwip_conf)-1)>>2) + 1)<<2)
 
-extern void atcmd_update_partition_info(AT_PARTITION id, AT_PARTITION_OP ops, u8 *data, u16 len);
+extern void atcmd_update_partition_info(AT_PARTITION id, AT_PARTITION_OP ops, uint8_t *data, u16 len);
 
 #define ATSTRING_LEN 	(LOG_SERVICE_BUFLEN)
 extern char at_string[ATSTRING_LEN];
@@ -148,7 +148,7 @@ extern unsigned char gAT_Echo; // default echo on
 //extern void uart_at_lock(void);
 //extern void uart_at_unlock(void);
 extern void uart_at_send_string(char *str);
-extern void uart_at_send_buf(u8 *buf, u32 len);
+extern void uart_at_send_buf(uint8_t *buf, uint32_t len);
 
 #define at_printf(fmt, args...)  do{\
 			/*uart_at_lock();*/\
@@ -226,13 +226,13 @@ typedef enum {
 #define LWIP_CONF_DATA_OFFSET			(WIFI_CONF_DATA_OFFSET+WIFI_CONF_DATA_SIZE)
 #define LWIP_CONF_DATA_SIZE				((((sizeof(struct atcmd_lwip_conf)-1)>>2) + 1)<<2)
 
-extern void atcmd_update_partition_info(AT_PARTITION id, AT_PARTITION_OP ops, u8 *data, u16 len);
+extern void atcmd_update_partition_info(AT_PARTITION id, AT_PARTITION_OP ops, uint8_t *data, u16 len);
 
 #define ATSTRING_LEN 	(LOG_SERVICE_BUFLEN)
 extern char at_string[ATSTRING_LEN];
 
 extern void spi_at_send_string(char *str);
-extern void spi_at_send_buf(u8 *buf, u32 len);
+extern void spi_at_send_buf(uint8_t *buf, uint32_t len);
 
 #define at_printf(fmt, args...)  do{\
 			/*spi_at_lock();*/\

@@ -108,6 +108,10 @@ int rtp_cache_deinit(rtp_ctx_t *ctx)
 {
 	rtp_cache_t *tmp;
 
+	if (ctx->cache_handler) {
+		vTaskDelete(ctx->cache_handler);
+	}
+
 	if (ctx->cache_ready && ctx->cache_recycle) {
 		while (xQueueReceive(ctx->cache_ready, (void *)&tmp, 0) == pdTRUE) {
 			if (tmp) {
@@ -132,9 +136,6 @@ int rtp_cache_deinit(rtp_ctx_t *ctx)
 		vQueueDelete(ctx->cache_recycle);
 	}
 
-	if (ctx->cache_handler) {
-		vTaskDelete(ctx->cache_handler);
-	}
 	ctx->cache_ready = NULL;
 	ctx->cache_recycle = NULL;
 	ctx->cache_handler = NULL;
@@ -319,6 +320,8 @@ int rtp_handle(void *ctx, void *input, void *output)
 void *rtp_destroy(void *p)
 {
 	rtp_ctx_t *ctx = (rtp_ctx_t *)p;
+
+	rtp_cache_deinit(ctx);
 
 	if (ctx->rtp_shutdown == 0) {
 		rtp_control((void *)ctx, CMD_RTP_STREAMING, 0);

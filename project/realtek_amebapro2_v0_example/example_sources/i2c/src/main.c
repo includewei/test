@@ -1,3 +1,4 @@
+#include <string.h>
 #include "PinNames.h"
 #include "basic_types.h"
 #include "diag.h"
@@ -25,8 +26,8 @@ char	i2cdatadst[I2C_DATA_LENGTH];
 i2c_t   i2cmaster;
 i2c_t   i2cslave;
 #else
-volatile i2c_t   i2cmaster;
-volatile i2c_t   i2cslave;
+i2c_t   i2cmaster;
+i2c_t   i2cslave;
 #endif
 
 void i2c_callback(void *userdata)
@@ -36,7 +37,7 @@ void i2c_callback(void *userdata)
 	int     result = 0;
 
 	dbg_printf("show slave received data>>>\n\r");
-	for (i2clocalcnt = 0; i2clocalcnt < I2C_DATA_LENGTH; i2clocalcnt += 2) {
+	for (i2clocalcnt = 0; i2clocalcnt < (I2C_DATA_LENGTH - 1); i2clocalcnt += 2) {
 		dbg_printf("i2c data: %02x \t %02x\n\r", i2cdatadst[i2clocalcnt], i2cdatadst[i2clocalcnt + 1]);
 	}
 
@@ -59,8 +60,8 @@ void main(void)
 	int     result = 0;
 
 	// prepare for transmission
-	rtw_memset(&i2cdatasrc[0], 0x00, I2C_DATA_LENGTH);
-	rtw_memset(&i2cdatadst[0], 0x00, I2C_DATA_LENGTH);
+	memset(&i2cdatasrc[0], 0x00, I2C_DATA_LENGTH);
+	memset(&i2cdatadst[0], 0x00, I2C_DATA_LENGTH);
 
 	for (i2clocalcnt = 0; i2clocalcnt < I2C_DATA_LENGTH; i2clocalcnt++) {
 		i2cdatasrc[i2clocalcnt] = i2clocalcnt + 1;

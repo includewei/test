@@ -5,6 +5,7 @@
 	"FIRMWARE":{
 		"manifest":"MANIFEST",
 		"images":[
+			"IQ_SENSOR",
 			"VOE",
 			"FW_S",
             "FW_NSC",
@@ -38,26 +39,27 @@
 		},
         "file":"voe.bin"
 	},
+	"IQ_SENSOR": {
+		"source":"binary",
+		"header":{
+			"type":"IMG_ISP"
+		},
+        "file":"firmware_isp_iq.bin"
+	},	
 	"FW_S": {
 		"source":"application.s.axf",
 		"header":{
 			"type":"IMG_FWHS_S", 
 			"entry": "__ram_start_table_start__"
 		},
-		"blocks" : ["sram", "itcm", "ddr"],
+		"blocks" : ["sram", "ddr"],
 		"sram": {
 			"type":"SIMG_SRAM",
 			"sections":	[
 				".ram.img.signature",
 				".ram.func.table",
-				".ram.code_text"
-			]
-		},
-		"itcm": {
-			"type":"SIMG_ITCM",
-			"sections":	[
-				".itcm_ram.code_rodata",
-                ".ram.data"
+				".ram.code_text",
+				".ram.data"
 			]
 		},
 		"ddr": {

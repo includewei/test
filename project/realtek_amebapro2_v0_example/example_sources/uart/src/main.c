@@ -26,10 +26,10 @@ int main(void)
 	serial_baud(&sobj, 38400);
 	serial_format(&sobj, 8, ParityNone, 1);
 
-	uart_send_string(&sobj, "UART API Demo... \r\n");
-	uart_send_string(&sobj, "Hello World!! \r\n");
+	uart_send_string(&sobj, (char *)"UART API Demo... \r\n");
+	uart_send_string(&sobj, (char *)"Hello World!! \r\n");
 	while (1) {
-		uart_send_string(&sobj, "\r\n8735B$");
+		uart_send_string(&sobj, (char *)"\r\n8735B$");
 		rc = serial_getc(&sobj);
 		serial_putc(&sobj, rc);
 	}

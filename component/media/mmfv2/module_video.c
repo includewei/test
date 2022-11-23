@@ -36,9 +36,11 @@
 #include "hal_video.h"
 #include "md/md2_api.h"
 
+#include "ftl_common_api.h"
+
 #define OSD_ENABLE 1
-#define MD_ENABLE  1
-#define HDR_ENABLE 1
+#define MD_ENABLE  0
+#define HDR_ENABLE 0
 
 int framecnt = 0;
 int jpegcnt = 0;
@@ -48,7 +50,7 @@ int ch1framecnt = 0;
 int ch2framecnt = 0;
 int rgb_lock = 0;
 
-#define VIDEO_DEBUG 0
+#define MMF_VIDEO_DEBUG 0
 
 ///////////////////
 #include "fw_img_export.h"
@@ -59,7 +61,19 @@ int isp_get_id(void);
 int isp_set_sensor(int sensor_id);
 void video_save_sensor_id(int SensorName);
 extern video_boot_stream_t *isp_boot;
+static int(*sensor_setup)(int status, int sensor_id) = NULL;
 //////////////////
+
+#if CONFIG_TUNING
+static int show_fps = 0;
+static int ch_fps[3]   = {0};
+static int cb_tick[3]   = {0};
+
+void video_show_fps(int enable)
+{
+	show_fps = enable;
+}
+#endif
 
 void md_output_cb(void *param1, void  *param2, uint32_t arg)
 {
@@ -80,15 +94,15 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 	enc2out_t *enc2out = (enc2out_t *)param1;
 	incb[enc2out->ch] = 1;
 	hal_video_adapter_t  *v_adp = (hal_video_adapter_t *)param2;
-	commandLine_s *cml = &v_adp->cmd[enc2out->ch];
+	commandLine_s *cml = (commandLine_s *)&v_adp->cmd[enc2out->ch];
 	video_ctx_t *ctx = (video_ctx_t *)arg;
 	mm_context_t *mctx = (mm_context_t *)ctx->parent;
 	mm_queue_item_t *output_item;
 
-	u32 timestamp = xTaskGetTickCount();
+	uint32_t timestamp = xTaskGetTickCount() + ctx->timestamp_offset;
 	int is_output_ready = 0;
 
-#if VIDEO_DEBUG
+#if MMF_VIDEO_DEBUG
 	if (enc2out->codec & CODEC_JPEG) {
 		VIDEO_DBG_INFO("jpeg in = 0x%X\r\n", enc2out->jpg_addr);
 	} else if (enc2out->codec & CODEC_H264 || enc2out->codec & CODEC_HEVC) {
@@ -113,7 +127,8 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 							  , enc2out->cmd_status == VOE_ENC_BUF_OVERFLOW ? "buff" : "queue"
 							  , enc2out->enc_time
 							  , enc2out->enc_used >> 10);
-			//video_encbuf_clean(enc2out->ch, CODEC_H264 | CODEC_HEVC);
+			video_encbuf_clean(enc2out->ch, CODEC_H264 | CODEC_HEVC);
+			video_ctrl(enc2out->ch, VIDEO_FORCE_IFRAME, 1);
 			//enc_queue_cnt[enc2out->ch] = 0;
 			break;
 		case VOE_JPG_BUF_OVERFLOW:
@@ -130,6 +145,7 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 			VIDEO_DBG_ERROR("Error CH%d VOE cmd %x status %x\n", enc2out->ch, enc2out->cmd, enc2out->cmd_status);
 			break;
 		}
+		incb[enc2out->ch] = 0;
 		return;
 	}
 
@@ -140,10 +156,22 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 	// Snapshot JPEG
 	if (enc2out->codec & CODEC_JPEG && enc2out->jpg_len > 0) { // JPEG
 		if (ctx->snapshot_cb != NULL) {
-			ctx->snapshot_cb(enc2out->jpg_addr, enc2out->jpg_len);
+#if 0
+			if (ctx->meta_cb) {
+				video_meta_t parm;
+				parm.type = AV_CODEC_ID_MJPEG;
+				parm.video_addr = (uint32_t)enc2out->jpg_addr;
+				parm.video_len = enc2out->jpg_len;
+				parm.meta_offset = enc2out->meta_offset;
+				//parm.isp_meta_data = &(enc2out->isp_meta_data);
+				//parm.isp_statis_meta = &(enc2out->statis_data);
+				ctx->meta_cb(&parm);
+			}
+#endif
+			ctx->snapshot_cb((uint32_t)enc2out->jpg_addr, enc2out->jpg_len);
 			video_encbuf_release(enc2out->ch, CODEC_JPEG, enc2out->jpg_len);
 		} else {
-			char *tempaddr;
+			char *tempaddr = NULL;
 			if (ctx->params.use_static_addr == 0) {
 				tempaddr = (char *)malloc(enc2out->jpg_len);
 				if (tempaddr == NULL) {
@@ -156,18 +184,29 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 			is_output_ready = xQueueReceive(mctx->output_recycle, (void *)&output_item, 0);
 			if (is_output_ready) {
 				if (ctx->params.use_static_addr) {
-					output_item->data_addr = (char *)enc2out->jpg_addr;
+					output_item->data_addr = (uint32_t)enc2out->jpg_addr;
 				} else {
-					output_item->data_addr = (char *)tempaddr;//malloc(enc2out->jpg_len);
-					memcpy(output_item->data_addr, (char *)enc2out->jpg_addr, enc2out->jpg_len);
+					output_item->data_addr = (uint32_t)tempaddr;//malloc(enc2out->jpg_len);
+					memcpy((void *)output_item->data_addr, (char *)enc2out->jpg_addr, enc2out->jpg_len);
 					video_encbuf_release(enc2out->ch, enc2out->codec, enc2out->jpg_len);
 				}
 				output_item->size = enc2out->jpg_len;
 				output_item->timestamp = timestamp;
 				output_item->hw_timestamp = enc2out->enc_time;
 				output_item->type = AV_CODEC_ID_MJPEG;
-				output_item->index = 0;
-
+				output_item->priv_data = enc2out->jpg_slot;//JPEG buffer used slot
+#if 0
+				if (ctx->meta_cb) {
+					video_meta_t parm;
+					parm.type = AV_CODEC_ID_MJPEG;
+					parm.video_addr = (uint32_t)enc2out->jpg_addr;
+					parm.video_len = enc2out->jpg_len;
+					parm.meta_offset = enc2out->meta_offset;
+					//parm.isp_meta_data = &(enc2out->isp_meta_data);
+					//parm.isp_statis_meta = &(enc2out->statis_data);
+					ctx->meta_cb(&parm);
+				}
+#endif
 				if (xQueueSend(mctx->output_ready, (void *)&output_item, 0) != pdTRUE) {
 					video_encbuf_release(enc2out->ch, enc2out->codec, enc2out->jpg_len);
 				} else {
@@ -188,7 +227,7 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 	if (/*enc2out->enc_len > 0 && */(enc2out->codec & CODEC_H264 || enc2out->codec & CODEC_HEVC ||
 									 enc2out->codec & CODEC_RGB || enc2out->codec & CODEC_NV12 ||
 									 enc2out->codec & CODEC_NV16)) {
-		char *tempaddr;
+		char *tempaddr = NULL;
 
 		is_output_ready = xQueueReceive(mctx->output_recycle, (void *)&output_item, 0);
 		if (is_output_ready) {
@@ -214,7 +253,7 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 				if (tempaddr == NULL) {
 					VIDEO_DBG_ERROR("malloc fail = %d\r\n", output_item->size);
 					if ((enc2out->codec & (CODEC_NV12 | CODEC_RGB | CODEC_NV16)) != 0) {
-						video_ispbuf_release(enc2out->ch, enc2out->isp_addr);
+						video_ispbuf_release(enc2out->ch, (int)enc2out->isp_addr);
 					} else {
 						video_encbuf_release(enc2out->ch, enc2out->codec, output_item->size);
 					}
@@ -231,12 +270,24 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 						VIDEO_DBG_ERROR("\r\n(%d/%d) %x %x %x %x\r\n", enc2out->enc_len, enc2out->finish, *ptr, *(ptr + 1), *(ptr + 2), *(ptr + 3));
 					}
 				}
-
+#if 0				
+				if (ctx->meta_cb) {
+					video_meta_t parm;
+					parm.meta_offset = enc2out->meta_offset;
+					parm.type = output_item->type;
+					parm.video_addr = (uint32_t)enc2out->enc_addr;
+					parm.video_len = enc2out->enc_len;
+					//parm.isp_meta_data = &(enc2out->isp_meta_data);
+					//parm.isp_statis_meta = &(enc2out->statis_data);
+					ctx->meta_cb(&parm);
+				}
+#endif				
+				/* } */
 				if (ctx->params.use_static_addr) {
-					output_item->data_addr = (char *)enc2out->enc_addr;
+					output_item->data_addr = (uint32_t)enc2out->enc_addr;
 				} else {
-					output_item->data_addr = (char *)tempaddr;//malloc(enc2out->enc_len);
-					memcpy(output_item->data_addr, (char *)enc2out->enc_addr, output_item->size);
+					output_item->data_addr = (uint32_t)tempaddr;//malloc(enc2out->enc_len);
+					memcpy((void *)output_item->data_addr, (char *)enc2out->enc_addr, output_item->size);
 					if (ctx->params.use_static_addr == 0) {
 						video_encbuf_release(enc2out->ch, enc2out->codec, output_item->size);
 					}
@@ -244,23 +295,56 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 
 			} else {
 				if (ctx->params.use_static_addr) {
-					output_item->data_addr = (char *)enc2out->isp_addr;
+					output_item->data_addr = (uint32_t)enc2out->isp_addr;
 				} else {
-					output_item->data_addr = (char *)tempaddr;//malloc(enc2out->enc_len);
-					memcpy(output_item->data_addr, (char *)enc2out->isp_addr, output_item->size);
-					video_ispbuf_release(enc2out->ch, enc2out->isp_addr);
+					output_item->data_addr = (uint32_t)tempaddr;//malloc(enc2out->enc_len);
+					memcpy((void *)output_item->data_addr, (char *)enc2out->isp_addr, output_item->size);
+					video_ispbuf_release(enc2out->ch, (int)enc2out->isp_addr);
 				}
 			}
 
 			output_item->timestamp = timestamp;
 			output_item->hw_timestamp = enc2out->enc_time;
-			output_item->index = 0;
+			output_item->priv_data = enc2out->enc_slot;//ENC buffer used slot
 
+#if CONFIG_TUNING
+			if (show_fps) {
+				if (xTaskGetTickCount() - cb_tick[enc2out->ch] > 1000) {
+					cb_tick[enc2out->ch] = xTaskGetTickCount();
+					printf("[CH:%d] fps:%d.\r\n", enc2out->ch, ch_fps[enc2out->ch]);
+					ch_fps[enc2out->ch] = 0;
+				}
+				ch_fps[enc2out->ch]++;
+			}
+#endif
+			if (voe_boot_fsc_status()) {
+				static int queue_len = 0;
+				static int queue_timestamp = 0;
+				static int queue_initial = 0;
+				video_boot_stream_t *isp_fcs_info;
+				video_get_fcs_info(&isp_fcs_info);
+				//printf("===================voe_boot_fsc_status %d========================\r\n", queue_len);
+				if (queue_initial == 0x00) {
+					if (isp_fcs_info->video_params[enc2out->ch].fcs) {
+						queue_len = output_item->priv_data;
+						queue_timestamp = timestamp;
+						VIDEO_DBG_INFO("output_item->priv_data %d %d\r\n", output_item->priv_data, queue_timestamp);
+						queue_initial = 1;
+						video_set_fcs_queue_info(queue_timestamp - (queue_len - 1) * (1000 / isp_fcs_info->video_params[enc2out->ch].fps), queue_timestamp);
+					}
+				}
+				if (queue_len > 0) {
+					output_item->timestamp = queue_timestamp - (queue_len - 1) * (1000 / isp_fcs_info->video_params[enc2out->ch].fps);
+					VIDEO_DBG_INFO("queue_len %d %d\r\n", queue_len, output_item->timestamp);
+					printf("queue_len %d %d\r\n", queue_len, output_item->timestamp);
+					queue_len = queue_len - 1;
+				}
+			}
 			if (xQueueSend(mctx->output_ready, (void *)&output_item, 0) != pdTRUE) {
 				if (enc2out->codec <= CODEC_JPEG) {
 					video_encbuf_release(enc2out->ch, enc2out->codec, output_item->size);
 				} else {
-					video_ispbuf_release(enc2out->ch, enc2out->isp_addr);
+					video_ispbuf_release(enc2out->ch, (int)enc2out->isp_addr);
 				}
 			} else {
 				enc_queue_cnt[enc2out->ch]++;
@@ -274,14 +358,16 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 			}
 
 		} else {
+#if !CONFIG_TUNING
 			VIDEO_DBG_WARNING("\r\n CH %d MMF ENC Queue full \r\n", enc2out->ch);
+#endif
 			//video_encbuf_clean(enc2out->ch, CODEC_H264 | CODEC_HEVC);
 			//enc_queue_cnt[enc2out->ch] = 0;
 
 			if (enc2out->codec <= CODEC_JPEG) {
 				video_encbuf_release(enc2out->ch, enc2out->codec, enc2out->enc_len);
 			} else {
-				video_ispbuf_release(enc2out->ch, enc2out->isp_addr);
+				video_ispbuf_release(enc2out->ch, (int)enc2out->isp_addr);
 			}
 		}
 	}
@@ -304,7 +390,7 @@ show_log:
 		if ((enc2out->codec & (CODEC_H264 | CODEC_HEVC)) != 0) {
 			video_encbuf_release(enc2out->ch, enc2out->codec, enc2out->enc_len);
 		} else if ((enc2out->codec & (CODEC_NV12 | CODEC_RGB | CODEC_NV16)) != 0) {
-			video_ispbuf_release(enc2out->ch, enc2out->isp_addr);
+			video_ispbuf_release(enc2out->ch, (int)enc2out->isp_addr);
 		} else if ((enc2out->codec & CODEC_JPEG) != 0) {
 			video_encbuf_release(enc2out->ch, enc2out->codec, enc2out->jpg_len);
 		}
@@ -369,6 +455,16 @@ int video_control(void *p, int cmd, int arg)
 		video_ctrl(ch, VIDEO_GOP, arg);
 	}
 	break;
+	case CMD_VIDEO_FPS: {
+		int ch = ctx->params.stream_id;
+		video_ctrl(ch, VIDEO_FPS, arg);
+	}
+	break;
+	case CMD_VIDEO_ISPFPS: {
+		int ch = ctx->params.stream_id;
+		video_ctrl(ch, VIDEO_ISPFPS, arg);
+	}
+	break;
 	case CMD_VIDEO_SNAPSHOT: {
 		int ch = ctx->params.stream_id;
 		video_ctrl(ch, VIDEO_JPEG_OUTPUT, arg);
@@ -414,6 +510,9 @@ int video_control(void *p, int cmd, int arg)
 	case CMD_VIDEO_SNAPSHOT_CB:
 		ctx->snapshot_cb = (int (*)(uint32_t, uint32_t))arg;
 		break;
+	// case CMD_VIDEO_META_CB:
+		// ctx->meta_cb = (void (*)(void *))arg;
+		// break;
 	case CMD_VIDEO_UPDATE:
 
 		break;
@@ -432,8 +531,17 @@ int video_control(void *p, int cmd, int arg)
 		ret = video_open(&ctx->params, video_frame_complete_cb, ctx);
 #if MULTI_SENSOR
 		if (ret < 0 && video_get_video_sensor_status() == 0) { //Change the sensor procedure
+#if NONE_FCS_MODE
+			for (int id = 0; id < isp_boot->p_fcs_ld_info.multi_fcs_cnt; id++) {
+#else
 			for (int id = 1; id < isp_boot->p_fcs_ld_info.multi_fcs_cnt; id++) {
-				//if (id != isp_boot->p_fcs_ld_info.fcs_id) {
+#endif
+				if (sensor_setup) {
+					ret = sensor_setup(SENSOR_MULTI_SETUP_PROCEDURE, id);
+					if (ret < 0) { //Skip the sensor
+						continue;
+					}
+				}
 				if (1) {
 					video_reset_fw(ch, id);
 					ret = video_open(&ctx->params, video_frame_complete_cb, ctx);
@@ -459,9 +567,7 @@ int video_control(void *p, int cmd, int arg)
 		}
 		if (ret < 0 && video_get_video_sensor_status() == 0) { //Change the sensor procedure
 			VIDEO_DBG_ERROR("Please check sensor id first,the id is %d\r\n", sensor_id_value);
-			while (1) {
-				vTaskDelay(100);
-			}
+			return -1;
 		} else {
 			if (video_get_video_sensor_status() == 0) {
 				video_save_sensor_id(sensor_id_value);
@@ -471,12 +577,12 @@ int video_control(void *p, int cmd, int arg)
 	}
 	break;
 	case CMD_VIDEO_MD_SET_ROI: {
-		int *roi = (int *)arg;
+		uint32_t *roi = (uint32_t *)arg;
 		md_set(MD2_PARAM_ROI, roi);
 	}
 	break;
 	case CMD_VIDEO_MD_SET_SENSITIVITY: {
-		int sensitivity = arg;
+		uint32_t sensitivity = (uint32_t)arg;
 		md_set(MD2_PARAM_SENSITIVITY, &sensitivity);
 	}
 	break;
@@ -492,8 +598,12 @@ int video_control(void *p, int cmd, int arg)
 		md_stop();
 	}
 	break;
+	case CMD_VIDEO_SET_TIMESTAMP_OFFSET: {
+		ctx->timestamp_offset = arg;
 	}
-	return 0;
+	break;
+}
+return 0;
 }
 
 int video_handle(void *ctx, void *input, void *output)
@@ -514,7 +624,7 @@ void *video_create(void *parent)
 {
 	video_ctx_t *ctx = malloc(sizeof(video_ctx_t));
 	int iq_addr, sensor_addr;
-
+	int ret = 0;
 	if (!ctx) {
 		return NULL;
 	}
@@ -529,16 +639,32 @@ void *video_create(void *parent)
 	} else {
 #if MULTI_SENSOR
 		int sensor_id = isp_get_id();
+		int sensor_status = 0;
 		VIDEO_DBG_INFO("sensor_id %d\r\n", sensor_id);
 		if (sensor_id != 0xff && sensor_id < isp_boot->p_fcs_ld_info.multi_fcs_cnt && sensor_id > 0) {
 			sensor_id_value = sensor_id;
-			voe_get_sensor_info(sensor_id_value, &iq_addr, &sensor_addr);
+			sensor_status = SENSOR_MULTI_SAVE_VALUE;
 		} else {
 			sensor_id_value = USE_SENSOR;
-			voe_get_sensor_info(sensor_id_value, &iq_addr, &sensor_addr);
+			sensor_status = SENSOR_MULTI_DEFAULT_SETUP;
 		}
+		if (sensor_setup) {
+			ret = sensor_setup(sensor_status, sensor_id_value);
+			if (ret >= 0) {
+				sensor_id_value = ret;
+			}
+		}
+		voe_get_sensor_info(sensor_id_value, &iq_addr, &sensor_addr);
 #else
-		sensor_id_value = USE_SENSOR;
+		if (!sensor_id_value) { //Use the default sensor, if the value equal to 0
+			sensor_id_value = USE_SENSOR;
+		}
+		if (sensor_setup) {
+			ret = sensor_setup(SENSOR_SINGLE_DEFAULT_SETUP, sensor_id_value);
+			if (ret >= 0) {
+				sensor_id_value = ret;
+			}
+		}
 		voe_get_sensor_info(sensor_id_value, &iq_addr, &sensor_addr);
 #endif
 	}
@@ -617,13 +743,21 @@ int video_voe_presetting(int v1_enable, int v1_w, int v1_h, int v1_bps, int v1_s
 	int voe_heap_size = 0;
 	isp_info_t info;
 
-	if (USE_SENSOR == SENSOR_GC2053 || USE_SENSOR == SENSOR_PS5258 || USE_SENSOR == SENSOR_MIS2008 || USE_SENSOR == SENSOR_SC2336) {
-		info.sensor_width = 1920;
-		info.sensor_height = 1080;
-		info.sensor_fps = 15;
-	} else if (USE_SENSOR == SENSOR_GC4653) {
+	if (USE_SENSOR == SENSOR_GC4653) {
 		info.sensor_width = 2560;
 		info.sensor_height = 1440;
+		info.sensor_fps = 15;
+	} else if (USE_SENSOR == SENSOR_SC301) {
+		info.sensor_width = 2048;
+		info.sensor_height = 1536;
+		info.sensor_fps = 30;
+	} else if (USE_SENSOR == SENSOR_JXF51) {
+		info.sensor_width = 1536;
+		info.sensor_height = 1536;
+		info.sensor_fps = 30;
+	} else {
+		info.sensor_width = 1920;
+		info.sensor_height = 1080;
 		info.sensor_fps = 30;
 	}
 
@@ -673,6 +807,11 @@ mm_module_t video_module = {
 int isp_get_id(void)////It only for non-fcs settung
 {
 	unsigned char type[4] = {0};
+
+#if NONE_FCS_MODE
+	video_get_fw_isp_info();
+#endif
+
 	if (voe_boot_fsc_id() == 0) {
 		ftl_common_read(ISP_FW_LOCATION, type, sizeof(type));
 		if (type[0] == 'I' && type[1] == 'S' && type[2] == 'P') {
@@ -716,4 +855,14 @@ void video_save_sensor_id(int SensorName)
 	multi_sensor_info.sensor_index = SensorName;
 	multi_sensor_info.sensor_finish = 1;
 	video_set_video_snesor_info(&multi_sensor_info);
+}
+
+void video_set_sensor_id(int SensorName)
+{
+	sensor_id_value = SensorName;
+}
+
+void video_setup_sensor(void *sensor_setup_cb)
+{
+	sensor_setup = (int(*)(int, int))sensor_setup_cb;
 }

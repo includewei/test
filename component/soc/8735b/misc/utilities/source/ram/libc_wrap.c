@@ -3,13 +3,13 @@
  * @brief    The wraper functions of ROM code to replace some of utility
  *           functions in Compiler's Library.
  * @version  V1.00
- * @date     2022-04-08
+ * @date     2022-08-03
  *
  * @note
  *
  ******************************************************************************
  *
- * Copyright(c) 2007 - 2018 Realtek Corporation. All rights reserved.
+ * Copyright(c) 2007 - 2022 Realtek Corporation. All rights reserved.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -48,6 +48,14 @@ extern void *pvPortMalloc(size_t xWantedSize);
 extern void *pvPortCalloc(size_t xWantedCnt, size_t xWantedSize);
 extern void vPortFree(void *pv);
 
+static void clean_memory(void *buf, int size)
+{
+	uint8_t *dst = (uint8_t *)buf;
+	for (int i = 0; i < size; i++) {
+		dst[i] = 0;
+	}
+}
+
 void *__wrap_malloc(size_t size)
 {
 	return pvPortMalloc(size);
@@ -66,7 +74,8 @@ void *__wrap_calloc(size_t cnt, size_t size)
 	total_size = cnt * size;
 	pbuf = pvPortMalloc(total_size);
 	if (pbuf) {
-		memset(pbuf, 0, total_size);
+		//memset(pbuf, 0, total_size);
+		clean_memory(pbuf, total_size);
 	}
 
 	return pbuf;
@@ -75,6 +84,42 @@ void *__wrap_calloc(size_t cnt, size_t size)
 
 void __wrap_free(void *p)
 {
+	vPortFree(p);
+}
+
+void *__wrap__malloc_r(void *rent, size_t size)
+{
+	(void)rent;
+	return pvPortMalloc(size);
+}
+
+void *__wrap__realloc_r(void *rent, void *p, size_t size)
+{
+	(void)rent;
+	return (void *)pvPortReAlloc(p, size);
+}
+
+void *__wrap__calloc_r(void *rent, size_t cnt, size_t size)
+{
+	void *pbuf;
+	uint32_t total_size;
+
+	(void)rent;
+
+	total_size = cnt * size;
+	pbuf = pvPortMalloc(total_size);
+	if (pbuf) {
+		//memset(pbuf, 0, total_size);
+		clean_memory(pbuf, total_size);
+	}
+
+	return pbuf;
+//    return (void*)pvPortCalloc(cnt, size);
+}
+
+void __wrap__free_r(void *rent, void *p)
+{
+	(void)rent;
 	vPortFree(p);
 }
 #endif  //  #if defined(CONFIG_CMSIS_FREERTOS_EN) && (CONFIG_CMSIS_FREERTOS_EN != 0)
@@ -110,6 +155,7 @@ static int __wrap_stdio_port_sputc(void *arg, char c)
 	if (c == '\n') {
 		stdio_printf_stubs.stdio_port_putc('\r');
 	}
+	return 0;
 }
 
 int __wrap_printf(const char *fmt, ...)
@@ -318,17 +364,6 @@ char *__wrap_strsep(char **s, const char *ct)
 	return strsep(s, ct);
 }
 
-char *__wrap_strdup(char *src)
-{
-	size_t size = strlen(src) + 1; //'\0'
-	char *str = (char *)malloc(size);
-	if (str) {
-		memcpy(str, src, size);
-	}
-	return str;
-}
-
-
 double __wrap_strtod(const char *str, char **endptr)
 {
 	return strtod(str, endptr);
@@ -416,6 +451,4 @@ volatile int *__aeabi_errno_addr(void)
 }
 #endif
 
-#endif // #if defined(CONFIG_PLATFORM_8195BHP) || defined(CONFIG_PLATFORM_8195BLP) \
-|| defined(CONFIG_PLATFORM_8710C) || defined(CONFIG_PLATFORM_8715B)
-
+#endif // #if defined(CONFIG_PLATFORM_8195BHP) || defined(CONFIG_PLATFORM_8195BLP) || defined(CONFIG_PLATFORM_8710C) || defined(CONFIG_PLATFORM_8715B)

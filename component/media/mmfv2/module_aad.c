@@ -74,7 +74,7 @@ int aad_handle(void *p, void *input, void *output)
 			AACGetLastFrameInfo(ctx->aad, &frameInfo);
 
 			// TODO: it might need resample if use different sample rate & channel number
-			memcpy((void *)output_item->data_addr + (process_times * frameInfo.outputSamps * 2), ctx->decode_buf, frameInfo.outputSamps * 2);
+			memcpy((void *)(output_item->data_addr + (process_times * frameInfo.outputSamps * 2)), ctx->decode_buf, frameInfo.outputSamps * 2);
 			process_times ++;
 		} else {
 			if (ret == ERR_AAC_INDATA_UNDERFLOW) {

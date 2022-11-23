@@ -130,11 +130,10 @@ typedef enum _RTK_STATUS_ {
 #define NDIS_OID uint
 #define NDIS_STATUS uint
 
+#undef _IO
 #define _I volatile
 #define _O volatile
-#ifndef _IO  // Arlo: already defined sockets.h
 #define _IO volatile
-#endif
 
 #ifndef PVOID
 typedef void *PVOID;
@@ -332,7 +331,7 @@ typedef void __attribute__((cmse_nonsecure_call)) nsfunc(void);
 #define EF2Byte le16_to_cpu
 #define EF4Byte le32_to_cpu
 
-#ifndef rtk_le16_to_cpu
+#ifndef le16_to_cpu
 #undef EF2Byte
 #define EF2Byte rtk_le16_to_cpu
 #endif

@@ -264,7 +264,7 @@ int qt_faststart(char *src_path,
 			}
 			offset_count = BE_32(&moov_atom[i + 8]);
 			for (j = 0; j < offset_count; j++) {
-				current_offset = BE_64(&moov_atom[i + 12 + j * 8]);
+				uint64_t current_offset = BE_64(&moov_atom[i + 12 + j * 8]);
 				current_offset += moov_atom_size;
 				moov_atom[i + 12 + j * 8 + 0] = (current_offset >> 56) & 0xFF;
 				moov_atom[i + 12 + j * 8 + 1] = (current_offset >> 48) & 0xFF;
@@ -593,13 +593,13 @@ static void pb_homepage_cb(struct httpd_conn *conn)
 	httpd_conn_dump_header(conn);
 
 	// test log to show extra User-Agent header field
-	if (httpd_request_get_header_field(conn, "User-Agent", &user_agent) != -1) {
+	if (httpd_request_get_header_field(conn, (char *)"User-Agent", &user_agent) != -1) {
 		printf("\nUser-Agent=[%s]\n", user_agent);
 		httpd_free(user_agent);
 	}
 
 	// GET homepage
-	if (httpd_request_is_method(conn, "GET")) {
+	if (httpd_request_is_method(conn, (char *)"GET")) {
 
 		DIR m_dir;
 		FILINFO m_fileinfo;
@@ -608,21 +608,21 @@ static void pb_homepage_cb(struct httpd_conn *conn)
 		char filelist[64];
 		int body_length = 0;
 
-		char *body = \
-					 "<HTML><BODY>" \
-					 "It Works<BR>" \
-					 "<BR>" \
-					 "You can test video playback by http://192.168.0.xxx/video_get.mp4?filename=xxxx.mp4<BR>" \
-					 "Video file list: <BR>";
+		const char *body = \
+						   "<HTML><BODY>" \
+						   "It Works<BR>" \
+						   "<BR>" \
+						   "You can test video playback by http://192.168.0.xxx/video_get.mp4?filename=xxxx.mp4<BR>" \
+						   "Video file list: <BR>";
 
-		char *body_end = \
-						 "</BODY></HTML>";
+		const char *body_end = \
+							   "</BODY></HTML>";
 
 		body_length += strlen(body);
 		body_length += strlen(body_end);
 
-		char *br = \
-				   "<BR>";
+		const char *br = \
+						 "<BR>";
 
 #if _USE_LFN
 		char fname_lfn[32];
@@ -644,7 +644,7 @@ static void pb_homepage_cb(struct httpd_conn *conn)
 #else
 				filename = m_fileinfo.fname;
 #endif
-				if (*filename == '.' || *filename == '..') {
+				if (*filename == '.' || (filename[0] == '.' && filename[1] == '.')) {
 					continue;
 				}
 
@@ -658,8 +658,8 @@ static void pb_homepage_cb(struct httpd_conn *conn)
 			f_closedir(&m_dir);
 		}
 
-		httpd_response_write_header_start(conn, "200 OK", "text/html", body_length);
-		httpd_response_write_header(conn, "Connection", "close");
+		httpd_response_write_header_start(conn, (char *)"200 OK", (char *)"text/html", body_length);
+		httpd_response_write_header(conn, (char *)"Connection", (char *)"close");
 		httpd_response_write_header_finish(conn);
 		httpd_response_write_data(conn, (uint8_t *)body, strlen(body));
 		if (f_opendir(&m_dir, path) == 0) {
@@ -673,7 +673,7 @@ static void pb_homepage_cb(struct httpd_conn *conn)
 #else
 				filename = m_fileinfo.fname;
 #endif
-				if (*filename == '.' || *filename == '..') {
+				if (*filename == '.' || (filename[0] == '.' && filename[1] == '.')) {
 					continue;
 				}
 
@@ -701,14 +701,14 @@ static void pb_homepage_cb(struct httpd_conn *conn)
 static void pb_test_get_cb(struct httpd_conn *conn)
 {
 	// GET /test_post
-	if (httpd_request_is_method(conn, "GET")) {
+	if (httpd_request_is_method(conn, (char *)"GET")) {
 		char *filename = NULL;
 
 		//set_playback_state();
 		cb_response();
 
 		// get 'filename' in query string
-		if ((httpd_request_get_query_key(conn, "filename", &filename) != -1)) {
+		if ((httpd_request_get_query_key(conn, (char *)"filename", &filename) != -1)) {
 
 			printf("filename = %s\r\n", filename);
 			size_t read_size;
@@ -789,8 +789,8 @@ static void pb_test_get_cb(struct httpd_conn *conn)
 			printf("file size = %d\r\n", read_size);
 #endif
 			// write HTTP response
-			httpd_response_write_header_start(conn, "200 OK", "text/plain", 0);
-			httpd_response_write_header(conn, "Connection", "close");
+			httpd_response_write_header_start(conn, (char *)"200 OK", (char *)"text/plain", 0);
+			httpd_response_write_header(conn, (char *)"Connection", (char *)"close");
 			httpd_response_write_header_finish(conn);
 			//memset(buf, 0, sizeof(buf));
 			//sprintf((char*)buf, "%d bytes from POST: ", read_size);
@@ -936,7 +936,7 @@ static void pb_test_get_cb(struct httpd_conn *conn)
 
 		} else {
 			// HTTP/1.1 400 Bad Request
-			httpd_response_bad_request(conn, "Bad Request - test1 or test2 not in query string");
+			httpd_response_bad_request(conn, (char *)"Bad Request - test1 or test2 not in query string");
 		}
 
 		if (filename) {
@@ -982,8 +982,8 @@ int httpfs_control(void *p, int cmd, int arg)
 		memcpy((void *)arg, &ctx->params, sizeof(httpfs_params_t));
 		break;
 	case CMD_HTTPFS_APPLY:
-		httpd_reg_page_callback("/", pb_homepage_cb);
-		httpd_reg_page_callback("/index.htm", pb_homepage_cb);
+		httpd_reg_page_callback((char *)"/", pb_homepage_cb);
+		httpd_reg_page_callback((char *)"/index.htm", pb_homepage_cb);
 		httpd_reg_page_callback(ctx->params.request_string, pb_test_get_cb);
 		break;
 	case CMD_HTTPFS_STREAM_STOP:

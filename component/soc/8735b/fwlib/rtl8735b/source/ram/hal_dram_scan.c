@@ -1604,49 +1604,6 @@ void dram_set_pll_frequency(u32 ddr_freq, unsigned short *pll_table)
 	DBG_DRAM_WARN("pll_ctl3_reg = %x\r\n", pll_ctl3_reg);
 }
 
-#if 0
-void dram_init_clk_frequency(uint32_t ddr_freq)
-{
-	DPI_TypeDef *dpi_dev_map = (DPI_TypeDef *) DPI_REG_BASE_ADDR;
-	//u32 n_code = 0, f_code = 0;
-	//u32 rmw_data;
-
-	//n_code = (ddr_freq / DDR_PLL_REF_CLK) - 3;
-	//f_code = ((ddr_freq*1000 / DDR_PLL_REF_CLK) - (n_code + 3)*1000)*2048/1000;
-
-	/*Disable Spread spectrum*/
-	dpi_dev_map->DPI_SSC0 &= ~DPI_BIT_EN_SSC;//Spread spectrum 533
-	DBG_DRAM_WARN("&dpi_dev_map->DPI_SSC0 = %x\r\n", dpi_dev_map->DPI_SSC0);
-
-	/*Down Spread -0.5%*/
-	//cpu_read_modify_write(&dpi_dev_map->DPI_SSC1, (0x1CC | (0x4 << DPI_SHIFT_DOT_GRAN)), DPI_MASK_GRAN_SET | DPI_MASK_DOT_GRAN);//Spread spectrum 533
-	/*Down Spread -3%*/
-	cpu_read_modify_write(&dpi_dev_map->DPI_SSC1, (0xAD0 | (0x4 << DPI_SHIFT_DOT_GRAN)), DPI_MASK_GRAN_SET | DPI_MASK_DOT_GRAN);//Spread spectrum 533
-	DBG_DRAM_WARN("&dpi_dev_map->DPI_SSC1 = %x\r\n", dpi_dev_map->DPI_SSC1);
-
-	/*No Spread spectrum*/
-	//cpu_read_modify_write(&dpi_dev_map->DPI_SSC2, (f_code | (f_code << DPI_SHIFT_F_CODE_T)), DPI_MASK_F_CODE | DPI_MASK_F_CODE_T);
-	/*Down Spread -0.5%*/
-	//cpu_read_modify_write(&dpi_dev_map->DPI_SSC2, (0x222 | (0x2AA << DPI_SHIFT_F_CODE_T)), DPI_MASK_F_CODE | DPI_MASK_F_CODE_T);//Spread spectrum 533
-	/*Down Spread -3%*/
-	cpu_read_modify_write(&dpi_dev_map->DPI_SSC2, (0x777 | (0x2AA << DPI_SHIFT_F_CODE_T)), DPI_MASK_F_CODE | DPI_MASK_F_CODE_T);//Spread spectrum 533
-	DBG_DRAM_WARN("&dpi_dev_map->DPI_SSC2 = %x\r\n", dpi_dev_map->DPI_SSC2);
-
-	/*No Spread spectrum*/
-	//cpu_read_modify_write(&dpi_dev_map->DPI_SSC3, (n_code | (n_code << DPI_SHIFT_N_CODE_T)), DPI_MASK_N_CODE | DPI_MASK_N_CODE_T);
-	/*Down Spread -0.5%*/
-	//cpu_read_modify_write(&dpi_dev_map->DPI_SSC3, (0xA | (0xA << DPI_SHIFT_N_CODE_T)), DPI_MASK_N_CODE | DPI_MASK_N_CODE_T);//Spread spectrum 533
-	/*Down Spread -3%*/
-	cpu_read_modify_write(&dpi_dev_map->DPI_SSC3, (0x9 | (0xA << DPI_SHIFT_N_CODE_T)), DPI_MASK_N_CODE | DPI_MASK_N_CODE_T);//Spread spectrum 533
-	DBG_DRAM_WARN("&dpi_dev_map->DPI_SSC3 = %x\r\n", dpi_dev_map->DPI_SSC3);
-
-	/*Enable Spread spectrum*/
-	dpi_dev_map->DPI_SSC0 |= (DPI_BIT_EN_SSC | DPI_BIT_SSC_FLAG_INIT);//Spread spectrum 533
-	DBG_DRAM_WARN("&dpi_dev_map->DPI_SSC0 = %x\r\n", dpi_dev_map->DPI_SSC0);
-
-	//DBG_DRAM_WARN("n_cdoe = %d, f_code = %d\r\n", n_code, f_code);
-}
-#else
 void dram_init_clk_frequency_dss(uint32_t ddr_freq, uint32_t down_spread_percent)
 {
 	DPI_TypeDef *dpi_dev_map = (DPI_TypeDef *) DPI_REG_BASE_ADDR;
@@ -1657,44 +1614,44 @@ void dram_init_clk_frequency_dss(uint32_t ddr_freq, uint32_t down_spread_percent
 
 	n_code_t = (ddr_freq / DDR_PLL_REF_CLK) - 3;
 	f_code_t = ((ddr_freq * 1000 / DDR_PLL_REF_CLK) - (n_code_t + 3) * 1000) * 2048 / 1000;
-	dbg_printf("n_code_t = %d, f_code_t = %d\r\n", n_code_t, f_code_t);
+	DBG_DRAM_WARN("n_code_t = %d, f_code_t = %d\r\n", n_code_t, f_code_t);
 
 	if (down_spread_percent == 0) {
 		n_code = n_code_t;
 		f_code = f_code_t;
 	} else {
-		value = (((n_code_t + 3) * 2048 + f_code_t) * (100 - down_spread_percent))/100;
-		dbg_printf("value = %d\r\n", value);
+		value = (((n_code_t + 3) * 2048 + f_code_t) * (100 - down_spread_percent)) / 100;
+		DBG_DRAM_WARN("value = %d\r\n", value);
 		n_code  = (value / 2048) - 3;
 		f_code  = (value - (n_code + 3) * 2048);
-		dbg_printf("n_code = %d, f_code = %d\r\n", n_code, f_code);
+		DBG_DRAM_WARN("n_code = %d, f_code = %d\r\n", n_code, f_code);
 		f_code_change = (n_code_t * 2048 + f_code_t) - (n_code * 2048 + f_code);
 		f_code_step = (DDR_PLL_REF_CLK * 1000000 / 33000) / 2;
 		gran_set = f_code_change * 2048 / f_code_step;
-		dbg_printf("f_code_change = %d, f_code_step = %d, gran_set = %d\r\n", f_code_change, f_code_step, gran_set);
+		DBG_DRAM_WARN("f_code_change = %d, f_code_step = %d, gran_set = %d\r\n", f_code_change, f_code_step, gran_set);
 		ss_en = 1;
 	}
 
 	if (ss_en) {
 		/*Disable Spread spectrum*/
 		dpi_dev_map->DPI_SSC0 &= ~DPI_BIT_EN_SSC;
-		dbg_printf("&dpi_dev_map->DPI_SSC0 = %x\r\n", dpi_dev_map->DPI_SSC0);
+		DBG_DRAM_WARN("&dpi_dev_map->DPI_SSC0 = %x\r\n", dpi_dev_map->DPI_SSC0);
 
 		/*Set dot_gran & gran_set*/
 		cpu_read_modify_write(&dpi_dev_map->DPI_SSC1, (gran_set | (dot_gran << DPI_SHIFT_DOT_GRAN)), DPI_MASK_GRAN_SET | DPI_MASK_DOT_GRAN);
-		dbg_printf("&dpi_dev_map->DPI_SSC1 = %x\r\n", dpi_dev_map->DPI_SSC1);
+		DBG_DRAM_WARN("&dpi_dev_map->DPI_SSC1 = %x\r\n", dpi_dev_map->DPI_SSC1);
 
 		/*Set f_code & f_code_t*/
 		cpu_read_modify_write(&dpi_dev_map->DPI_SSC2, (f_code | (f_code_t << DPI_SHIFT_F_CODE_T)), DPI_MASK_F_CODE | DPI_MASK_F_CODE_T);
-		dbg_printf("&dpi_dev_map->DPI_SSC2 = %x\r\n", dpi_dev_map->DPI_SSC2);
+		DBG_DRAM_WARN("&dpi_dev_map->DPI_SSC2 = %x\r\n", dpi_dev_map->DPI_SSC2);
 
 		/*Set n_code & n_code_t*/
 		cpu_read_modify_write(&dpi_dev_map->DPI_SSC3, (n_code | (n_code_t << DPI_SHIFT_N_CODE_T)), DPI_MASK_N_CODE | DPI_MASK_N_CODE_T);
-		dbg_printf("&dpi_dev_map->DPI_SSC3 = %x\r\n", dpi_dev_map->DPI_SSC3);
+		DBG_DRAM_WARN("&dpi_dev_map->DPI_SSC3 = %x\r\n", dpi_dev_map->DPI_SSC3);
 
 		/*Enable Spread spectrum*/
 		dpi_dev_map->DPI_SSC0 |= (DPI_BIT_EN_SSC | DPI_BIT_SSC_FLAG_INIT);
-		dbg_printf("&dpi_dev_map->DPI_SSC0 = %x\r\n", dpi_dev_map->DPI_SSC0);
+		DBG_DRAM_WARN("&dpi_dev_map->DPI_SSC0 = %x\r\n", dpi_dev_map->DPI_SSC0);
 	} else {
 		/*Set f_code & f_code_t*/
 		cpu_read_modify_write(&dpi_dev_map->DPI_SSC2, (f_code | (f_code_t << DPI_SHIFT_F_CODE_T)), DPI_MASK_F_CODE | DPI_MASK_F_CODE_T);
@@ -1703,5 +1660,4 @@ void dram_init_clk_frequency_dss(uint32_t ddr_freq, uint32_t down_spread_percent
 		cpu_read_modify_write(&dpi_dev_map->DPI_SSC3, (n_code | (n_code_t << DPI_SHIFT_N_CODE_T)), DPI_MASK_N_CODE | DPI_MASK_N_CODE_T);
 	}
 }
-#endif
 

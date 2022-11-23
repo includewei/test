@@ -10,14 +10,6 @@
 
 static uint32_t hci_log_level = 0x1FF;
 
-void hci_dbg_printf(const char *fmt, ...)
-{
-	va_list va;
-	va_start(va, fmt);
-	vprintf(fmt, va);
-	va_end(va);
-}
-
 void hci_dbg_set_level(uint32_t level)
 {
 	/* uint32_t >= HCI_TP_DEBUG_ERROR */

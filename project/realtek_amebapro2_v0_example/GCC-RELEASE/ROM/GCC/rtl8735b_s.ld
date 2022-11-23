@@ -18,16 +18,16 @@ MEMORY
   DTCM_ROM (rx) 		: ORIGIN = 0x20010000, LENGTH = 0x20017800 - 0x20010000		/*  30KB     */
 
   /* Non-Secure Callable: for Non-Secure callable functions and secure gateway */  
-  NSC (rwx)             : ORIGIN = 0x2015E000, LENGTH = 0x2016C300 - 0x2015E000		/*  56.75KB  */
+  NSC (rwx)             : ORIGIN = 0x20156000, LENGTH = 0x20164300 - 0x20156000		/*  56.75KB  */
 
   /* RAM functions entry table */
-  RAM_FUN_TABLE (rwx)   : ORIGIN = 0x2016C300, LENGTH = 0x2016C3F0 - 0x2016C300     /* 240B 	 */
+  RAM_FUN_TABLE (rwx)   : ORIGIN = 0x20164300, LENGTH = 0x201643F0 - 0x20164300     /* 240B 	 */
   
   /* RAM image Signature */
-  RAM_IMG_SIGN (rwx)    : ORIGIN = 0x2016C3F0, LENGTH = 0x2016C400 - 0x2016C3F0		/*  16B      */
+  RAM_IMG_SIGN (rwx)    : ORIGIN = 0x201643F0, LENGTH = 0x20164400 - 0x201643F0		/*  16B      */
     
   /* Internal SRAM for text, rodata & data */
-  RAM (rwx)             : ORIGIN = 0x2016C400, LENGTH = 0x20177800 - 0x2016C400		/*  45KB     */
+  RAM (rwx)             : ORIGIN = 0x20164400, LENGTH = 0x20177800 - 0x20164400		/*  77KB     */
   
   /* Non-Cacheable memory, defined by MPU configuration */
   /* RAM_NC (rwx)          : ORIGIN = 0x2017BB00, LENGTH = 0x2017DF00 - 0x2017BB00	*/	/*  9KB 	 */
@@ -40,7 +40,7 @@ MEMORY
 
   /* DDR memory */
   VOE (rwx)             : ORIGIN = 0x70000000, LENGTH = 0x70100000 - 0x70000000		/*  1MB */
-  DDR (rwx)	            : ORIGIN = 0x70100000, LENGTH = 0x70200000 - 0x70100000		/*2047kB+960B */
+  DDR (rwx)	            : ORIGIN = 0x73E00000, LENGTH = 0x74000000 - 0x73E00000		/*  2MB */
 }
 
 /* Library configurations */
@@ -115,6 +115,7 @@ SECTIONS
 		KEEP(*fw_voe_rom_boot.o(.rodata.str1*))
 		KEEP(*fw_snand_boot.o(.rodata*))
 		KEEP(*(.rom.ssl.dtcm))
+		KEEP(*(.rom.lfc_ctrl_sts.dtcm))
 	} > DTCM_ROM
 
 	.rom.itcm.text :
@@ -273,6 +274,7 @@ SECTIONS
 		KEEP(*rtl8735b_hkdf.o(.rodata*))
 		KEEP(*rtl8735b_flash_sec.o(.rodata*))
 		KEEP(*rtl8735b_trng.o(.rodata*))
+		KEEP(*rtl8735b_sys_ctrl.o(.rodata*))
 
 		KEEP(*rom_mbedtls_bignum.o(.rodata.str1*))
 		KEEP(*rom_mbedtls_ecp.o(.rodata.str1*))

@@ -32,6 +32,7 @@ list(
 )
 
 target_compile_definitions(${wslay} PRIVATE ${wslay_flags} )
+target_compile_options(${wslay} PRIVATE ${LIBS_WARN_ERR_FLAGS} )
 
 include(../includepath.cmake)
 target_include_directories(

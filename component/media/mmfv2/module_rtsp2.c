@@ -126,18 +126,17 @@ int rtsp2_control(void *p, int cmd, int arg)
 
 			codec_id = params->u.v.codec_id;
 		} else if (params->type == AVMEDIA_TYPE_AUDIO) {
-			memcpy(&ctx->params[channel_idx], (void *)arg, sizeof(rtsp2_params_t));
 			if (params->u.a.codec_id == AV_CODEC_ID_OPUS) {
-				stream_ctx->samplerate = params->u.a_opus.samplerate;
-				stream_ctx->channel = params->u.a_opus.channel;
-				stream_ctx->bitrate = params->u.a_opus.max_average_bitrate;
-				if (params->u.a_opus.frame_size == 0) {
+				stream_ctx->samplerate = params->u.a.samplerate;
+				stream_ctx->channel = params->u.a.channel;
+				stream_ctx->bitrate = params->u.a.max_average_bitrate;
+				if (params->u.a.frame_size == 0) {
 					stream_ctx->tsin_by_fs = 120 * (20 * 2 / 5); //use 20 frame size
 				} else {
-					stream_ctx->tsin_by_fs = 120 * (params->u.a_opus.frame_size * 2 / 5); //divide by 2.5
+					stream_ctx->tsin_by_fs = 120 * (params->u.a.frame_size * 2 / 5); //divide by 2.5
 				}
 				printf("stream_ctx->tsin_by_fs = %d\r\n", stream_ctx->tsin_by_fs);
-				codec_id = params->u.a_opus.codec_id;
+				codec_id = params->u.a.codec_id;
 			} else {
 				if (params->u.a.codec_id == AV_CODEC_ID_PCMU || params->u.a.codec_id == AV_CODEC_ID_PCMA) {
 					stream_ctx->tsin_by_fs = 320 / 2; //Audio half of audio framesize

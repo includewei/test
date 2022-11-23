@@ -70,7 +70,8 @@ enum mqtt_status {
 enum QoS { QOS0, QOS1, QOS2 };
 
 /* all failure return codes must be negative */
-enum returnCode { BUFFER_OVERFLOW = -2, FAILURE = -1 };//, SUCCESS = 0
+#undef SUCCESS
+enum returnCode { BUFFER_OVERFLOW = -2, FAILURE = -1, SUCCESS = 0};//,
 
 /* The Platform specific header must define the Network and Timer structures and functions
  * which operate on them.
@@ -189,7 +190,8 @@ DLLExport int MQTTYield(MQTTClient *client, int time);
 
 #if defined(MQTT_TASK)
 void MQTTSetStatus(MQTTClient *c, int mqttstatus);
-int MQTTDataHandle(MQTTClient *c, fd_set *readfd, MQTTPacket_connectData *connectData, messageHandler messageHandler, char *address, char *topic);
+int MQTTDataHandle(MQTTClient *c, fd_set *readfd, MQTTPacket_connectData *connectData, messageHandler messageHandler, char *address, char *topic[],
+				   int topic_num);
 #endif
 
 #if defined(__cplusplus)

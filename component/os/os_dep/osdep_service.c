@@ -77,9 +77,9 @@ u32 rtw_atoi(u8 *s)
 void *tcm_heap_malloc(int size);
 void *tcm_heap_calloc(int size);
 #endif
-u8 *_rtw_vmalloc(u32 sz)
+void *_rtw_vmalloc(u32 sz)
 {
-	u8 *pbuf = NULL;
+	void *pbuf = NULL;
 #if defined(CONFIG_USE_TCM_HEAP) && CONFIG_USE_TCM_HEAP
 	pbuf = tcm_heap_malloc(sz);
 #endif
@@ -93,9 +93,9 @@ u8 *_rtw_vmalloc(u32 sz)
 	return pbuf;
 }
 
-u8 *_rtw_zvmalloc(u32 sz)
+void *_rtw_zvmalloc(u32 sz)
 {
-	u8 *pbuf = NULL;
+	void *pbuf = NULL;
 #if defined(CONFIG_USE_TCM_HEAP) && CONFIG_USE_TCM_HEAP
 	pbuf = tcm_heap_calloc(sz);
 #endif
@@ -126,10 +126,10 @@ void _rtw_vmfree(u8 *pbuf, u32 sz)
 	}
 }
 
-u8 *_rtw_malloc(u32 sz)
+void *_rtw_malloc(u32 sz)
 {
 	if (osdep_service.rtw_malloc) {
-		u8 *pbuf = osdep_service.rtw_malloc(sz);
+		void *pbuf = osdep_service.rtw_malloc(sz);
 		return pbuf;
 	} else {
 		OSDEP_DBG("Not implement osdep service: rtw_malloc");
@@ -138,10 +138,10 @@ u8 *_rtw_malloc(u32 sz)
 	return NULL;
 }
 
-u8 *_rtw_zmalloc(u32 sz)
+void *_rtw_zmalloc(u32 sz)
 {
 	if (osdep_service.rtw_zmalloc) {
-		u8 *pbuf = osdep_service.rtw_zmalloc(sz);
+		void *pbuf = osdep_service.rtw_zmalloc(sz);
 		return pbuf;
 	} else {
 		OSDEP_DBG("Not implement osdep service: rtw_zmalloc");
@@ -150,10 +150,10 @@ u8 *_rtw_zmalloc(u32 sz)
 	return NULL;
 }
 
-u8 *_rtw_calloc(u32 nelements, u32 elementSize)
+void *_rtw_calloc(u32 nelements, u32 elementSize)
 {
 	u32 sz = nelements * elementSize;
-	u8 *pbuf = _rtw_zmalloc(sz);
+	void *pbuf = _rtw_zmalloc(sz);
 	return pbuf;
 }
 
@@ -337,9 +337,9 @@ int get_mem_usage(_list *pmem_table)
 #endif
 
 
-u8 *rtw_vmalloc(u32 sz)
+void *rtw_vmalloc(u32 sz)
 {
-	u8 *pbuf = _rtw_vmalloc(sz);
+	void *pbuf = _rtw_vmalloc(sz);
 #if CONFIG_MEM_MONITOR & MEM_MONITOR_LEAK
 	add_mem_usage(&mem_table, pbuf, sz, &mem_used_num, MEM_MONITOR_FLAG_WIFI_DRV);
 #else
@@ -348,9 +348,9 @@ u8 *rtw_vmalloc(u32 sz)
 	return pbuf;
 }
 
-u8 *rtw_zvmalloc(u32 sz)
+void *rtw_zvmalloc(u32 sz)
 {
-	u8 *pbuf = _rtw_zvmalloc(sz);
+	void *pbuf = _rtw_zvmalloc(sz);
 #if CONFIG_MEM_MONITOR & MEM_MONITOR_LEAK
 	add_mem_usage(&mem_table, pbuf, sz, &mem_used_num, MEM_MONITOR_FLAG_WIFI_DRV);
 #else
@@ -369,9 +369,9 @@ void rtw_vmfree(u8 *pbuf, u32 sz)
 #endif
 }
 
-u8 *rtw_malloc(u32 sz)
+void *rtw_malloc(u32 sz)
 {
-	u8 *pbuf = _rtw_malloc(sz);
+	void *pbuf = _rtw_malloc(sz);
 #if CONFIG_MEM_MONITOR & MEM_MONITOR_LEAK
 	add_mem_usage(&mem_table, pbuf, sz, &mem_used_num, MEM_MONITOR_FLAG_WIFI_DRV);
 #else
@@ -380,9 +380,9 @@ u8 *rtw_malloc(u32 sz)
 	return pbuf;
 }
 
-u8 *rtw_zmalloc(u32 sz)
+void *rtw_zmalloc(u32 sz)
 {
-	u8 *pbuf = _rtw_zmalloc(sz);
+	void *pbuf = _rtw_zmalloc(sz);
 #if CONFIG_MEM_MONITOR & MEM_MONITOR_LEAK
 	add_mem_usage(&mem_table, pbuf, sz, &mem_used_num, MEM_MONITOR_FLAG_WIFI_DRV);
 #else
@@ -391,9 +391,9 @@ u8 *rtw_zmalloc(u32 sz)
 	return pbuf;
 }
 
-u8 *rtw_calloc(u32 nelements, u32 elementSize)
+void *rtw_calloc(u32 nelements, u32 elementSize)
 {
-	u8 *pbuf = _rtw_calloc(nelements, elementSize);
+	void *pbuf = _rtw_calloc(nelements, elementSize);
 
 	u32 sz = nelements * elementSize;
 #if CONFIG_MEM_MONITOR & MEM_MONITOR_LEAK
@@ -547,6 +547,8 @@ int rtw_in_interrupt(void)
 
 #ifdef ARM_CORE_CM4
 	return (__get_xPSR() & 0x1FF) != 0;
+#elif defined(RSICV_CORE_KR4)
+	return plic_get_active_irq_id_ram() != 0;
 #else
 	return __get_IPSR() != 0;
 #endif
@@ -554,7 +556,6 @@ int rtw_in_interrupt(void)
 #endif
 #endif
 }
-
 
 void rtw_up_sema(_sema *sema)
 {
@@ -1295,6 +1296,28 @@ void rtw_resume_task(void *task)
 		osdep_service.rtw_resume_task(task);
 	} else {
 		OSDEP_DBG("Not implement osdep service: rtw_resume_task");
+	}
+
+	return;
+}
+
+void rtw_suspend_task_all(void)
+{
+	if (osdep_service.rtw_suspend_task_all) {
+		osdep_service.rtw_suspend_task_all();
+	} else {
+		OSDEP_DBG("Not implement osdep service: rtw_suspend_task_all");
+	}
+
+	return;
+}
+
+void rtw_resume_task_all(void)
+{
+	if (osdep_service.rtw_resume_task_all) {
+		osdep_service.rtw_resume_task_all();
+	} else {
+		OSDEP_DBG("Not implement osdep service: rtw_resume_task_all");
 	}
 
 	return;

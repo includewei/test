@@ -30,7 +30,6 @@
 /* This file redefines API functions to be called through a wrapper macro, but
  * only for ports that are using the MPU. */
 #if portUSING_MPU_WRAPPERS
-
 /* MPU_WRAPPERS_INCLUDED_FROM_API_FILE will be defined when this file is
  * included from queue.c or task.c to prevent it from having an effect within
  * those files. */

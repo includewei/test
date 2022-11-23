@@ -6,8 +6,11 @@
 #include <task.h>
 #include <stdint.h>
 #include "timer_api.h"
+#include "vfs.h"
 
 #define DEFAULT_TONE_LEN				96000*2 // total frame size 10s, word length = DEFAULT_TONE_LEN / 2
+#define PRE_SWEEP_MS					3000 	// pre sweep frames
+#define SWEEP_INTERVAL_MS				100 	// sweep interval ms 
 
 #define TONE_MODE_ONCE		0
 #define TONE_MODE_LOOP		1
@@ -19,9 +22,17 @@
 #define CMD_TONE_GET_STATE			MM_MODULE_CMD(0x04)
 #define CMD_TONE_STREAMING			MM_MODULE_CMD(0x05)
 #define CMD_TONE_RECOUNT_PERIOD		MM_MODULE_CMD(0x06)
+#define CMD_TONE_SWEEP_TONE			MM_MODULE_CMD(0x07)
+#define CMD_TONE_TARGET_DB			MM_MODULE_CMD(0x08)
+#define CMD_TONE_SWEEP_DB			MM_MODULE_CMD(0x09)
+#define CMD_TONE_PLAY_SD_FILE       MM_MODULE_CMD(0x10)
 
 
 #define CMD_TONE_APPLY				MM_MODULE_CMD(0x20)  // for hardware module
+
+
+#define play_tone       0x00
+#define play_sd_data    0x01
 
 typedef struct tone_param_s {
 	uint32_t codec_id;
@@ -43,7 +54,18 @@ typedef struct tone_ctx_s {
 	gtimer_t frame_timer;
 	uint32_t frame_timer_period; // us
 	uint32_t audio_timer_delay_ms;
+	uint32_t audio_timer_process_time;
 	uint32_t tone_data_offset;
+	uint32_t pre_sweep_frames; 		//pre sweep frames
+	uint32_t sweep_interval_frames; //number of frames to change sweep frequency
+	uint32_t sweep_frequency;
+	uint32_t sweep_enable;
+	int32_t target_dB;
+	uint32_t DBsweep_frames;
+	uint8_t enable_DB_SWEEP;
+	uint8_t playmode;
+
+	FILE   *sd_data;
 
 	tone_params_t params;
 	// flag

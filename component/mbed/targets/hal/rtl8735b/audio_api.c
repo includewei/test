@@ -58,7 +58,11 @@ void audio_init(audio_t *obj, audio_output_mode output_mode, audio_input_mode in
 	hal_audio_sck_inv(paudio_adapter, DISABLE);
 	hal_audio_loopback(paudio_adapter, DISABLE); //DISABLE, ENABLE
 	hal_audio_tx_ch(paudio_adapter, AUDIO_L_R);
-	hal_audio_rx_ch(paudio_adapter, AUDIO_L_R);
+	if (input_mode == RIGHT_DMIC) {
+		hal_audio_rx_ch(paudio_adapter, AUDIO_R_L);
+	} else {
+		hal_audio_rx_ch(paudio_adapter, AUDIO_L_R);
+	}
 
 	hal_audio_digital_rst(paudio_adapter, DISABLE);
 
@@ -412,6 +416,51 @@ void audio_dmic_pinmux(audio_t *obj, PinName dmic_clk, PinName dmic_data)
 
 }
 
+void audio_dmic_depinmux(audio_t *obj, PinName dmic_clk, PinName dmic_data)
+{
+	HAL_Status ret;
+	u8 pin_mux_err = 0;
+
+#if IS_CUT_TEST(CONFIG_CHIP_VER)
+	uint32_t dmic_s0[3] = {PE_4, PE_0, PE_2};
+#else
+	uint32_t dmic_s0[3] = {PD_18, PD_14, PD_16};
+#endif
+
+	if (dmic_data == dmic_s0[0]) {
+		ret = hal_pinmux_unregister(dmic_s0[0], PID_DMIC);
+		if (ret != HAL_OK) {
+			DBG_AUDIO_ERR("audio_dmic_pinmux : dmic data pin is conflict. \r\n");
+			pin_mux_err |= 1;
+		}
+	} else {
+		DBG_AUDIO_ERR("audio_dmic_pinmux : dmic data pin is invalid. \r\n");
+		pin_mux_err |= 1;
+	}
+
+	if (dmic_clk == dmic_s0[1]) {
+		ret = hal_pinmux_unregister(dmic_s0[1], PID_DMIC);
+		if (ret != HAL_OK) {
+			DBG_AUDIO_ERR("audio_dmic_pinmux : dmic clk pin is conflict. \r\n");
+			pin_mux_err |= 1;
+		}
+	} else if (dmic_clk == dmic_s0[2]) {
+		ret = hal_pinmux_unregister(dmic_s0[2], PID_DMIC);
+		if (ret != HAL_OK) {
+			DBG_AUDIO_ERR("audio_dmic_pinmux : dmic clk pin is conflict. \r\n");
+			pin_mux_err |= 1;
+		}
+	} else {
+		DBG_AUDIO_ERR("audio_dmic_pinmux : dmic data pin is invalid. \r\n");
+		pin_mux_err |= 1;
+	}
+
+	if (pin_mux_err == 1) {
+		DBG_AUDIO_ERR("audio_dmic_pinmux : DMIC pins is invalid. \r\n");
+	}
+
+}
+
 void audio_l_dmic_gain(audio_t *obj, audio_dmic_gain dmic_gain)
 {
 	hal_audio_adapter_t *paudio_adapter = &obj->audio_adapter;
@@ -504,4 +553,20 @@ void audio_output_l_eq(audio_t *obj, audio_eq eq, BOOL en, u32 h0, u32 b1, u32 b
 	hal_audio_output_l_eq(paudio_adapter, eq, en, &eq_params);
 }
 
+void audio_set_param_adv(audio_t *obj, audio_sr sample_rate, audio_wl word_length, audio_ch tx_ch, audio_ch rx_ch)
+{
+	hal_audio_adapter_t *paudio_adapter = &obj->audio_adapter;
 
+	hal_audio_rate(paudio_adapter, sample_rate, sample_rate);
+	hal_audio_length(paudio_adapter, word_length, word_length);
+	hal_audio_sport_tx_params(paudio_adapter, tx_ch, word_length, sample_rate); // AUDIO_STEREO,AUDIO_MONO
+	hal_audio_sport_rx_params(paudio_adapter, rx_ch, word_length, sample_rate); // AUDIO_STEREO,AUDIO_MONO
+
+	if (word_length == WL_24BIT) {
+		hal_audio_sport_tx_byte_swap(paudio_adapter, 1);
+		hal_audio_sport_rx_byte_swap(paudio_adapter, 1);
+	} else {
+		hal_audio_sport_tx_byte_swap(paudio_adapter, 0);
+		hal_audio_sport_rx_byte_swap(paudio_adapter, 0);
+	}
+}

@@ -20,6 +20,7 @@
 #define CMD_ARRAY_GET_STATE			MM_MODULE_CMD(0x04)
 #define CMD_ARRAY_STREAMING			MM_MODULE_CMD(0x05)
 #define CMD_ARRAY_RECOUNT_PERIOD	MM_MODULE_CMD(0x06)
+#define CMD_ARRAY_PCM_SWEEP			MM_MODULE_CMD(0x07)
 
 
 #define CMD_ARRAY_APPLY				MM_MODULE_CMD(0x20)  // for hardware module
@@ -58,6 +59,11 @@ typedef struct array_ctx_s {
 
 	array_params_t params;
 	array_t array;
+	array_t array_copy;
+
+	uint8_t array_sweepdb_en;
+	uint8_t array_sweep_flag;
+	int32_t dB_Sweep;
 	// flag
 	int stop;
 } array_ctx_t;

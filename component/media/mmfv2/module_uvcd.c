@@ -92,7 +92,15 @@ end:
 
 int uvcd_control(void *p, int cmd, int arg)
 {
-	// struct uvc_dev *uvc_ctx = (struct uvc_dev *)p;
+	struct uvc_dev *uvc_ctx = (struct uvc_dev *)p;
+	switch (cmd) {
+	case CMD_UVCD_CALLBACK_SET://Prot A and B
+		uvc_ctx->uvcd_ext_set_cb = (void (*)(void *, unsigned int))arg;
+		break;
+	case CMD_UVCD_CALLBACK_GET:
+		uvc_ctx->uvcd_ext_get_cb = (void (*)(void *, unsigned int))arg;
+		break;
+	}
 	return 0;
 }
 

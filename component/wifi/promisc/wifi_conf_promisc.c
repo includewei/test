@@ -56,6 +56,7 @@ int wifi_set_promisc(rtw_rcr_level_t enabled, void (*callback)(unsigned char *, 
 	return promisc_set(enabled, callback, len_used);
 }
 
+
 void wifi_enter_promisc_mode()
 {
 #ifdef CONFIG_PROMISC
@@ -82,6 +83,8 @@ void wifi_enter_promisc_mode()
 			if (strlen((const char *)setting.ssid) > 0) {
 				wifi_disconnect();
 			}
+		default:
+			break;
 		}
 	}
 #endif

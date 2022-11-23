@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <FreeRTOS.h>
 #include <task.h>
 #include <queue.h>
@@ -31,6 +32,7 @@
 #define TX_CACHE_DEPTH	16
 
 #if (defined(CONFIG_PLATFORM_8735B) && (CONFIG_PLATFORM_8735B == 1))
+#if IS_CUT_TEST(CONFIG_CHIP_VER)
 //amebapro2 i2s pin
 #define I2S_SCLK_PIN            PE_0
 #define I2S_WS_PIN              PE_3
@@ -39,6 +41,15 @@
 #define I2S_MCK_PIN             NC //PE_2 or NC
 #define I2S_TX1_PIN             NC
 #define I2S_TX2_PIN             NC
+#else
+#define I2S_SCLK_PIN            PD_14
+#define I2S_WS_PIN              PD_17
+#define I2S_TX_PIN              PD_15
+#define I2S_RX_PIN              PD_18
+#define I2S_MCK_PIN             NC //PD_16 or NC
+#define I2S_TX1_PIN             NC
+#define I2S_TX2_PIN             NC
+#endif
 #else
 //amebapro i2s pin
 #define I2S_SCLK_PIN            PE_1
@@ -78,7 +89,7 @@ static int logic_input_num = 1;		// for non-mix mode
 #endif
 
 //-------------AEC interrupt handler ------------------------------------------
-#if ENABLE_SPEEX_AEC==1
+#if defined(ENABLE_SPEEX_AEC) && ENABLE_SPEEX_AEC==1
 #include "speex/speex_echo.h"
 #include "speex/speex_preprocess.h"
 
@@ -132,7 +143,7 @@ static void i2s_rx_complete(uint32_t arg, uint8_t *pbuf)
 	uint32_t i2s_rx_ts = xTaskGetTickCountFromISR();
 	// set timestamp to 1st sample
 	i2s_rx_ts -= 1000 * (AUDIO_DMA_PAGE_SIZE / ctx->word_length) / ctx->sample_rate;
-#if ENABLE_SPEEX_AEC==1
+#if defined(ENABLE_SPEEX_AEC) && ENABLE_SPEEX_AEC==1
 	if (ctx->params.enable_aec) {
 		//printf("\n\renable_aec\n\r");
 		int shrink_size = shrink_data(pbuf, last_rx_buf, AUDIO_DMA_PAGE_SIZE, ctx);
@@ -166,7 +177,7 @@ static void i2s_rx_complete(uint32_t arg, uint8_t *pbuf)
 	}
 }
 
-#if ENABLE_SPEEX_AEC==1
+#if defined(ENABLE_SPEEX_AEC) && ENABLE_SPEEX_AEC==1
 static void i2s_rx_handle_thread(void *param)
 {
 	i2s_ctx_t *ctx = (i2s_ctx_t *)param;
@@ -224,7 +235,7 @@ int i2s_control(void *p, int cmd, int arg)
 		memcpy((void *)arg, &ctx->params, sizeof(i2s_params_t));
 		break;
 	case CMD_I2S_APPLY:
-#if ENABLE_SPEEX_AEC==1
+#if defined(ENABLE_SPEEX_AEC) && ENABLE_SPEEX_AEC==1
 		if (ctx->params.enable_aec) {
 			ctx->aec_rx_done_sema = xSemaphoreCreateBinary();
 			if (!ctx->aec_rx_done_sema) {
@@ -459,7 +470,7 @@ void *i2s_create(void *parent)
 #endif
 
 	// Init TX,RX dma
-	i2s_set_dma_buffer(ctx->i2s_obj, dma_txdata, dma_rxdata, AUDIO_DMA_PAGE_NUM, AUDIO_DMA_PAGE_SIZE);
+	i2s_set_dma_buffer(ctx->i2s_obj, (char *)dma_txdata, (char *)dma_rxdata, AUDIO_DMA_PAGE_NUM, AUDIO_DMA_PAGE_SIZE);
 	i2s_rx_irq_handler(ctx->i2s_obj, (i2s_irq_handler)i2s_rx_complete, (uint32_t)ctx);
 	i2s_tx_irq_handler(ctx->i2s_obj, (i2s_irq_handler)i2s_tx_complete, (uint32_t)ctx);
 

@@ -70,6 +70,7 @@ list(
 )
 
 target_compile_definitions(${usrsctp} PRIVATE ${usrsctp_flags} )
+target_compile_options(${usrsctp} PRIVATE ${LIBS_WARN_ERR_FLAGS} )
 
 include(../includepath.cmake)
 target_include_directories(

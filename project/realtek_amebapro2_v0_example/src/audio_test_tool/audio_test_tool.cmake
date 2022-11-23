@@ -3,8 +3,12 @@ if(BUILD_LIB)
 	message(STATUS "build audio save libraries")
 endif()
 
+ADD_LIBRARY (skynet_lib STATIC IMPORTED )
+SET_PROPERTY ( TARGET skynet_lib PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_LIST_DIR}/skynet/skynet_iot/GCC/libSkynetAPI_iot.a )
+
 list(
     APPEND app_example_lib
+	skynet_lib
 )
 
 ### add flags ###
@@ -17,6 +21,7 @@ list(
 list (
     APPEND app_example_inc_path
     "${CMAKE_CURRENT_LIST_DIR}"
+	${CMAKE_CURRENT_LIST_DIR}/skynet
 )
 
 ### add source file ###
@@ -45,6 +50,8 @@ list(
 	audio_tool_init.c
 	pcm8K_music.c
 	pcm16K_music.c
+	skynet/skynet_device.c
+	skynet/module_p2p_audio.c
 )	
 #pcm8K_std1ktone.c
 #pcm16K_std1ktone.c

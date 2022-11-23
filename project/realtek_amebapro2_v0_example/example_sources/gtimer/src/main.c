@@ -50,7 +50,7 @@ int main(void)
 	gtimer_init(&my_timer2, ONE_SHOUT_TIMER);
 	time2_expired = 0;
 	if (my_timer2.timer_adp.tid != 0xFF) {
-		gtimer_start_one_shout(&my_timer2, 500000, (void *)timer2_timeout_handler, NULL);
+		gtimer_start_one_shout(&my_timer2, 500000, (void *)timer2_timeout_handler, (uint32_t)NULL);
 	}
 
 	while (1) {
@@ -58,7 +58,7 @@ int main(void)
 			gpio_write(&gpio_led2, !gpio_read(&gpio_led2));
 			time2_expired = 0;
 			if (my_timer2.timer_adp.tid != 0xFF) {
-				gtimer_start_one_shout(&my_timer2, 500000, (void *)timer2_timeout_handler, NULL);
+				gtimer_start_one_shout(&my_timer2, 500000, (void *)timer2_timeout_handler, (uint32_t)NULL);
 			}
 		}
 	}

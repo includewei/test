@@ -13,11 +13,11 @@
 #if (defined(SUPPORT_UART_LOG_SERVICE) && SUPPORT_UART_LOG_SERVICE) || (defined(CONFIG_EXAMPLE_SPI_ATCMD) && CONFIG_EXAMPLE_SPI_ATCMD)
 #include "atcmd_lwip.h"
 #endif
+#include "osdep_service.h"
+//osdep_service.h include platform_autoconfig.h, it will undefine BT macro default
 #if defined(CONFIG_PLATFORM_8721D) || defined(CONFIG_PLATFORM_8710C) || defined(CONFIG_PLATFORM_AMEBAD2) || defined(CONFIG_PLATFORM_8735B) || defined(CONFIG_PLATFORM_AMEBALITE)
 #include <platform_opts_bt.h>
 #endif
-#include "osdep_service.h"
-
 
 #if SUPPORT_LOG_SERVICE
 //======================================================
@@ -31,30 +31,26 @@ extern void at_google_init(void);
 extern void at_transport_init(void);
 //extern void at_app_init(void);
 extern void at_mp_init(void);
+#if	!defined(CONFIG_BT_MP_MODE)
 extern void at_bt_init(void);
+#endif
 extern void at_qr_code_init(void);
 extern void at_isp_init(void);
 extern void at_ftl_init(void);
 #ifdef CONFIG_MP_INCLUDED
+#ifdef CONFIG_AS_INIC_AP
+extern void inic_ipc_mp_command(char *token, unsigned int cmd_len, int show_msg);
+#else
 extern int wext_private_command(const char *ifname, char *cmd, int show_msg);
 #endif
-#if (CONFIG_JOYLINK || CONFIG_GAGENT || CONFIG_QQ_LINK || 	\
-	(defined(CONFIG_AIRKISS_CLOUD) && CONFIG_AIRKISS_CLOUD) || CONFIG_ALINK || \
-	(defined(CONFIG_HILINK) && CONFIG_HILINK) || (defined(CONFIG_MIIO) && CONFIG_MIIO))
-extern void at_cloud_init(void);
 #endif
+
 void at_log_init(void);
 
 char log_buf[LOG_SERVICE_BUFLEN];
 xSemaphoreHandle log_rx_interrupt_sema = NULL;
 #if CONFIG_LOG_SERVICE_LOCK
 xSemaphoreHandle log_service_sema = NULL;
-#endif
-
-#ifdef CONFIG_INIC_EN
-#ifndef CONFIG_INIC_IPC
-extern unsigned char inic_cmd_ioctl;
-#endif
 #endif
 
 //#if defined (__ICCARM__)
@@ -73,8 +69,14 @@ log_init_t log_init_table[] = {
 	at_wifi_init,
 #endif
 
+#if	!defined(CONFIG_BT_MP_MODE)
 #if defined(CONFIG_BT) && CONFIG_BT
 	at_bt_init,
+#endif
+#endif
+
+#if defined(CONFIG_ATCMD_MP) && CONFIG_ATCMD_MP
+	at_mp_init,
 #endif
 
 #ifndef CONFIG_INIC_IPC_TODO
@@ -98,10 +100,6 @@ log_init_t log_init_table[] = {
 	at_transport_init,
 #endif
 
-#if defined(CONFIG_ATCMD_MP) && CONFIG_ATCMD_MP
-	at_mp_init,
-#endif
-
 #if defined(CONFIG_FTL) && CONFIG_FTL
 	at_ftl_init,
 #endif
@@ -109,10 +107,6 @@ log_init_t log_init_table[] = {
 	at_isp_init,
 #endif
 
-#if (CONFIG_JOYLINK || CONFIG_GAGENT || CONFIG_QQ_LINK || (defined(CONFIG_AIRKISS_CLOUD) && \
-	CONFIG_AIRKISS_CLOUD) || CONFIG_ALINK || (defined(CONFIG_HILINK) && CONFIG_HILINK) || (defined(CONFIG_MIIO) && CONFIG_MIIO))
-	at_cloud_init,
-#endif
 #endif
 };
 #else
@@ -139,7 +133,7 @@ extern unsigned int __log_init_end__;
 #endif
 
 //======================================================
-int hash_index(char *str)
+int hash_index(const char *str)
 {
 	unsigned int seed = 131; // 31 131 1313 13131 131313 etc..
 	unsigned int hash = 0;
@@ -357,7 +351,11 @@ int mp_commnad_handler(char *cmd)
 	if (token && (strcmp(buf, "iwpriv") == 0)) {
 		token = strtok(NULL, "");
 #ifdef CONFIG_MP_INCLUDED
+#ifdef CONFIG_AS_INIC_AP
+		inic_ipc_mp_command(token, sizeof(buf), 1);
+#else
 		wext_private_command(WLAN0_NAME, token, 1);
+#endif
 #endif
 		return 0;
 	}
@@ -409,10 +407,19 @@ void log_service_lock_init(void)
 #else
 #define LOG_SERVICE_SECURE_STACK_SIZE	configMINIMAL_SECURE_STACK_SIZE
 #endif
+
+__weak char *log_get_buffer(void)
+{
+	while (xSemaphoreTake(log_rx_interrupt_sema, portMAX_DELAY) != pdTRUE);
+	return log_buf;
+}
+
 void log_service(void *param)
 {
 	/* To avoid gcc warnings */
 	(void) param;
+
+	char *line_buf = NULL;
 
 #if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
 	rtw_create_secure_context(LOG_SERVICE_SECURE_STACK_SIZE);
@@ -420,28 +427,23 @@ void log_service(void *param)
 	_AT_DBG_MSG(AT_FLAG_COMMON, AT_DBG_INFO, "\n\rStart LOG SERVICE MODE\n\r");
 	_AT_DBG_MSG(AT_FLAG_COMMON, AT_DBG_INFO, "\n\r# ");
 	while (1) {
-		while (xSemaphoreTake(log_rx_interrupt_sema, portMAX_DELAY) != pdTRUE);
+		//while (xSemaphoreTake(log_rx_interrupt_sema, portMAX_DELAY) != pdTRUE);
+		line_buf = log_get_buffer();
 #if CONFIG_LOG_SERVICE_LOCK
 		log_service_lock();
 #endif
-		if (log_handler((char *)log_buf) == NULL) {
+		if (log_handler((char *)line_buf) == NULL) {
 #if CONFIG_WLAN
-#ifndef CONFIG_INIC_IPC
-			if (mp_commnad_handler((char *)log_buf) < 0)
-#endif
+			if (mp_commnad_handler((char *)line_buf) < 0)
 #endif
 			{
-				if (print_help_handler((char *)log_buf) < 0) {
-					at_printf("\r\nunknown command '%s'", log_buf);
+				if (print_help_handler((char *)line_buf) < 0) {
+					at_printf("\r\nunknown command '%s'", line_buf);
 				}
 			}
 		}
-		log_buf[0] = '\0';
-#ifdef CONFIG_INIC_EN
-#ifndef CONFIG_INIC_IPC
-		inic_cmd_ioctl = 0;
-#endif
-#endif
+		line_buf[0] = '\0';
+
 		_AT_DBG_MSG(AT_FLAG_COMMON, AT_DBG_ALWAYS, "\n\r[MEM] After do cmd, available heap %d\n\r", xPortGetFreeHeapSize());
 		_AT_DBG_MSG(AT_FLAG_COMMON, AT_DBG_ALWAYS, "\r\n\n#\r\n"); //"#" is needed for mp tool
 #if (defined(SUPPORT_UART_LOG_SERVICE) && SUPPORT_UART_LOG_SERVICE)

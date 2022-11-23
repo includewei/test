@@ -290,4 +290,14 @@ int gpio_irq_debounce_set(gpio_irq_t *obj, uint32_t debounce_us, u8 enable)
 	}
 }
 
-
+/**
+  * @brief  Reads the input level of the given GPIO IRQ pin.
+  *         If a debounce function is enabled on this GPIO IRQ pin,
+  *         then reads the de-bounced input level.
+  * @param  obj: gpio irq object define in application software.
+  * @retval Value of the GPIO IRQ pin - Low = 0; High = 1
+  */
+int gpio_irq_read(gpio_irq_t *obj)
+{
+	return hal_gpio_irq_read(&obj->gpio_irq_adp);
+}

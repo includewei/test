@@ -16,6 +16,7 @@
 *
 ******************************************************************************/
 #include <stdint.h>
+#include <string.h>
 #include "avcodec.h"
 #include "mmf2_module.h"
 #include "module_fmp4.h"

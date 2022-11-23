@@ -1,3 +1,4 @@
+#undef CONFIG_SSL_RSA
 #define CONFIG_SSL_RSA          1
 
 #include "rom_ssl_ram_map.h"
@@ -6,6 +7,10 @@
 
 #if defined (CONFIG_PLATFORM_AMEBAD2)
 #define SUPPORT_HW_SW_CRYPTO
+#if defined (ARM_CORE_CA7)
+#undef CONFIG_SSL_RSA
+#define CONFIG_SSL_RSA          0
+#endif
 #endif
 
 /* RTL_CRYPTO_FRAGMENT should be less than 16000, and should be 16bytes-aligned */

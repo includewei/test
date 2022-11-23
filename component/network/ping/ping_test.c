@@ -3,6 +3,7 @@
 #include "main.h"
 
 #include <lwipconf.h>
+#include <lwip_netconf.h>
 #include <platform_stdlib.h>
 
 #define PING_IP		"192.168.159.1"
@@ -14,6 +15,7 @@
 
 static unsigned short ping_seq = 0;
 static int infinite_loop, ping_count, data_size, ping_interval, ping_call;
+static int ping_interface;
 static int ping_total_time = 0, ping_received_count = 0;
 static unsigned char g_ping_terminate = 0;
 xTaskHandle g_ping_task = NULL;
@@ -115,6 +117,25 @@ void ping_test(void *param)
 			to_addr.sin_addr.s_addr = inet_addr(host);
 		}
 
+		struct sockaddr_in s_serv_addr;
+		memset((char *)&s_serv_addr, 0, sizeof(s_serv_addr));
+		s_serv_addr.sin_family = AF_INET;
+
+
+		if (ping_interface == 0) {
+			s_serv_addr.sin_addr.s_addr = *(u32_t *)LwIP_GetIP(0);
+			if (bind(ping_socket, (struct sockaddr *)&s_serv_addr, sizeof(s_serv_addr)) < 0) {
+				printf("\r\nbind sock error!");
+			}
+		} else if (ping_interface == 1) {
+			s_serv_addr.sin_addr.s_addr = *(u32_t *)LwIP_GetIP(1);
+			if (bind(ping_socket, (struct sockaddr *)&s_serv_addr, sizeof(s_serv_addr)) < 0) {
+				printf("\r\nbind sock error!");
+			}
+		} else {
+			//do nothing
+		}
+
 		generate_ping_echo(ping_buf, data_size);
 		sendto(ping_socket, ping_buf, ping_size, 0, (struct sockaddr *) &to_addr, sizeof(to_addr));
 
@@ -155,7 +176,7 @@ void ping_test(void *param)
 	} else {
 		printf("\n\r[%s] %d packets transmitted, %d received, %d%% packet loss, average %d ms", __FUNCTION__, ping_count, ping_received_count,
 			   (ping_count - ping_received_count) * 100 / ping_count, ping_received_count ? ping_total_time / ping_received_count : 0);
-		printf("\n\r[%s] min: %d ms, max: %d ms\n\r", __FUNCTION__, min_time, max_time);
+		printf("\n\r[%s] min: %u ms, max: %u ms\n\r", __FUNCTION__, min_time, max_time);
 	}
 Exit:
 	if (ping_buf) {
@@ -206,6 +227,7 @@ void cmd_ping(int argc, char **argv)
 	char *host;
 
 	g_ping_terminate = 0;
+	ping_interface = 255;
 
 	if (argc < 2) {
 		goto Exit;
@@ -270,6 +292,12 @@ void cmd_ping(int argc, char **argv)
 				}
 				data_size = (int) atoi(argv[argv_count]);
 				argv_count += 2;
+			} else if (strcmp(argv[argv_count - 1], "if") == 0) {
+				if (argc < (argv_count + 1)) {
+					goto Exit;
+				}
+				ping_interface = (int) atoi(argv[argv_count]);
+				argv_count += 2;
 			} else {
 				goto Exit;
 			}
@@ -291,6 +319,7 @@ Exit:
 	printf("  \r     -t    #   Ping the specified host until stopped\n");
 	printf("  \r     -n   #   Number of echo requests to send (default 4 times)\n");
 	printf("  \r     -l    #   Send buffer size (default 32 bytes)\n");
+	printf("  \r     if   #   only for concurrent mode, set '0' or '1' \n");
 	printf("\n\r   Example:\n");
 	printf("  \r     ATWI=192.168.1.2,-n,100,-l,5000\n");
 	return;

@@ -13,7 +13,8 @@ MEMORY
   VECTORS_RAM   (rwx)	: ORIGIN = 0x00018000, LENGTH = 0x00018200 - 0x00018000  /* 512B */
   RAM_FUN_TABLE (rwx)	: ORIGIN = 0x00018200, LENGTH = 0x00018300 - 0x00018200  /* 240B */ 
   ITCM_RAM_BSS  (rwx)	: ORIGIN = 0x00018300, LENGTH = 0x00020300 - 0x00018300  /* 32 KB */
-  ITCM_RAM      (rwx)	: ORIGIN = 0x00020300, LENGTH = 0x00030000 - 0x00020300  /* 63.25KB */
+  ITCM_RAM      (rwx)	: ORIGIN = 0x00020300, LENGTH = 0x00040000 - 0x00020300  /* 63.25KB */
+  RAM           (rwx)	: ORIGIN = 0x20101200, LENGTH = 0x20105200 - 0x20101200  /* 16 KB */
   VOE           (rwx)	: ORIGIN = 0x70000000, LENGTH = 0x70100000 - 0x70000000  /* 1MB */
   NN     (rwx)          : ORIGIN = 0x72C00000, LENGTH = 0x74000000 - 0x72C00000	 /* 20MB For FCS*/
   
@@ -120,6 +121,7 @@ SECTIONS
 		*(.bss*)
 		*(COMMON)
 		*hal_dram_init.o(.bss*)
+       	*(.ram.hal_pmc.bss*)
 		. = ALIGN(4);
 		__bss_end__ = .;
 	} > ITCM_RAM_BSS
@@ -129,6 +131,7 @@ SECTIONS
 		. = ALIGN(4);
 		__data_start__ = .;
 		*(vtable)
+       	*(.ram.hal_pmc.data*)
 		*(.data*)
 
 		. = ALIGN(4);
@@ -172,6 +175,7 @@ SECTIONS
 		*hal_flash.o(.text*)
 		*hal_timer.o(.text*)
 		*hal_uart.o(.text*)	
+        *(.ram.hal_pmc.text*)
 		__ram_code_text_end__ = .;
 
 	} > ITCM_RAM
@@ -183,9 +187,10 @@ SECTIONS
 		*(.rodata.str1*)
 		*hal_sys_ctrl.o(.rodata*)
 		*hal_dram_init.o(.rodata*)	
+       	*(.ram.hal_pmc.rodata*)
 		__ram_code_rodata_end__ = .;	/*	This locate define is important!!! erase boot loader will reference this as end */
 
-	} > ITCM_RAM
+	} > RAM
 	
 	.heap (COPY):
 	{
@@ -280,6 +285,6 @@ SECTIONS
     .trashcan :
     {
         *(*)
-    } > RAM
+    } > ITCM_RAM_BSS
     ASSERT(SIZEOF(.trashcan) == 0, "Some section is collect by trashcan.Check your map file.")
 }

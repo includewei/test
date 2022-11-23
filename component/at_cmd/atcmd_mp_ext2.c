@@ -1,15 +1,10 @@
 #include <platform_stdlib.h>
 #include <platform_opts.h>
-#if defined(CONFIG_PLATFORM_8721D) || defined(CONFIG_PLATFORM_8710C) || defined(CONFIG_PLATFORM_AMEBAD2) || defined(CONFIG_PLATFORM_8735B) || defined(CONFIG_PLATFORM_AMEBALITE)
 #include <platform_opts_bt.h>
-#endif
 #include <gpio_api.h>
 #include "log_service.h"
 #include "osdep_service.h"
 #include "atcmd_mp.h"
-#ifdef CONFIG_PLATFORM_8710C
-#include "rtl8710c_pin_name.h"
-#endif
 #include "bt_intf.h"
 
 #define MP_EXT2_PREFIX		"[ATM2]: "
@@ -19,24 +14,31 @@
 			_AT_PRINTK(__VA_ARGS__); \
 		}while(0)
 
-#define UART_BRIDGE_USAGE	"ATM2=bridge\n"
-#define BT_POWER_USAGE		"ATM2=bt_power,ACT <ACT: on/off>\n"
-#define GNT_BT_USAGE		"ATM2=gnt_bt,TARGET <TARGET: wifi/bt>\n"
+#define UART_BRIDGE_USAGE		"ATM2=bridge\n"
+#define BT_POWER_USAGE			"ATM2=bt_power,ACT <ACT: on/off>\n"
+#define GNT_BT_USAGE			"ATM2=gnt_bt,TARGET <TARGET: wifi/bt>\n"
+#define SELECTION_BT_ANTENNA	"ATM2=ant,TARGET <TARGET: s0/s1>\n"
 
+#if defined(CONFIG_BT) && CONFIG_BT
 #if defined(CONFIG_PLATFORM_8710C) || defined(CONFIG_PLATFORM_8735B)
 extern void console_reinit_uart(void);
 #endif
-
-#if defined(CONFIG_BT) && CONFIG_BT
-extern void bt_uart_bridge_close(void);
-extern void bt_uart_bridge_open(void);
+#if defined(CONFIG_PLATFORM_AMEBAD2) || defined(CONFIG_PLATFORM_AMEBALITE)
+extern void rtk_bt_mp_power_on(void);
+extern void rtk_bt_mp_power_off(void);
+extern void rtk_bt_set_ant(uint8_t ant_switch);
+#else
 extern bool bte_init(void);
 extern void bte_deinit(void);
 extern bool bt_trace_init(void);
 extern bool bt_trace_deinit(void);
-
+#endif
+extern void wifi_btcoex_set_pta(pta_type_t  type);
+extern void bt_uart_bridge_close(void);
+extern void bt_uart_bridge_open(void);
 static bool open_flag = 0;
 #endif
+
 static int mp_ext2_uart_bridge(void **argv, int argc)
 {
 #if defined(CONFIG_BT) && CONFIG_BT
@@ -73,14 +75,22 @@ static int mp_ext2_bt_power(void **argv, int argc)
 #if defined(CONFIG_BT) && CONFIG_BT
 	if (strcmp(argv[0], "on") == 0) {
 		MP_EXT2_PRINTF("BT power on.\n\r");
-		rtlk_bt_set_gnt_bt_with_clk_source(PTA_BT);
+		wifi_btcoex_set_pta(PTA_BT);
+#if defined(CONFIG_PLATFORM_AMEBAD2) || defined(CONFIG_PLATFORM_AMEBALITE)
+		rtk_bt_mp_power_on();
+#else
 		bt_trace_init();
 		bte_init();
+#endif
 	} else if (strcmp(argv[0], "off") == 0) {
 		MP_EXT2_PRINTF("BT power off.\n\r");
+#if defined(CONFIG_PLATFORM_AMEBAD2) || defined(CONFIG_PLATFORM_AMEBALITE)
+		rtk_bt_mp_power_off();
+#else
 		bte_deinit();
 		bt_trace_deinit();
-		rtlk_bt_set_gnt_bt_with_clk_source(PTA_WIFI);
+#endif
+		wifi_btcoex_set_pta(PTA_WIFI);
 	}
 #endif
 	return 0;
@@ -89,14 +99,39 @@ static int mp_ext2_bt_power(void **argv, int argc)
 static int mp_ext2_gnt_bt(void **argv, int argc)
 {
 	(void)argc;
+#if defined(CONFIG_BT) && CONFIG_BT
 	if (strcmp(argv[0], "wifi") == 0) {
 		MP_EXT2_PRINTF("Switch GNT_BT to WIFI.\n\r");
-		rtlk_bt_set_gnt_bt_with_clk_source(PTA_WIFI);
+		wifi_btcoex_set_pta(PTA_WIFI);
 
 	} else if (strcmp(argv[0], "bt") == 0) {
 		MP_EXT2_PRINTF("Switch GNT_BT to BT.\n\r");
-		rtlk_bt_set_gnt_bt_with_clk_source(PTA_BT);
+		wifi_btcoex_set_pta(PTA_BT);
 	}
+#else
+	(void)argv;
+#endif
+	return 0;
+}
+
+static int mp_ext2_ant(void **argv, int argc)
+{
+	(void)argc;
+#if defined(CONFIG_BT) && CONFIG_BT
+	if (strcmp(argv[0], "s0") == 0) {
+		MP_EXT2_PRINTF("BT use dedicated RF s0.\n\r");
+#if defined(CONFIG_PLATFORM_AMEBAD2)
+		rtk_bt_set_ant(0);
+#endif
+	} else if (strcmp(argv[0], "s1") == 0) {
+		MP_EXT2_PRINTF("BT use share RF s1.\n\r");
+#if defined(CONFIG_PLATFORM_AMEBAD2)
+		rtk_bt_set_ant(1);
+#endif
+	}
+#else
+	(void)argv;
+#endif
 	return 0;
 }
 
@@ -104,6 +139,7 @@ at_mp_ext_item_t at_mp_ext2_items[] = {
 	{"bridge",		mp_ext2_uart_bridge,		UART_BRIDGE_USAGE},
 	{"bt_power",	mp_ext2_bt_power,			BT_POWER_USAGE},
 	{"gnt_bt",		mp_ext2_gnt_bt,				GNT_BT_USAGE},
+	{"ant",			mp_ext2_ant,				SELECTION_BT_ANTENNA},
 };
 
 void fATM2(void *arg)

@@ -69,8 +69,8 @@ void secure_api(char *(*a2)(void *), void *a3, int a4)
 		char *(__cmse_nonsecure_call * func)(void *d);
 		func = (char *(__cmse_nonsecure_call *)(void *))a2;
 #else
-		char *__attribute__((cmse_nonsecure_call))(*func)(void *d);
-		func = cmse_nsfptr_create(a2);
+		typedef char *__attribute__((cmse_nonsecure_call))(*func_t)(void *d);
+		func_t func = (func_t)cmse_nsfptr_create(a2);
 		if (cmse_is_nsfptr(func))
 #endif
 		{

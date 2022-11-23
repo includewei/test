@@ -5,10 +5,10 @@
 
 #include <lwipconf.h>
 #include <platform_stdlib.h>
-#if defined(CONFIG_INIC_IPC) && CONFIG_INIC_IPC
+#if defined(CONFIG_AS_INIC_AP)
 #define BSD_STACK_SIZE		    1024
 #else
-#define BSD_STACK_SIZE		    256
+#define BSD_STACK_SIZE		    512
 #endif
 #define DEFAULT_PORT            5001
 #define DEFAULT_TIME            10

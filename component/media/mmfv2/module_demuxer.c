@@ -10,6 +10,8 @@
 
 #include "mmf2_module.h"
 #include "module_demuxer.h"
+#include "memory_encoder.h"
+#include "mp4_demuxer.h"
 
 #define FATFS_SD_CARD
 
@@ -56,7 +58,7 @@ Reaction:
 			mm_context_t *mctx = (mm_context_t *)ctx->parent;
 			mm_queue_item_t *output_item;
 			if (xQueueReceive(mctx->output_recycle, &output_item, 0xFFFFFFFF) == pdTRUE) {
-				output_item->data_addr = memory_alloc(ctx->mem_pool, ctx->mp4_demuxer_ctx->audio_max_size);
+				output_item->data_addr = (uint32_t)memory_alloc(ctx->mem_pool, ctx->mp4_demuxer_ctx->audio_max_size);
 				if (!output_item->data_addr) {
 					//mm_printf("fail to allocate data drop the frame\r\n");
 					xQueueSend(mctx->output_ready, (void *)&output_item, 0xFFFFFFFF);
@@ -64,13 +66,14 @@ Reaction:
 				}
 
 				xSemaphoreTake(ctx->demuxer_sema, portMAX_DELAY);
-				output_item->size = get_audio_frame(ctx->mp4_demuxer_ctx, output_item->data_addr, ctx->cur_a_index, &(ctx->audio_duration), &(ctx->audio_timestamp));
+				output_item->size = get_audio_frame(ctx->mp4_demuxer_ctx, (unsigned char *)output_item->data_addr, ctx->cur_a_index, (unsigned int *) & (ctx->audio_duration),
+													(unsigned int *) & (ctx->audio_timestamp));
 				xSemaphoreGive(ctx->demuxer_sema);
 
 				output_item->type = ctx->audio_format;
 				while (((ctx->audio_timestamp / (ctx->mp4_demuxer_ctx->audio_sample_rate / 1000)) - ctx->first_timestamp) > (xTaskGetTickCount() - ctx->start_timestamp)) {
 					if (ctx->demuxer_a_state == DEMUXER_PAUSE) {
-						memory_free(ctx->mem_pool, output_item->data_addr);
+						memory_free(ctx->mem_pool, (uint8_t *)output_item->data_addr);
 						goto Reaction;
 					}
 					vTaskDelay(1);
@@ -108,7 +111,7 @@ void find_gop_last_frame(demuxer_ctx_t *ctx)
 		ctx->cur_v_index = ctx->cur_v_index % ctx->mp4_demuxer_ctx->video_len;
 	}
 	video_timestamp = get_timestamp(ctx->mp4_demuxer_ctx, video_type, ctx->cur_v_index);
-	if (ctx->demuxer_a_state != DEMUXER_STOP || ctx->demuxer_a_state != DEMUXER_IDLE) {
+	if (ctx->demuxer_a_state != DEMUXER_STOP && ctx->demuxer_a_state != DEMUXER_IDLE) {
 		//survey the start time index for audio depend on the video
 		ctx->cur_a_index = 0;
 		while (ctx->cur_a_index < ctx->mp4_demuxer_ctx->audio_len) {
@@ -161,6 +164,7 @@ Reaction:
 				goto Reaction;
 			}
 			vTaskDelay(1);
+			break;
 		case DEMUXER_STOP:
 			vTaskDelay(10);
 			break;
@@ -172,7 +176,7 @@ Reaction:
 			if (xTaskGetTickCount() > ctx->real_video_timestamp + (ctx->video_duration / 90)) {
 				//send the same frame
 				if (xQueueReceive(mctx->output_recycle, &output_item, 0x10) == pdTRUE) {
-					output_item->data_addr = memory_alloc(ctx->mem_pool, ctx->mp4_demuxer_ctx->video_max_size);
+					output_item->data_addr = (uint32_t)memory_alloc(ctx->mem_pool, ctx->mp4_demuxer_ctx->video_max_size);
 					if (!output_item->data_addr) {
 						//mm_printf("fail to allocate data drop the frame\r\n");
 						xQueueSend(mctx->output_ready, (void *)&output_item, 0xFFFFFFFF);
@@ -180,8 +184,9 @@ Reaction:
 					}
 
 					xSemaphoreTake(ctx->demuxer_sema, portMAX_DELAY);
-					output_item->size = get_video_frame(ctx->mp4_demuxer_ctx, output_item->data_addr, ctx->cur_v_index, &key_frame, &(ctx->video_duration),
-														&(ctx->video_timestamp));
+					output_item->size = get_video_frame(ctx->mp4_demuxer_ctx, (unsigned char *)output_item->data_addr, ctx->cur_v_index, &key_frame,
+														(unsigned int *) & (ctx->video_duration),
+														(unsigned int *) & (ctx->video_timestamp));
 					xSemaphoreGive(ctx->demuxer_sema);
 
 					output_item->type = AV_CODEC_ID_H264; //may need change
@@ -203,7 +208,7 @@ pause_end:
 			mm_context_t *mctx = (mm_context_t *)ctx->parent;
 			mm_queue_item_t *output_item;
 			if (xQueueReceive(mctx->output_recycle, &output_item, 0x10) == pdTRUE) {
-				output_item->data_addr = memory_alloc(ctx->mem_pool, ctx->mp4_demuxer_ctx->video_max_size);
+				output_item->data_addr = (uint32_t)memory_alloc(ctx->mem_pool, ctx->mp4_demuxer_ctx->video_max_size);
 				if (!output_item->data_addr) {
 					//mm_printf("fail to allocate data drop the frame\r\n");
 					xQueueSend(mctx->output_ready, (void *)&output_item, 0xFFFFFFFF);
@@ -211,14 +216,15 @@ pause_end:
 				}
 
 				xSemaphoreTake(ctx->demuxer_sema, portMAX_DELAY);
-				output_item->size = get_video_frame(ctx->mp4_demuxer_ctx, output_item->data_addr, ctx->cur_v_index, &key_frame, &(ctx->video_duration),
-													&(ctx->video_timestamp));
+				output_item->size = get_video_frame(ctx->mp4_demuxer_ctx, (unsigned char *)output_item->data_addr, ctx->cur_v_index, &key_frame,
+													(unsigned int *) & (ctx->video_duration),
+													(unsigned int *) & (ctx->video_timestamp));
 				xSemaphoreGive(ctx->demuxer_sema);
 
 				output_item->type = AV_CODEC_ID_H264; //may need change
 				while (((ctx->video_timestamp / 90) - ctx->first_timestamp) > (xTaskGetTickCount() - ctx->start_timestamp)) {
 					if (ctx->demuxer_v_state == DEMUXER_PAUSE) {
-						memory_free(ctx->mem_pool, output_item->data_addr);
+						memory_free(ctx->mem_pool, (uint8_t *)output_item->data_addr);
 						goto Reaction;
 					}
 					vTaskDelay(1);
@@ -335,7 +341,7 @@ int demuxer_control(void *p, int cmd, int arg)
 		ctx->params.mem_block_size = arg;
 		break;
 	case CMD_DEMUXER_INIT_MEM_POOL:
-		ctx->mem_pool = memory_init(ctx->params.mem_total_size, ctx->params.mem_block_size);
+		ctx->mem_pool = (void *)memory_init(ctx->params.mem_total_size, ctx->params.mem_block_size);
 		if (ctx->mem_pool == NULL) {
 			mm_printf("Can't allocate DEMUXER buffer\r\n");
 			while (1);
@@ -462,13 +468,13 @@ void *demuxer_create(void *parent)
 
 	ctx->demuxer_sema = xSemaphoreCreateBinary();
 	if (!ctx->demuxer_sema) {
-		return NULL;
+		goto demuxer_create_fail;
 	}
 
 	ctx->mp4_demuxer_ctx = (mp4_demux *)malloc(sizeof(mp4_demux));
 	if (ctx->mp4_demuxer_ctx == NULL) {
 		mm_printf("It can't be allocated the buffer\r\n");
-		return NULL;
+		goto demuxer_create_fail;
 	}
 	memset(ctx->mp4_demuxer_ctx, 0, sizeof(mp4_demux));
 
@@ -477,7 +483,7 @@ void *demuxer_create(void *parent)
 #ifdef FATFS_SD_CARD
 	if (fatfs_sd_init() < 0) {
 		mm_printf("[MODULE DEMUXER]SD INIT FAIL\r\n");
-		return NULL;
+		goto demuxer_create_fail;
 	}
 	fatfs_sd_get_param(&ctx->fatfs_params);
 
@@ -485,7 +491,7 @@ void *demuxer_create(void *parent)
 #else
 	if (fatfs_ram_init() < 0) {
 		mm_printf("[MODULE DEMUXER]RAM INIT FAIL\r\n");
-		return NULL;
+		goto demuxer_create_fail;
 	}
 	fatfs_ram_get_param((fatfs_ram_params_t *)&ctx->fatfs_params);
 	set_mp4_demuxer_fatfs_param(&ctx->mp4_demuxer_ctx, &ctx->fatfs_params);

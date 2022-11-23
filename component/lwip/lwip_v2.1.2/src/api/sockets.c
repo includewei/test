@@ -68,6 +68,14 @@
 #include LWIP_HOOK_FILENAME
 #endif
 
+/* Added by Realtek start */
+#if defined(CONFIG_LWIP_TCP_RESUME) && (CONFIG_LWIP_TCP_RESUME == 1)
+#include <hal_cache.h>
+
+__attribute__((section (".retention.data"))) struct tcp_pcb retention_tcp_pcb;
+#endif
+/* Added by Realtek end */
+
 /* If the netconn API is not required publicly, then we include the necessary
    files here to get the implementation */
 #if !LWIP_NETCONN
@@ -4323,6 +4331,119 @@ int lwip_gettcpstatus(int s, uint32_t *seqno, uint32_t *ackno, uint16_t *wnd)
 
   return 0;
 }
+
+#if defined(CONFIG_LWIP_TCP_RESUME) && (CONFIG_LWIP_TCP_RESUME == 1)
+int lwip_retaintcp(int s)
+{
+  struct lwip_sock *sock;
+  sock = get_socket(s);
+  if (!sock) {
+    printf("\n\r ERROR: get_socket(%d) \n\r", s);
+    return -1;
+  }
+
+  if (NETCONNTYPE_GROUP(netconn_type(sock->conn)) == NETCONN_TCP) {
+    struct tcp_pcb *pcb = sock->conn->pcb.tcp;
+
+    memcpy((uint8_t *) &retention_tcp_pcb, pcb, sizeof(struct tcp_pcb));
+    dcache_clean_invalidate_by_addr((uint32_t *) &retention_tcp_pcb, sizeof(struct tcp_pcb));
+  }
+  else {
+    return -1;
+  }
+
+  return 0;
+}
+
+int lwip_resumetcp(int s, uint32_t seqno, uint32_t ackno)
+{
+  struct lwip_sock *sock;
+  sock = get_socket(s);
+  if (!sock) {
+    printf("\n\r ERROR: get_socket(%d) \n\r", s);
+    return -1;
+  }
+
+  if (NETCONNTYPE_GROUP(netconn_type(sock->conn)) == NETCONN_TCP) {
+    struct tcp_pcb *pcb = sock->conn->pcb.tcp;
+    struct tcp_pcb *pcb_backup = &retention_tcp_pcb;
+
+    pcb->local_ip = pcb_backup->local_ip;
+    pcb->remote_ip = pcb_backup->remote_ip;
+    pcb->netif_idx = pcb_backup->netif_idx;
+    pcb->so_options = pcb_backup->so_options;
+    pcb->tos = pcb_backup->tos;
+    pcb->ttl = pcb_backup->ttl;
+    // *next
+    // *callback_arg
+    pcb->state = pcb_backup->state;
+    pcb->prio = pcb_backup->prio;
+    pcb->local_port = pcb_backup->local_port;
+    pcb->remote_port = pcb_backup->remote_port;
+    pcb->flags = pcb_backup->flags;
+    // polltmr
+    pcb->pollinterval = pcb_backup->pollinterval;
+    // last_timer
+    // tmr
+    pcb->rcv_nxt = ackno;
+    pcb->rcv_wnd = pcb_backup->rcv_wnd;
+    pcb->rcv_ann_wnd = pcb_backup->rcv_ann_wnd;
+    pcb->rcv_ann_right_edge = pcb_backup->rcv_ann_right_edge;
+    // rtime
+    pcb->mss = pcb_backup->mss;
+    // rttest
+    pcb->rtseq = seqno - 1;
+    // sa
+    // sv
+    // rto
+    // nrtx
+    // dupacks
+    pcb->lastack = seqno;
+    pcb->cwnd = pcb_backup->cwnd;
+    // ssthresh
+    // rto_end
+    pcb->snd_nxt = seqno;
+    pcb->snd_wl1 = ackno;
+    pcb->snd_wl2 = seqno;
+    pcb->snd_lbb = seqno;
+    pcb->snd_wnd = pcb_backup->snd_wnd;
+    pcb->snd_wnd_max = pcb_backup->snd_wnd_max;
+    // snd_buf
+    // snd_queuelen
+    // unsent_oversize
+    // bytes_acked
+    // *unsent
+    // *unacked
+    // *ooseq
+    // *refused_data
+    // *listener
+    // sent
+    // recv
+    // connected
+    // poll
+    // errf
+    pcb->keep_idle = pcb_backup->keep_idle;
+    pcb->keep_intvl = pcb_backup->keep_intvl;
+    pcb->keep_cnt = pcb_backup->keep_cnt;
+    // persist_cnt
+    // persist_backoff
+    // persist_probe
+    // keep_cnt_sent
+    pcb->snd_scale = pcb_backup->snd_scale;
+    pcb->rcv_scale = pcb_backup->rcv_scale;
+
+    sock->sendevent = 1;
+
+    extern void tcp_reg_active(struct tcp_pcb *pcb);
+    tcp_reg_active(pcb);
+  }
+  else {
+    return -1;
+  }
+
+  return 0;
+}
+#endif // defined(CONFIG_LWIP_TCP_RESUME) && (CONFIG_LWIP_TCP_RESUME == 1)
 /**************************************************************
 *                           Added  by Realtek        end                    *
 **************************************************************/

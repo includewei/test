@@ -19,16 +19,30 @@ if(NOT BUILD_LIB)
 endif()
 
 
+ADD_LIBRARY (hal_pmc_lib STATIC IMPORTED )
+SET_PROPERTY ( TARGET hal_pmc_lib PROPERTY IMPORTED_LOCATION ${sdk_root}/component/soc/8735b/fwlib/rtl8735b/lib/lib/hal_pmc.a )
+
+
 #VIDEO
 list(
-	APPEND bootloader_sources
+	APPEND fcs_sources
 	${sdk_root}/component/video/driver/RTL8735B/video_user_boot.c
+)
+
+list(
+	APPEND bootloader_sources
+	${sdk_root}/component/video/driver/RTL8735B/video_boot.c
 	${sdk_root}/component/soc/8735b/misc/platform/user_boot.c
 )
+
+add_library(bootfcs ${fcs_sources})
+target_compile_definitions(bootfcs PRIVATE ${boot_flags} )
+target_compile_options(bootfcs PRIVATE ${WARN_ERR_FLAGS})
 
 add_executable(
 	${bootloader}
 	${bootloader_sources}
+	$<TARGET_OBJECTS:bootfcs>
 )
 
 list(
@@ -41,10 +55,21 @@ list(
 )
 
 target_compile_definitions(${bootloader} PRIVATE ${boot_flags} )
+target_compile_options(${bootloader} PRIVATE ${WARN_ERR_FLAGS})
 
 include(../includepath.cmake)
 target_include_directories(
-	${bootloader}
+	bootfcs
+	PUBLIC
+
+	${inc_path}
+	${sdk_root}/component/os/freertos/${freertos}/Source/portable/GCC/ARM_CM33_NTZ/non_secure
+	${sdk_root}/component/soc/8735b/fwlib/rtl8735b/lib/source/ram/video
+	${sdk_root}/component/soc/8735b/fwlib/rtl8735b/lib/source/ram/video/enc/inc
+)
+
+target_include_directories(
+	${bootloader} 
 	PUBLIC
 
 	${inc_path}
@@ -57,6 +82,7 @@ target_link_libraries(
 	${bootloader} 
 	-Wl,--whole-archive
 	boot
+	hal_pmc_lib
 )
 
 if(NOT PICOLIBC)
@@ -74,13 +100,15 @@ endif()
 target_link_options(
 	${bootloader} 
 	PUBLIC
-	"LINKER:SHELL:-L ${CMAKE_CURRENT_SOURCE_DIR}/../ROM/GCC"
+	"LINKER:SHELL:-L ${sdk_root}/component/soc/8735b/cmsis/rtl8735b/source/GCC"
 	"LINKER:SHELL:-T ${ld_script}"
 	"LINKER:SHELL:-Map=${CMAKE_CURRENT_BINARY_DIR}/bootloader.map"
+	"LINKER:-wrap,puts"
 )
 
 set_target_properties(${bootloader} PROPERTIES LINK_DEPENDS ${ld_script})
 set_target_properties(${bootloader} PROPERTIES LINK_DEPENDS ${ELF2BIN})
+set_target_properties(${bootloader} PROPERTIES LINK_DEPENDS ${POSTBUILD_BOOT})
 
 if (MPCHIP)	
 
@@ -88,33 +116,41 @@ add_custom_command(TARGET ${bootloader} POST_BUILD
 
 	COMMAND ${CMAKE_NM} $<TARGET_FILE:${bootloader}> | sort > ${bootloader}.nm.map
 	COMMAND ${CMAKE_OBJEDUMP} -d $<TARGET_FILE:${bootloader}> > ${bootloader}.asm
-	COMMAND cp $<TARGET_FILE:${bootloader}> ${bootloader}.axf
+	COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${bootloader}> ${bootloader}.axf
 
-	COMMAND cp ${POSTBUILD_BOOT} amebapro2_bootloader.json
+	COMMAND ${CMAKE_COMMAND} -E copy ${POSTBUILD_BOOT} amebapro2_bootloader.json
 	COMMAND ${ELF2BIN} convert amebapro2_bootloader.json BOOTLOADER boot.bin
 
-	COMMAND rm -rf output && mkdir output
-	COMMAND cp boot.bin output
-	COMMAND cp ${bootloader}.nm.map output
-	COMMAND cp ${bootloader}.asm output
-	COMMAND cp ${bootloader}.axf output
+	COMMAND echo $<TARGET_OBJECTS:bootfcs>
+	COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_OBJECTS:bootfcs> tmp.o
+	COMMAND ${CMAKE_OBJECOPY} -O binary tmp.o boot_fcs.bin -j .data.video_boot_stream
+	COMMAND ${CHKSUM} -m fcs ./boot_fcs.bin
+	
+	COMMAND ${CMAKE_COMMAND} -E remove_directory output && ${CMAKE_COMMAND} -E make_directory  output
+	COMMAND ${CMAKE_COMMAND} -E copy boot.bin output
+	COMMAND ${CMAKE_COMMAND} -E copy boot_fcs.bin output
+	COMMAND ${CMAKE_COMMAND} -E copy ${bootloader}.nm.map output
+	COMMAND ${CMAKE_COMMAND} -E copy ${bootloader}.asm output
+	COMMAND ${CMAKE_COMMAND} -E copy ${bootloader}.axf output
 )
 else()
 add_custom_command(TARGET ${bootloader} POST_BUILD 
 	COMMAND ${CMAKE_NM} $<TARGET_FILE:${bootloader}> | sort > ${bootloader}.nm.map
 	COMMAND ${CMAKE_OBJEDUMP} -d $<TARGET_FILE:${bootloader}> > ${bootloader}.asm
-	COMMAND cp $<TARGET_FILE:${bootloader}> ${bootloader}.axf
+	COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${bootloader}> ${bootloader}.axf
 
-	COMMAND cp ${prj_root}/GCC-RELEASE/keycfg.json keycfg.json
-	COMMAND cp ${prj_root}/GCC-RELEASE/partition.json partition.json
-	COMMAND cp ${prj_root}/GCC-RELEASE/amebapro2_bootloader.json amebapro2_bootloader.json
+	COMMAND ${CMAKE_COMMAND} -E copy ${prj_root}/GCC-RELEASE/keycfg.json keycfg.json
+	COMMAND ${CMAKE_COMMAND} -E copy ${prj_root}/GCC-RELEASE/partition.json partition.json
+	COMMAND ${CMAKE_COMMAND} -E copy ${prj_root}/GCC-RELEASE/amebapro2_bootloader.json amebapro2_bootloader.json
 	COMMAND ${ELF2BIN} keygen keycfg.json
 	COMMAND ${ELF2BIN} convert amebapro2_bootloader.json BOOTLOADER
 
-	COMMAND rm -rf output && mkdir output
-	COMMAND cp boot.bin output
-	COMMAND cp ${bootloader}.nm.map output
-	COMMAND cp ${bootloader}.asm output
-	COMMAND cp ${bootloader}.axf output
+	COMMAND ${CMAKE_COMMAND} -E remove_directory output && ${CMAKE_COMMAND} -E make_directory  output
+	COMMAND ${CMAKE_COMMAND} -E copy boot.bin output
+	COMMAND ${CMAKE_COMMAND} -E copy ${bootloader}.nm.map output
+	COMMAND ${CMAKE_COMMAND} -E copy ${bootloader}.asm output 
+	COMMAND ${CMAKE_COMMAND} -E copy ${bootloader}.axf output
+	
+	COMMAND ${CMAKE_COMMAND} -E copy -f *.a output
 )
 endif()	

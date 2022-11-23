@@ -2,9 +2,11 @@
 #if ((defined(CONFIG_BT_PERIPHERAL) && CONFIG_BT_PERIPHERAL) || \
 	(defined(CONFIG_BT_MESH_PROVISIONER_MULTIPLE_PROFILE) && CONFIG_BT_MESH_PROVISIONER_MULTIPLE_PROFILE) || \
 	(defined(CONFIG_BT_MESH_DEVICE_MULTIPLE_PROFILE) && CONFIG_BT_MESH_DEVICE_MULTIPLE_PROFILE))
+#include "platform_opts.h"
+#include <platform_stdlib.h>
+#if SUPPORT_LOG_SERVICE
 #include "log_service.h"
 #include "atcmd_bt.h"
-#include <platform_stdlib.h>
 #include "gap.h"
 #include "gap_adv.h"
 #include "gap_bond_le.h"
@@ -374,9 +376,11 @@ int ble_peripheral_change_to_pair_mode(int argc, char **argv)
 	return 0;
 }
 #endif
+#endif
 
 int ble_peripheral_app_handle_at_cmd(uint16_t subtype, void *arg)
 {
+#if SUPPORT_LOG_SERVICE
 	int argc = 0;
 	char *argv[MAX_ARGC] = {0};
 
@@ -410,5 +414,8 @@ int ble_peripheral_app_handle_at_cmd(uint16_t subtype, void *arg)
 	}
 
 	return 0;
+#else
+	return 0;
+#endif
 }
 #endif

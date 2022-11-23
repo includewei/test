@@ -129,7 +129,9 @@
 /*
 //     <o>End Address <0x1F-0xFFFFFFFF>
 */
+//#define SAU_INIT_END2       0x2007FFFF
 #define SAU_INIT_END2       0x20155FFF
+
 
 /*
 //     <o>Region is
@@ -207,11 +209,7 @@
 /*
 //     <o>End Address <0x1F-0xFFFFFFFF>
 */
-/* DDR 64MB */
-#define SAU_INIT_END5       0x73DFFFFF
-
-/* DDR 128MB */
-//#define SAU_INIT_END5       0x77DFFFFF
+#define SAU_INIT_END5 0x77DFFFFF
 
 /*
 //     <o>Region is
@@ -258,19 +256,19 @@
 /*
 //     <o>Start Address <0-0xFFFFFFE0>
 */
-#define SAU_INIT_START7     0x9BF80000
+#define SAU_INIT_START7     0x20090000
 
 /*
 //     <o>End Address <0x1F-0xFFFFFFFF>
 */
-#define SAU_INIT_END7       0x9BFFFFFF
+#define SAU_INIT_END7       0x20155FFF
 
 /*
 //     <o>Region is
 //         <0=>Non-Secure
 //         <1=>Secure, Non-Secure Callable
 */
-#define SAU_INIT_NSC7       1
+#define SAU_INIT_NSC7       0
 /*
 //   </e>
 */

@@ -8,11 +8,6 @@ set(CMAKE_ASM_COMPILER_WORKS 1)
 ###****************NEW*********************#####
 set(PICOLIBC OFF)
 
-if(UNIX AND NOT APPLE)
-    set(LINUX TRUE)
-    message(STATUS "Build LINUX")
-endif()
-
 set(CMAKE_C_COMPILER "arm-none-eabi-gcc" )
 set(CMAKE_CXX_COMPILER "arm-none-eabi-g++" )
 set(CMAKE_ASM_COMPILER "arm-none-eabi-gcc" )
@@ -32,11 +27,40 @@ set(CMAKE_C_FLAGS "-march=armv8-m.main+dsp -mthumb -mcmse -mfpu=fpv5-sp-d16 -mfp
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os -fstack-usage -fdata-sections -ffunction-sections  -fno-optimize-sibling-calls")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -gdwarf-3 -MMD -nostartfiles -nodefaultlibs -nostdlib ")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++11 -Wall -Wpointer-arith -Wundef -Wno-write-strings -Wno-maybe-uninitialized -fdiagnostics-color=always -fno-PIC")#-fPIC -fexceptions
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -Wpointer-arith -Wstrict-prototypes -Wundef -Wno-write-strings -Wno-maybe-uninitialized -fdiagnostics-color=always")
+#set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++11 -Wall -Wpointer-arith -Wundef -Wno-write-strings -Wno-maybe-uninitialized -fdiagnostics-color=always -fno-PIC")#-fPIC -fexceptions
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -Wpointer-arith -Wstrict-prototypes -Wundef -Wno-write-strings -Wno-maybe-uninitialized -fdiagnostics-color=always")
 
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++11 -fdiagnostics-color=always -fno-PIC")#-fPIC -fexceptions
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -fdiagnostics-color=always")
 
 set(CMAKE_ASM_FLAGS "-march=armv8-m.main -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=softfp -x assembler-with-cpp")
+
+set(OUTSRC_WARN_ERR_FLAGS -Wall -Wpointer-arith -Wstrict-prototypes -Wundef -Wno-write-strings -Wno-maybe-uninitialized)
+set(LIBS_WARN_ERR_FLAGS -Wall -Wpointer-arith -Wstrict-prototypes -Wundef -Wno-write-strings -Wno-maybe-uninitialized)
+set(WARN_ERR_FLAGS -Wall -Wpointer-arith -Wstrict-prototypes -Wundef -Wno-write-strings -Wno-maybe-uninitialized)
+
+
+if(NOT CONSOLE STREQUAL "UART")
+list(
+    APPEND _wrapper
+#		"-Wl,-wrap,puts"
+#		"-Wl,-wrap,printf"
+#		"-Wl,-wrap,sprintf"
+#		"-Wl,-wrap,snprintf"
+#		"-Wl,-wrap,vsnprintf"
+#		"-Wl,-wrap,vprintf"	
+)
+else()
+list(
+    APPEND _wrapper
+#		"-Wl,-wrap,puts"
+#		"-Wl,-wrap,printf"
+#		"-Wl,-wrap,sprintf"
+#		"-Wl,-wrap,snprintf"
+#		"-Wl,-wrap,vsnprintf"
+#		"-Wl,-wrap,vprintf"	
+)
+endif()
 
 list(
     APPEND _wrapper
@@ -57,7 +81,7 @@ list(
 		"-Wl,-wrap,strtok"
 		"-Wl,-wrap,strxfrm"
 		"-Wl,-wrap,strsep"
-		"-Wl,-wrap,strdup"
+#		"-Wl,-wrap,strdup"
 		"-Wl,-wrap,strtod"
 		"-Wl,-wrap,strtof"
 		"-Wl,-wrap,strtold"
@@ -74,16 +98,14 @@ list(
 		"-Wl,-wrap,memcpy"
 		"-Wl,-wrap,memmove"
 		"-Wl,-wrap,memset"
-		"-Wl,-wrap,puts"
-		"-Wl,-wrap,printf"
-#		"-Wl,-wrap,sprintf"
-		"-Wl,-wrap,snprintf"
-		"-Wl,-wrap,vsnprintf"
-		"-Wl,-wrap,vprintf"
+		"-Wl,-wrap,_malloc_r"
+		"-Wl,-wrap,_free_r"
+		#"-Wl,-wrap,_realloc_r"
+		"-Wl,-wrap,_calloc_r"
 		"-Wl,-wrap,malloc"
 		"-Wl,-wrap,free"
-		"-Wl,-wrap,realloc"
-		"-Wl,-wrap,calloc" 
+		#"-Wl,-wrap,realloc"
+		"-Wl,-wrap,calloc"	
 		"-Wl,-wrap,abort"
 		"-Wl,-wrap,fopen"
 		"-Wl,-wrap,fclose"

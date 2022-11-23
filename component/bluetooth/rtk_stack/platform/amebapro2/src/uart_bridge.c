@@ -9,16 +9,6 @@
 #include "platform_opts.h"
 #include "hci_uart.h"
 
-//#define CONFIG_HCI_UART_BRIDGE_TO_LOG_UART		1
-
-#ifndef CONFIG_HCI_UART_BRIDGE_TO_LOG_UART
-#if defined(CONFIG_ATCMD_MP) && CONFIG_ATCMD_MP
-#define CONFIG_HCI_UART_BRIDGE_TO_LOG_UART		1		// In AmebaPro2 MP test, use Log Uart as HCI Uart
-#endif
-#endif
-
-#if defined(CONFIG_HCI_UART_BRIDGE_TO_LOG_UART) && CONFIG_HCI_UART_BRIDGE_TO_LOG_UART
-
 #define KEY_ENTER		0xd		//'\r'
 
 extern char log_buf[LOG_SERVICE_BUFLEN];
@@ -256,16 +246,3 @@ void bt_uart_bridge_open(void)
 	hci_uart_bridge_open(true);
 }
 
-#else
-
-void bt_uart_bridge_close(void)
-{
-
-}
-
-void bt_uart_bridge_open(void)
-{
-
-}
-
-#endif

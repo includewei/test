@@ -9,10 +9,10 @@
 #define SCLK_FREQ           1000000
 
 // SPI0 (S0)
-#define SPI0_MOSI  PE_7
-#define SPI0_MISO  PE_6
-#define SPI0_SCLK  PE_5
-#define SPI0_CS    PE_8
+#define SPI0_MOSI  PE_3
+#define SPI0_MISO  PE_2
+#define SPI0_SCLK  PE_1
+#define SPI0_CS    PE_4
 
 extern void hal_ssi_toggle_between_frame(phal_ssi_adaptor_t phal_ssi_adaptor, u8 ctl);
 
@@ -134,7 +134,7 @@ int main(void)
 		i++;
 	}
 	dbg_printf("SPI Master Read Done!! \r\n");
-	dump_data((const u8 *)TestBuf, TEST_BUF_SIZE, "SPI Master Read Data:");
+	dump_data((const u8 *)TestBuf, TEST_BUF_SIZE, (char *)"SPI Master Read Data:");
 
 	spi_free(&spi_master);
 	dbg_printf("SPI Master Test <== \r\n");
@@ -160,7 +160,7 @@ int main(void)
 			break;
 		}
 	}
-	dump_data((const u8 *)TestBuf, TEST_BUF_SIZE, "SPI Slave Read Data:");
+	dump_data((const u8 *)TestBuf, TEST_BUF_SIZE, (char *)"SPI Slave Read Data:");
 
 	// Slave Write Test
 	dbg_printf("SPI Slave Write Test ==> \r\n");

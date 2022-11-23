@@ -5,7 +5,6 @@
 ******************************************************************************/
 #include <stdint.h>
 #include "platform_stdlib.h"
-#include "osdep_service.h"
 #include "mmf2_module.h"
 #include "module_filesaver.h"
 
@@ -17,7 +16,11 @@ int filesaver_handle(void *p, void *input, void *output)
 
 	mm_queue_item_t *input_item = (mm_queue_item_t *)input;
 
-	ctx->type_handler(ctx->output_file_path, input_item->data_addr, input_item->size);
+	if (strlen(ctx->output_file_path) != 0) {
+		ctx->type_handler(ctx->output_file_path, input_item->data_addr, input_item->size);
+	} else {
+		ctx->type_handler(input_item->name, input_item->data_addr, input_item->size);
+	}
 
 	return 0;
 }
@@ -40,7 +43,7 @@ int filesaver_control(void *p, int cmd, int arg)
 		memcpy((char *)ctx->output_file_path, (char *)arg, strlen((char *)arg));
 		break;
 	case CMD_FILESAVER_SET_TYPE_HANDLER:
-		ctx->type_handler = (type_handler_t *)arg;
+		ctx->type_handler = (type_handler_t)arg;
 		break;
 	case CMD_FILESAVER_APPLY:
 		// do nothing
