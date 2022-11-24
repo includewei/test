@@ -391,6 +391,9 @@ int pthread_setschedparam( pthread_t thread,
                            int policy,
                            const struct sched_param * param );
 
+// ESSENTIAL2: prototyping for function existing in FreeRTOS_POSIX_pthread.c
+int pthread_cancel(pthread_t thread);
+
 #ifdef __cplusplus
 }
 #endif
