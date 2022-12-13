@@ -51,7 +51,7 @@ FILE *__wrap_fopen(const char *filename, const char *mode)
 	}
 	memset(finfo, 0x00, sizeof(vfs_file));
 	finfo->vfs_id = vfs_id;
-	if (finfo->vfs_id == VFS_FATFS) {
+	if (vfs.drv[vfs_id]->vfs_type == VFS_FATFS) {
 		drv_id = vfs.drv[vfs_id]->get_interface(vfs.user[user_id].vfs_interface_type);
 		char temp[4] = {0};
 		temp[0] = drv_id + '0';
@@ -153,7 +153,7 @@ int __wrap_remove(const char *filename)
 		printf("It can't find the file system\r\n");
 		return -1;
 	}
-	if (vfs_id == VFS_FATFS) {
+	if (vfs.drv[vfs_id]->vfs_type == VFS_FATFS) {
 		int drv_id = 0;
 		drv_id = vfs.drv[vfs_id]->get_interface(vfs.user[user_id].vfs_interface_type);
 		char temp[4] = {0};
@@ -181,7 +181,7 @@ int __wrap_rename(const char *oldname, const char *newname)
 		printf("It can't find the file system\r\n");
 		return -1;
 	}
-	if (vfs_id == VFS_FATFS) {
+	if (vfs.drv[vfs_id]->vfs_type == VFS_FATFS) {
 		int drv_id = 0;
 		drv_id = vfs.drv[vfs_id]->get_interface(vfs.user[user_id].vfs_interface_type);
 		char temp[4] = {0};
@@ -271,7 +271,7 @@ DIR *__wrap_opendir(const char *name)
 	}
 	memset(finfo, 0x00, sizeof(vfs_file));
 	finfo->vfs_id = vfs_id;
-	if (vfs_id == VFS_FATFS) {
+	if (vfs.drv[vfs_id]->vfs_type == VFS_FATFS) {
 		int drv_id = 0;
 		drv_id = vfs.drv[vfs_id]->get_interface(vfs.user[user_id].vfs_interface_type);
 		char temp[4] = {0};
@@ -316,7 +316,7 @@ int __wrap_scandir(const char *dirp, struct dirent ***namelist,
 		printf("It can't find the file system\r\n");
 		return -1;
 	}
-	if (vfs_id == VFS_FATFS) {
+	if (vfs.drv[vfs_id]->vfs_type == VFS_FATFS) {
 		int drv_id = 0;
 		drv_id = vfs.drv[vfs_id]->get_interface(vfs.user[user_id].vfs_interface_type);
 		char temp[4] = {0};
@@ -344,7 +344,7 @@ int __wrap_rmdir(const char *path)
 		printf("It can't find the file system\r\n");
 		return -1;
 	}
-	if (vfs_id == VFS_FATFS) {
+	if (vfs.drv[vfs_id]->vfs_type == VFS_FATFS) {
 		int drv_id = 0;
 		drv_id = vfs.drv[vfs_id]->get_interface(vfs.user[user_id].vfs_interface_type);
 		char temp[4] = {0};
@@ -371,7 +371,7 @@ int __wrap_mkdir(const char *pathname, mode_t mode)
 		printf("It can't find the file system\r\n");
 		return -1;
 	}
-	if (vfs_id == VFS_FATFS) {
+	if (vfs.drv[vfs_id]->vfs_type == VFS_FATFS) {
 		int drv_id = 0;
 		drv_id = vfs.drv[vfs_id]->get_interface(vfs.user[user_id].vfs_interface_type);
 		char temp[4] = {0};
@@ -382,6 +382,9 @@ int __wrap_mkdir(const char *pathname, mode_t mode)
 	} else {
 		snprintf(name, sizeof(name), "%s", pathname + prefix_len);
 	}
+	int len = strlen(name);
+	if (name[len-1] == '/')		// ESSENTIAL2:mkdir does not like '/' ending.
+		name[len-1] = '\0';
 	//printf("name %s\r\n",name);
 	ret = vfs.drv[vfs_id]->mkdir(name);
 	return ret;
@@ -398,7 +401,7 @@ int __wrap_access(const char *pathname, int mode)
 		printf("It can't find the file system\r\n");
 		return -1;
 	}
-	if (vfs_id == VFS_FATFS) {
+	if (vfs.drv[vfs_id]->vfs_type == VFS_FATFS) {
 		int drv_id = 0;
 		drv_id = vfs.drv[vfs_id]->get_interface(vfs.user[user_id].vfs_interface_type);
 		char temp[4] = {0};
@@ -426,7 +429,7 @@ int __wrap_stat(const char *path, struct stat *buf)
 		printf("It can't find the file system\r\n");
 		return -1;
 	}
-	if (vfs_id == VFS_FATFS) {
+	if (vfs.drv[vfs_id]->vfs_type == VFS_FATFS) {
 		int drv_id = 0;
 		drv_id = vfs.drv[vfs_id]->get_interface(vfs.user[user_id].vfs_interface_type);
 		char temp[4] = {0};
@@ -440,4 +443,10 @@ int __wrap_stat(const char *path, struct stat *buf)
 	//printf("name %s\r\n",name);
 	ret = vfs.drv[vfs_id]->stat(name, buf);
 	return ret;
+}
+
+void __wrap_sync(void)
+{
+	// ESSENTIAL2: I don't think there is anything to do
+	return;
 }
