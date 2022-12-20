@@ -15,6 +15,8 @@
 #include "video_boot.h"
 #include "hal_snand.h"
 #include "diag.h"
+#include "hal_spic.h"
+#include "hal_flash.h"
 //#define USE_2K_SENSOR
 #define CHANGE_PARAMETER
 video_boot_stream_t video_boot_stream = {
@@ -167,6 +169,7 @@ video_boot_stream_t video_boot_stream = {
 };
 //#define FCS_PARTITION //Use the FCS data to change the parameter from bootloader.If mark the marco, it will use the FTL config.
 extern hal_snafc_adaptor_t boot_snafc_adpt;
+extern hal_spic_adaptor_t _hal_spic_adaptor;
 uint8_t snand_data[2112] __attribute__((aligned(32)));
 #define NAND_FLASH_FCS 0x7080000 //900*128*1024 It msut be first page for the block
 #define NAND_PAGE_SIZE 2048
@@ -243,8 +246,8 @@ int boot_read_flash_data(unsigned int address, unsigned char *buf, int length)
 			memcpy(buf, snand_data, length);
 		}
 	} else {
-		dcache_invalidate_by_addr((uint32_t *)NOR_FLASH_BASE + address, 2048);
-		memcpy(buf, (void *)(NOR_FLASH_BASE + address), length);
+		dcache_invalidate_by_addr((uint32_t *)(NOR_FLASH_BASE + address), length);
+		hal_flash_stream_read(&_hal_spic_adaptor, length, address, buf);
 	}
 	return ret;
 }
