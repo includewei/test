@@ -73,7 +73,7 @@ TX_cfg_t tx_asp_params = {
 RX_cfg_t rx_asp_params = {
 	.aec_cfg = {
 		.AEC_EN = 0,
-		.aec_core = WEBRTC_AEC,
+		.aec_core = WEBRTC_AECM,
 		.FilterLength = 30,
 		.CNGEnable = 1,
 		.AECLevel = 3,
@@ -1080,12 +1080,12 @@ void fAUAGC(void *arg)
 					rx_asp_params.agc_cfg.RefThreshold = 6;
 				}
 				rx_asp_params.agc_cfg.AttackTime = atoi(argv[5]);
-				if (rx_asp_params.agc_cfg.AttackTime < 20 || rx_asp_params.agc_cfg.AttackTime > 1000) {
-					rx_asp_params.agc_cfg.AttackTime = 20;
+				if (rx_asp_params.agc_cfg.AttackTime < 0 || rx_asp_params.agc_cfg.AttackTime > 500) {
+					rx_asp_params.agc_cfg.AttackTime = 10;
 				}
 				rx_asp_params.agc_cfg.ReleaseTime = atoi(argv[6]);
-				if (rx_asp_params.agc_cfg.ReleaseTime < 20 || rx_asp_params.agc_cfg.ReleaseTime > 1000) {
-					rx_asp_params.agc_cfg.ReleaseTime = 20;
+				if (rx_asp_params.agc_cfg.ReleaseTime < 0 || rx_asp_params.agc_cfg.ReleaseTime > 500) {
+					rx_asp_params.agc_cfg.ReleaseTime = 10;
 				}
 				rx_asp_params.agc_cfg.Ratio[0] = atoi(argv[7]);
 				if (rx_asp_params.agc_cfg.Ratio[0] < 1 || rx_asp_params.agc_cfg.Ratio[0] > 50) {
@@ -1138,12 +1138,12 @@ void fAUAGC(void *arg)
 					rx_asp_params.agc_cfg.RefThreshold = 6;
 				}
 				rx_asp_params.agc_cfg.AttackTime = atoi(argv[5]);
-				if (rx_asp_params.agc_cfg.AttackTime < 20 || rx_asp_params.agc_cfg.AttackTime > 1000) {
-					rx_asp_params.agc_cfg.AttackTime = 20;
+				if (rx_asp_params.agc_cfg.AttackTime < 0 || rx_asp_params.agc_cfg.AttackTime > 500) {
+					rx_asp_params.agc_cfg.AttackTime = 10;
 				}
 				rx_asp_params.agc_cfg.ReleaseTime = atoi(argv[6]);
-				if (rx_asp_params.agc_cfg.ReleaseTime < 20 || rx_asp_params.agc_cfg.ReleaseTime > 1000) {
-					rx_asp_params.agc_cfg.ReleaseTime = 20;
+				if (rx_asp_params.agc_cfg.ReleaseTime < 0 || rx_asp_params.agc_cfg.ReleaseTime > 500) {
+					rx_asp_params.agc_cfg.ReleaseTime = 10;
 				}
 				rx_asp_params.agc_cfg.Ratio[0] = atoi(argv[7]);
 				if (rx_asp_params.agc_cfg.Ratio[0] < 1 || rx_asp_params.agc_cfg.Ratio[0] > 50) {
@@ -1191,12 +1191,12 @@ void fAUAGC(void *arg)
 					rx_asp_params.agc_cfg.RefThreshold = 6;
 				}
 				rx_asp_params.agc_cfg.AttackTime = atoi(argv[5]);
-				if (rx_asp_params.agc_cfg.AttackTime < 20 || rx_asp_params.agc_cfg.AttackTime > 1000) {
-					rx_asp_params.agc_cfg.AttackTime = 20;
+				if (rx_asp_params.agc_cfg.AttackTime < 0 || rx_asp_params.agc_cfg.AttackTime > 500) {
+					rx_asp_params.agc_cfg.AttackTime = 0;
 				}
 				rx_asp_params.agc_cfg.ReleaseTime = atoi(argv[6]);
-				if (rx_asp_params.agc_cfg.ReleaseTime < 20 || rx_asp_params.agc_cfg.ReleaseTime > 1000) {
-					rx_asp_params.agc_cfg.ReleaseTime = 20;
+				if (rx_asp_params.agc_cfg.ReleaseTime < 0 || rx_asp_params.agc_cfg.ReleaseTime > 500) {
+					rx_asp_params.agc_cfg.ReleaseTime = 0;
 				}
 				rx_asp_params.agc_cfg.Ratio[0] = atoi(argv[7]);
 				if (rx_asp_params.agc_cfg.Ratio[0] < 1 || rx_asp_params.agc_cfg.Ratio[0] > 50) {
@@ -1225,12 +1225,12 @@ void fAUAGC(void *arg)
 					rx_asp_params.agc_cfg.RefThreshold = 6;
 				}
 				rx_asp_params.agc_cfg.AttackTime = atoi(argv[5]);
-				if (rx_asp_params.agc_cfg.AttackTime < 20 || rx_asp_params.agc_cfg.AttackTime > 1000) {
-					rx_asp_params.agc_cfg.AttackTime = 20;
+				if (rx_asp_params.agc_cfg.AttackTime < 0 || rx_asp_params.agc_cfg.AttackTime > 500) {
+					rx_asp_params.agc_cfg.AttackTime = 0;
 				}
 				rx_asp_params.agc_cfg.ReleaseTime = atoi(argv[6]);
-				if (rx_asp_params.agc_cfg.ReleaseTime < 20 || rx_asp_params.agc_cfg.ReleaseTime > 1000) {
-					rx_asp_params.agc_cfg.ReleaseTime = 20;
+				if (rx_asp_params.agc_cfg.ReleaseTime < 0 || rx_asp_params.agc_cfg.ReleaseTime > 500) {
+					rx_asp_params.agc_cfg.ReleaseTime = 0;
 				}
 				rx_asp_params.agc_cfg.AGC_EN = 1;
 				mm_module_ctrl(audio_save_ctx, CMD_AUDIO_SET_RXASP_PARAM, (int)&rx_asp_params);
@@ -1551,12 +1551,12 @@ void fAUSPAGC(void *arg)
 					tx_asp_params.agc_cfg.RefThreshold = 6;
 				}
 				tx_asp_params.agc_cfg.AttackTime = atoi(argv[5]);
-				if (tx_asp_params.agc_cfg.AttackTime < 20 || tx_asp_params.agc_cfg.AttackTime > 1000) {
-					tx_asp_params.agc_cfg.AttackTime = 20;
+				if (tx_asp_params.agc_cfg.AttackTime < 0 || tx_asp_params.agc_cfg.AttackTime > 500) {
+					tx_asp_params.agc_cfg.AttackTime = 10;
 				}
 				tx_asp_params.agc_cfg.ReleaseTime = atoi(argv[6]);
-				if (tx_asp_params.agc_cfg.ReleaseTime < 20 || tx_asp_params.agc_cfg.ReleaseTime > 1000) {
-					tx_asp_params.agc_cfg.ReleaseTime = 20;
+				if (tx_asp_params.agc_cfg.ReleaseTime < 0 || tx_asp_params.agc_cfg.ReleaseTime > 500) {
+					tx_asp_params.agc_cfg.ReleaseTime = 10;
 				}
 				tx_asp_params.agc_cfg.Ratio[0] = atoi(argv[7]);
 				if (tx_asp_params.agc_cfg.Ratio[0] < 1 || tx_asp_params.agc_cfg.Ratio[0] > 50) {
@@ -1608,12 +1608,12 @@ void fAUSPAGC(void *arg)
 					tx_asp_params.agc_cfg.RefThreshold = 6;
 				}
 				tx_asp_params.agc_cfg.AttackTime = atoi(argv[5]);
-				if (tx_asp_params.agc_cfg.AttackTime < 20 || tx_asp_params.agc_cfg.AttackTime > 1000) {
-					tx_asp_params.agc_cfg.AttackTime = 20;
+				if (tx_asp_params.agc_cfg.AttackTime < 0 || tx_asp_params.agc_cfg.AttackTime > 500) {
+					tx_asp_params.agc_cfg.AttackTime = 10;
 				}
 				tx_asp_params.agc_cfg.ReleaseTime = atoi(argv[6]);
-				if (tx_asp_params.agc_cfg.ReleaseTime < 20 || tx_asp_params.agc_cfg.ReleaseTime > 1000) {
-					tx_asp_params.agc_cfg.ReleaseTime = 20;
+				if (tx_asp_params.agc_cfg.ReleaseTime < 0 || tx_asp_params.agc_cfg.ReleaseTime > 500) {
+					tx_asp_params.agc_cfg.ReleaseTime = 10;
 				}
 				tx_asp_params.agc_cfg.Ratio[0] = atoi(argv[7]);
 				if (tx_asp_params.agc_cfg.Ratio[0] < 1 || tx_asp_params.agc_cfg.Ratio[0] > 50) {
@@ -1661,12 +1661,12 @@ void fAUSPAGC(void *arg)
 					tx_asp_params.agc_cfg.RefThreshold = 6;
 				}
 				tx_asp_params.agc_cfg.AttackTime = atoi(argv[5]);
-				if (tx_asp_params.agc_cfg.AttackTime < 20 || tx_asp_params.agc_cfg.AttackTime > 1000) {
-					tx_asp_params.agc_cfg.AttackTime = 20;
+				if (tx_asp_params.agc_cfg.AttackTime < 0 || tx_asp_params.agc_cfg.AttackTime > 500) {
+					tx_asp_params.agc_cfg.AttackTime = 10;
 				}
 				tx_asp_params.agc_cfg.ReleaseTime = atoi(argv[6]);
-				if (tx_asp_params.agc_cfg.ReleaseTime < 20 || tx_asp_params.agc_cfg.ReleaseTime > 1000) {
-					tx_asp_params.agc_cfg.ReleaseTime = 20;
+				if (tx_asp_params.agc_cfg.ReleaseTime < 0 || tx_asp_params.agc_cfg.ReleaseTime > 500) {
+					tx_asp_params.agc_cfg.ReleaseTime = 10;
 				}
 				tx_asp_params.agc_cfg.Ratio[0] = atoi(argv[7]);
 				if (tx_asp_params.agc_cfg.Ratio[0] < 1 || tx_asp_params.agc_cfg.Ratio[0] > 50) {
@@ -1695,12 +1695,12 @@ void fAUSPAGC(void *arg)
 					tx_asp_params.agc_cfg.RefThreshold = 6;
 				}
 				tx_asp_params.agc_cfg.AttackTime = atoi(argv[5]);
-				if (tx_asp_params.agc_cfg.AttackTime < 20 || tx_asp_params.agc_cfg.AttackTime > 1000) {
-					tx_asp_params.agc_cfg.AttackTime = 20;
+				if (tx_asp_params.agc_cfg.AttackTime < 0 || tx_asp_params.agc_cfg.AttackTime > 500) {
+					tx_asp_params.agc_cfg.AttackTime = 10;
 				}
 				tx_asp_params.agc_cfg.ReleaseTime = atoi(argv[6]);
-				if (tx_asp_params.agc_cfg.ReleaseTime < 20 || tx_asp_params.agc_cfg.ReleaseTime > 1000) {
-					tx_asp_params.agc_cfg.ReleaseTime = 20;
+				if (tx_asp_params.agc_cfg.ReleaseTime < 0 || tx_asp_params.agc_cfg.ReleaseTime > 500) {
+					tx_asp_params.agc_cfg.ReleaseTime = 10;
 				}
 				tx_asp_params.agc_cfg.AGC_EN = 1;
 				mm_module_ctrl(audio_save_ctx, CMD_AUDIO_SET_TXASP_PARAM, (int)&tx_asp_params);
