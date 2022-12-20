@@ -44,8 +44,11 @@ extern void inic_ipc_mp_command(char *token, unsigned int cmd_len, int show_msg)
 extern int wext_private_command(const char *ifname, char *cmd, int show_msg);
 #endif
 #endif
+extern void at_ftl_init(void);
 
 void at_log_init(void);
+extern void at_kv_init(void);
+extern void at_myfs_init(void);
 
 char log_buf[LOG_SERVICE_BUFLEN];
 xSemaphoreHandle log_rx_interrupt_sema = NULL;
@@ -107,6 +110,9 @@ log_init_t log_init_table[] = {
 	at_isp_init,
 #endif
 
+// ESSENTIAL2
+	at_kv_init,
+	at_myfs_init,
 #endif
 };
 #else
@@ -233,7 +239,11 @@ void *log_handler(char *cmd)
 	token = _strsep(&copy, "=");
 	param = copy;
 #else
-	token = strtok(copy, "=");
+	if (strchr(copy, '='))
+		token = strtok(copy, "=");  // ATCMD type
+	else
+		token = strtok(copy, " ");  // ESSENTIAL2: allow for command line type
+
 	param = strtok(NULL, "\0");
 #endif
 	//if (token && (strlen(token) <= 4)) {

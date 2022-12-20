@@ -208,7 +208,8 @@ int littlefs_open(const char *filename, const char *mode, vfs_file *finfo)
 		free(file);
 		return ret;
 	}
-	printf("Open file mode 0x%x\n\r", mode_flag);
+	// ESSENTIAL2; don't print
+	//printf("Open file mode 0x%x\n\r", mode_flag);
 	finfo->file = (void *)file;
 	return ret;
 }
@@ -439,9 +440,10 @@ int littlefs_mkdir(const char *pathname)
 {
 	int ret = 0;
 	ret = lfs_mkdir(&lfs, pathname);
-	if (ret < 0) {
-		printf("lfs_mkdir fail %d\r\n", ret);
-	}
+	// ESSENTIAL2: don't print error
+	//if (ret < 0) {
+	//	printf("lfs_mkdir fail %d\r\n", ret);
+	//}
 	return ret;
 }
 
