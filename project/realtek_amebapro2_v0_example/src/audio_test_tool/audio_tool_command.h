@@ -112,7 +112,7 @@ void audio_fatfs_drv_close(void);
 void audio_open_record_file(void);
 void audio_close_record_file(void);
 void audio_record_write_file(int16_t *record);
-void audio_mic_record(int16_t *speaker_data_TXASP, int16_t *speaker_data_TX, int16_t *mic_data_RX, int16_t *mic_data_ASP);
+void audio_mic_record(int16_t *speaker_data_TX, int16_t *speaker_data_TXASP, int16_t *mic_data_RX, int16_t *mic_data_ASP);
 extern void audio_save_log_init(void);
 extern RX_cfg_t rx_asp_params;
 extern TX_cfg_t tx_asp_params;

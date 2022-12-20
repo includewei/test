@@ -589,6 +589,8 @@ static void audio_rx_handle_thread(void *param)
 		if (ctx->rxcfg.aec_cfg.AEC_EN || ctx->rxcfg.agc_cfg.AGC_EN || ctx->rxcfg.ns_cfg.NS_EN) {
 			AEC_init(FRAMESIZE, sampleRate, &(ctx->rxcfg.aec_cfg), &(ctx->rxcfg.agc_cfg), &(ctx->rxcfg.ns_cfg), 1.0f);
 			AUDIO_DBG_INFO("set AEC level = %d, sdelay = %d\r\n", ctx->rxcfg.aec_cfg.PPLevel, ctx->rxcfg.aec_cfg.EchoTailLen);
+			ctx->inited_aec = 1;
+			ctx->run_aec = 1;
 		}
 #else
 		if (ctx->rxcfg.aec_cfg.AEC_EN) {
@@ -1473,31 +1475,31 @@ int audio_control(void *p, int cmd, int arg)
 		if (ctx->params.sample_rate == ASR_8KHZ || ctx->params.sample_rate == ASR_16KHZ) {
 			sample_rate = audio_get_samplerate(ctx->params.sample_rate);
 #if defined(CONFIG_PLATFORM_8735B) && (defined(CONFIG_NEWAEC) && CONFIG_NEWAEC)
-			if (ctx->rxcfg.ns_cfg.NS_EN) {
-				NS_init(sample_rate, &(ctx->rxcfg.ns_cfg));
-				AUDIO_DBG_INFO("Set Speaker NS level %d\r\n", ctx->rxcfg.ns_cfg.NSLevel);
+			if (ctx->txcfg.ns_cfg.NS_EN) {
+				NS_init(sample_rate, &(ctx->txcfg.ns_cfg));
+				AUDIO_DBG_INFO("Set Speaker NS level %d\r\n", ctx->txcfg.ns_cfg.NSLevel);
 				ctx->inited_ns |= 0x1;
 				ctx->run_ns |= 0x1;
 			}
-			if (ctx->rxcfg.agc_cfg.AGC_EN) {
-				AGC_init(sample_rate, &(ctx->rxcfg.agc_cfg));
-				AUDIO_DBG_INFO("speaker AGC %d,%d,%d,%d\r\n", ctx->rxcfg.agc_cfg.ReferenceLvl, ctx->rxcfg.agc_cfg.RefThreshold, ctx->rxcfg.agc_cfg.AttackTime,
-							   ctx->rxcfg.agc_cfg.ReleaseTime);
+			if (ctx->txcfg.agc_cfg.AGC_EN) {
+				AGC_init(sample_rate, &(ctx->txcfg.agc_cfg));
+				AUDIO_DBG_INFO("speaker AGC %d,%d,%d,%d\r\n", ctx->txcfg.agc_cfg.ReferenceLvl, ctx->txcfg.agc_cfg.RefThreshold, ctx->txcfg.agc_cfg.AttackTime,
+							   ctx->txcfg.agc_cfg.ReleaseTime);
 
 				ctx->inited_agc |= 0x1;
 				ctx->run_agc |= 0x1;
 			}
 #else
-			if (ctx->rxcfg.ns_cfg.NS_EN) {
-				NS_init(sample_rate, &(ctx->rxcfg.ns_cfg));
-				AUDIO_DBG_INFO("Set Speaker NS level %d\r\n", ctx->rxcfg.ns_cfg.NSLevel);
+			if (ctx->txcfg.ns_cfg.NS_EN) {
+				NS_init(sample_rate, &(ctx->txcfg.ns_cfg));
+				AUDIO_DBG_INFO("Set Speaker NS level %d\r\n", ctx->txcfg.ns_cfg.NSLevel);
 				ctx->inited_ns |= 0x1;
 				ctx->run_ns |= 0x1;
 			}
-			if (ctx->rxcfg.agc_cfg.AGC_EN) {
-				AGC_init(sample_rate, &(ctx->rxcfg.agc_cfg));
-				AUDIO_DBG_INFO("speaker AGC %d,%d,%d,%d\r\n", ctx->rxcfg.agc_cfg.AGCMode, ctx->rxcfg.agc_cfg.TargetLevelDbfs, ctx->rxcfg.agc_cfg.CompressionGaindB,
-							   ctx->rxcfg.agc_cfg.LimiterEnable);
+			if (ctx->txcfg.agc_cfg.AGC_EN) {
+				AGC_init(sample_rate, &(ctx->txcfg.agc_cfg));
+				AUDIO_DBG_INFO("speaker AGC %d,%d,%d,%d\r\n", ctx->txcfg.agc_cfg.AGCMode, ctx->txcfg.agc_cfg.TargetLevelDbfs, ctx->txcfg.agc_cfg.CompressionGaindB,
+							   ctx->txcfg.agc_cfg.LimiterEnable);
 				ctx->inited_agc |= 0x1;
 				ctx->run_agc |= 0x1;
 			}
@@ -1687,6 +1689,7 @@ void *audio_create(void *parent)
 		goto audio_create_fail;
 	}
 	memset(ctx->audio, 0, sizeof(audio_t));
+	mm_module_ctrl(ctx->parent, CMD_AUDIO_SET_MESSAGE_LEVEL, AUDIO_LOG_LEVEL);
 #if defined(CONFIG_PLATFORM_8735B) //only test on 8735
 	//audio default setting
 	memcpy((void *)&ctx->params, (void *)&default_audio_params, sizeof(audio_params_t));

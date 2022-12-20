@@ -154,8 +154,8 @@ void audio_ram_sd_thread(void *param)
 	FILE  *m_sd_file;
 	char ram_path[64];
 	char sd_path[64];
-	char ram_r_file[32];
-	char sd_r_file[32];
+	char ram_r_file[64];
+	char sd_r_file[64];
 	int br, bw;
 	int16_t ramBufferr[RECORD_WORDS];
 	int record_flag = 0;
@@ -363,7 +363,7 @@ open_file_fail:
 
 FILE  *tftp_ram_file;
 char tftp_ram_path[64];
-char tftp_ram_r_file[32];
+char tftp_ram_r_file[64];
 void tftp_audio_send_handler(unsigned char *buffer, int *len, unsigned int index)
 {
 	int br;

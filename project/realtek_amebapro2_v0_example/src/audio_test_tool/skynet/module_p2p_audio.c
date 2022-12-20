@@ -39,7 +39,7 @@ int p2p_audio_handle(void *p, void *input, void *output)
 	unsigned long nCurTick = myGetTickCount();
 	int UserCount = 0, nRet = 0;
 
-	if (ctx->params.enable_stream) {
+	if (ctx && ctx->params.enable_stream) {
 		drop = 1;
 		for (i = 0 ; i < MAX_CLIENT_NUMBER; i++) {
 			if (gClientInfo[i].SID >= 0 && gClientInfo[i].bEnableAudio == 1) {
@@ -75,7 +75,7 @@ int p2p_audio_handle(void *p, void *input, void *output)
 						} else if (ctx->params.sample_rate == 16000) {
 							pstFrameHead->flag = (ASAMPLE_RATE_16K << 2) | (ADATABITS_16 << 1) | (ACHANNEL_MONO);
 						} else {
-							printf("Unsupport sample rate for %d\r\n", ctx->params.sample_rate);
+							printf("Unsupport sample rate for %u\r\n", ctx->params.sample_rate);
 							goto p2p_audio_fail;
 						}
 
