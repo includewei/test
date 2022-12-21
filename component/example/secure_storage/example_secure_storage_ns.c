@@ -51,7 +51,7 @@ static int ns_flash_read(uint32_t address, uint32_t len, uint8_t *data)
 	ret = flash_stream_read(&flash, address, len, data);
 	device_mutex_unlock(RT_DEV_LOCK_FLASH);
 #elif defined(CONFIG_PLATFORM_8735B)
-	ftl_common_read(address, data, len);
+	ret = ftl_common_read(address, data, len);
 #endif
 
 	return ret;
@@ -67,7 +67,7 @@ static int ns_flash_write(uint32_t address, uint32_t len, uint8_t *data)
 	ret = flash_stream_write(&flash, address, len, data);
 	device_mutex_unlock(RT_DEV_LOCK_FLASH);
 #elif defined(CONFIG_PLATFORM_8735B)
-	ftl_common_write(address, data, len);
+	ret = ftl_common_write(address, data, len);
 #endif
 
 	return ret;
@@ -106,15 +106,15 @@ static void example_secure_storage_thread(void *param)
 
 		if (user_data) {
 			memset(user_data, 0, sizeof(user_data_t));
-			char *client_key = \
-							   "-----BEGIN EC PARAMETERS-----\r\n" \
-							   "BggqhkjOPQMBBw==\r\n" \
-							   "-----END EC PARAMETERS-----\r\n" \
-							   "-----BEGIN EC PRIVATE KEY-----\r\n" \
-							   "MHcCAQEEIAQxciQmaeuPLUa8VueFj9fTEdqbqLY8jW84NuKtxf+ToAoGCCqGSM49\r\n" \
-							   "AwEHoUQDQgAEtxzt0vQIGEeVZMklv+ZJnkjpSj9IlhZhRyfY4rFyieaD3wo3cnw0\r\n" \
-							   "LJTKAEZCGC7y+4qzkzFY/FVUG+zxwkWVsw==\r\n" \
-							   "-----END EC PRIVATE KEY-----\r\n";
+			const char *client_key = \
+									 "-----BEGIN EC PARAMETERS-----\r\n" \
+									 "BggqhkjOPQMBBw==\r\n" \
+									 "-----END EC PARAMETERS-----\r\n" \
+									 "-----BEGIN EC PRIVATE KEY-----\r\n" \
+									 "MHcCAQEEIAQxciQmaeuPLUa8VueFj9fTEdqbqLY8jW84NuKtxf+ToAoGCCqGSM49\r\n" \
+									 "AwEHoUQDQgAEtxzt0vQIGEeVZMklv+ZJnkjpSj9IlhZhRyfY4rFyieaD3wo3cnw0\r\n" \
+									 "LJTKAEZCGC7y+4qzkzFY/FVUG+zxwkWVsw==\r\n" \
+									 "-----END EC PRIVATE KEY-----\r\n";
 			strcpy(user_data->client_key, client_key);
 			secure_storage_setup_user_data(user_data);
 			free(user_data);

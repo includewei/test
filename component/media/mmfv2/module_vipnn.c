@@ -689,10 +689,10 @@ void vipnn_hardware_init(void)
 	hal_sys_set_clk(NN_SYS, NN_500M);
 	//hal_sys_set_clk(NN_SYS, NN_250M);
 	dprintf(LOG_INF, "hal_rtl_sys_get_clk %x \n", hal_sys_get_clk(NN_SYS));
-	nn_hw_version();
+	//nn_hw_version();
 
-	nn_set_mode();
-	nn_clkcontrol(0);  //PPU & core_clock
+	//nn_set_mode();
+	//nn_clkcontrol(0);  //PPU & core_clock
 }
 
 void *vipnn_create(void *parent)

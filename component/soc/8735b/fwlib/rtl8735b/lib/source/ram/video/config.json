@@ -62,6 +62,7 @@
 	"-cp -f voe_bin/fcs_data_dummy.bin $(OBJCOPYDIR)/../output",
 	"-cp -f voe_bin/sensor.bin $(OBJCOPYDIR)/../output",
 	"-cp -f voe_bin/iq.bin $(OBJCOPYDIR)/../output",
+	"-cp -f voe_bin/iq_linear.bin $(OBJCOPYDIR)/../output",	
 	"-cp -f voe_bin/fcs_data_gc4653.bin $(OBJCOPYDIR)/../output",
 	"-cp -f voe_bin/fcs_data_gc2053.bin $(OBJCOPYDIR)/../output",	
 	"-cp -f voe_bin/sensor_gc4653.bin $(OBJCOPYDIR)/../output",

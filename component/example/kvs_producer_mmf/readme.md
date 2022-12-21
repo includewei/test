@@ -13,7 +13,7 @@
 
 ## Set mbedtls version
 - In KVS producer project, we use some function in mbedtls-2.16.6, same as KVS webrtc  
-- Set mbedtls version to 2.16.6 in `project/realtek_amebapro2_v0_example/GCC-RELEASE/application/CMakeLists.txt`
+- Set mbedtls version to 2.16.6 in `project/realtek_amebapro2_v0_example/GCC-RELEASE/config.cmake`
     ```
     set(mbedtls "mbedtls-2.16.6")
     ```

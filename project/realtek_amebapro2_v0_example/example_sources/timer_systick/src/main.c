@@ -1,4 +1,5 @@
 #include "FreeRTOS.h"
+#include "osdep_service.h"
 #include "task.h"
 #include "diag.h"
 #include "gpio_api.h"   // mbed

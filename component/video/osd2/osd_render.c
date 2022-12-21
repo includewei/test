@@ -287,6 +287,7 @@ void osd_render_task_start(int *ch_visible, int *ch_width, int *ch_height)
 		for (int j = 0; j < OSD_OBJ_MAX_NUM; j++) {
 			int pic_idx = i * OSD_OBJ_MAX_NUM + j;
 			osd_pict_st *osd2_pic = &osd_render_info.render_obj[pic_idx].osd2_pic;
+			memset(osd2_pic, 0, sizeof(osd_pict_st));
 			osd_render_info.render_obj[pic_idx].buff_bmp[0] = NULL;
 			osd_render_info.render_obj[pic_idx].buff_bmp[1] = NULL;
 			osd2_pic->chn_id = i;

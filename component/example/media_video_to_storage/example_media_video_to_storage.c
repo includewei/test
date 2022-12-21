@@ -271,10 +271,10 @@ static void example_media_video_to_storage_thread(void *param)
 		goto EXIT;
 	}
 	//////////////////////////////////VIDEO INIT//////////////////////////////////////////
-	int voe_heap_size = video_buf_calc(1, V1_WIDTH, V1_HEIGHT, V1_BPS, 0,
-									   0, 0, 0, 0, 0,
-									   0, 0, 0, 0, 0,
-									   0, 0, 0);
+	int voe_heap_size = video_voe_presetting(1, V1_WIDTH, V1_HEIGHT, V1_BPS, 0,
+						0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0,
+						0, 0, 0);
 
 	voe_get_sensor_info(USE_SENSOR, &iq_addr, &sensor_addr);
 

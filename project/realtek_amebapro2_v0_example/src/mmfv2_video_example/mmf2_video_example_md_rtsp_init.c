@@ -80,7 +80,8 @@ static rtsp2_params_t rtsp2_v1_params = {
 #define MD_FPS 10
 #define MD_GOP 10
 #define MD_BPS 1024*1024
-#define MD_EXCUTE_FPS 5
+#define MD_COL 16
+#define MD_ROW 16
 
 #define MD_TYPE VIDEO_RGB
 
@@ -95,6 +96,9 @@ static rtsp2_params_t rtsp2_v1_params = {
 #if USE_SENSOR == SENSOR_GC4653
 #define SENSOR_MAX_WIDTH 2560
 #define SENSOR_MAX_HEIGHT 1440
+#elif USE_SENSOR == SENSOR_SC301
+#define SENSOR_MAX_WIDTH 2048
+#define SENSOR_MAX_HEIGHT 1536
 #elif USE_SENSOR == SENSOR_JXF51
 #define SENSOR_MAX_WIDTH 1536
 #define SENSOR_MAX_HEIGHT 1536
@@ -124,8 +128,10 @@ static video_params_t video_v4_params = {
 };
 
 static md_param_t md_param = {
-	.width = MD_WIDTH,
-	.height = MD_HEIGHT
+	.image_width = MD_WIDTH,
+	.image_height = MD_HEIGHT,
+	.md_row = MD_ROW,
+	.md_col = MD_COL
 };
 
 static void atcmd_userctrl_init(void);
@@ -152,12 +158,12 @@ static void md_process(void *md_result)
 	char *md_res = (char *) md_result;
 	//draw md rect
 	int motion = 0, j, k;
-	int jmin = md_row - 1, jmax = 0;
-	int kmin = md_col - 1, kmax = 0;
-	for (j = 0; j < md_row; j++) {
-		for (k = 0; k < md_col; k++) {
-			printf("%d ", md_res[j * md_col + k]);
-			if (md_res[j * md_col + k]) {
+	int jmin = MD_ROW - 1, jmax = 0;
+	int kmin = MD_COL - 1, kmax = 0;
+	for (j = 0; j < MD_ROW; j++) {
+		for (k = 0; k < MD_COL; k++) {
+			printf("%d ", md_res[j * MD_COL + k]);
+			if (md_res[j * MD_COL + k]) {
 				motion = 1;
 				if (j < jmin) {
 					jmin = j;
@@ -180,10 +186,10 @@ static void md_process(void *md_result)
 	//draw md region
 	canvas_clean_all(RTSP_CHANNEL, 0);
 	if (motion) {
-		int xmin = (int)(kmin * RTSP_WIDTH / md_col) + 1;
-		int ymin = (int)(jmin * RTSP_HEIGHT / md_row) + 1;
-		int xmax = (int)((kmax + 1) * RTSP_WIDTH / md_col) - 1;
-		int ymax = (int)((jmax + 1) * RTSP_HEIGHT / md_row) - 1;
+		int xmin = (int)(kmin * RTSP_WIDTH / MD_COL) + 1;
+		int ymin = (int)(jmin * RTSP_HEIGHT / MD_ROW) + 1;
+		int xmax = (int)((kmax + 1) * RTSP_WIDTH / MD_COL) - 1;
+		int ymax = (int)((jmax + 1) * RTSP_HEIGHT / MD_ROW) - 1;
 		canvas_set_rect(RTSP_CHANNEL, 0, xmin, ymin, xmax, ymax, 3, COLOR_GREEN);
 	}
 	canvas_update(RTSP_CHANNEL, 0);
@@ -237,8 +243,8 @@ void mmf2_video_example_md_rtsp_init(void)
 		.Tbase = 2,
 		.Tlum = 3
 	};
-	char md_mask [md_col * md_row] = {0};
-	for (int i = 0; i < md_col * md_row; i++) {
+	char md_mask [MD_COL * MD_ROW] = {0};
+	for (int i = 0; i < MD_COL * MD_ROW; i++) {
 		md_mask[i] = 1;
 	}
 
@@ -248,7 +254,6 @@ void mmf2_video_example_md_rtsp_init(void)
 		mm_module_ctrl(md_ctx, CMD_MD_SET_MD_THRESHOLD, (int)&md_thr);
 		mm_module_ctrl(md_ctx, CMD_MD_SET_MD_MASK, (int)&md_mask);
 		mm_module_ctrl(md_ctx, CMD_MD_SET_DISPPOST, (int)md_process);
-		mm_module_ctrl(md_ctx, CMD_MD_SET_TRIG_BLK, 3); //md triggered when at least 3 motion block triggered
 		//mm_module_ctrl(md_ctx, CMD_MD_GET_MD_RESULT, (int)&md_mask);
 	} else {
 		printf("md_ctx open fail\n\r");

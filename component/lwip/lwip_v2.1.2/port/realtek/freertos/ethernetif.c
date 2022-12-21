@@ -235,6 +235,9 @@ void ethernetif_recv(struct netif *netif, int total_len)
 #if CONFIG_WLAN
     if(!rltk_wlan_running(netif_get_idx(netif)))
         return;
+	
+	if (!(netif->flags & NETIF_FLAG_LINK_UP))
+		return;
 #endif
 #if CONFIG_BRIDGE
     if (get_bridge_portnum() != (NET_IF_NUM - 1)) {

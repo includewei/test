@@ -40,7 +40,7 @@
  *                              Macros
  *============================================================================*/
 #define BLE_SCATTERNET_APP_TASK_PRIORITY             1         //!< Task priorities
-#define BLE_SCATTERNET_APP_TASK_STACK_SIZE           256 * 6   //!<  Task stack size
+#define BLE_SCATTERNET_APP_TASK_STACK_SIZE           256 * 8   //!<  Task stack size
 #define BLE_SCATTERNET_MAX_NUMBER_OF_GAP_MESSAGE     0x20      //!<  GAP message queue size
 #define BLE_SCATTERNET_MAX_NUMBER_OF_IO_MESSAGE      0x20      //!<  IO message queue size
 #define BLE_SCATTERNET_MAX_NUMBER_OF_EVENT_MESSAGE   (BLE_SCATTERNET_MAX_NUMBER_OF_GAP_MESSAGE + BLE_SCATTERNET_MAX_NUMBER_OF_IO_MESSAGE)    //!< Event message queue size

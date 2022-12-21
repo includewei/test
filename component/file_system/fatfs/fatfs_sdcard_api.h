@@ -1,7 +1,6 @@
 #ifndef _FATFS_SDCARD_API_H
 #define _FATFS_SDCARD_API_H
 #include "ff.h"
-#include <stdint.h>
 
 typedef struct fatfs_sd_param_s {
 	int drv_num;
@@ -25,6 +24,7 @@ long long int fatfs_get_free_space_byte(void);
 void fatfs_list_files(void);
 void sd_reset_procedure(int reason);
 void sd_gpio_init(void);
+void sd_gpio_deinit(void);
 void sd_gpio_power_reset(void);
 void sd_gpio_power_off(void);
 void sd_gpio_power_on(void);

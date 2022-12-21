@@ -10,7 +10,6 @@
 #include "hal_video.h"
 #include "osd/osd_custom.h"
 #include "osd/osd_api.h"
-#include "md/md2_api.h"
 #include "video_api.h"
 
 #if CONFIG_TUNING
@@ -518,7 +517,7 @@ void fATII(void *arg)
 				if (iq_tmp) {
 					memset(iq_tmp, 0, CMD_DATA_SIZE);
 					printf("[ATII] erase 64K.\r\n");
-					ftl_common_write(TUNING_IQ_FW, (u8*)iq_tmp, CMD_DATA_SIZE);
+					ftl_common_write(TUNING_IQ_FW, (u8 *)iq_tmp, CMD_DATA_SIZE);
 					free(iq_tmp);
 				}
 			}
@@ -578,39 +577,6 @@ void fATIO(void *arg)
 #endif
 }
 
-extern void md_output_cb(void *param1, void  *param2, uint32_t arg);
-
-void fATID(void *arg)
-{
-	int argc = 0;
-	char *argv[MAX_ARGC] = {0};
-	argc = parse_param(arg, argv);
-
-	if (strcmp(argv[1], "start") == 0) {
-		if (hal_video_md_cb(md_output_cb) != OK) {
-			printf("hal_video_md_cb_register fail\n");
-			return;
-		}
-		md_start();
-	} else if (strcmp(argv[1], "set") == 0) {
-		uint32_t buf[10];
-
-		if (strcmp(argv[2], "roi") == 0) {
-			buf[0] = atoi(argv[3]);
-			buf[1] = atoi(argv[4]);
-			buf[2] = atoi(argv[5]);
-			buf[3] = atoi(argv[6]);
-			buf[4] = atoi(argv[7]);
-			buf[5] = atoi(argv[8]);
-			md_set(MD2_PARAM_ROI, &buf[0]);
-		} else if (strcmp(argv[2], "sstt") == 0) {
-			buf[0] = atoi(argv[3]);
-			md_set(MD2_PARAM_SENSITIVITY, &buf[0]);
-		}
-	} else if (strcmp(argv[1], "stop") == 0) {
-		md_stop();
-	}
-}
 #include "sensor_service.h"
 void fATIR(void *arg)
 {
@@ -680,7 +646,6 @@ log_item_t at_isp_items[] = {
 	{"ATIX", fATIX,},
 	{"ATII", fATII,},
 	{"ATIO", fATIO,},
-	{"ATID", fATID,},
 	{"ATIR", fATIR,},
 };
 

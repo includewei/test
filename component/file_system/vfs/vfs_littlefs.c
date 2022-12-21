@@ -147,26 +147,26 @@ int fmodeflags(const char *mode)
 {
 	int flags;
 	if (strchr(mode, '+')) {
-		flags = O_RDWR;
+		flags = VFS_O_RDWR;
 	} else if (*mode == 'r') {
-		flags = O_RDONLY;
+		flags = VFS_O_RDONLY;
 	} else {
-		flags = O_WRONLY;
+		flags = VFS_O_WRONLY;
 	}
 	if (strchr(mode, 'x')) {
-		flags |= O_EXCL;
+		flags |= VFS_O_EXCL;
 	}
 	if (strchr(mode, 'e')) {
-		flags |= O_CLOEXEC;
+		flags |= VFS_O_CLOEXEC;
 	}
 	if (*mode != 'r') {
-		flags |= O_CREAT;
+		flags |= VFS_O_CREAT;
 	}
 	if (*mode == 'w') {
-		flags |= O_TRUNC;
+		flags |= VFS_O_TRUNC;
 	}
 	if (*mode == 'a') {
-		flags |= O_APPEND;
+		flags |= VFS_O_APPEND;
 	}
 	return flags;
 }
@@ -181,25 +181,25 @@ int littlefs_open(const char *filename, const char *mode, vfs_file *finfo)
 		return -1;
 	}
 
-	if ((flags & 3) == O_RDONLY) {
+	if ((flags & 3) == VFS_O_RDONLY) {
 		mode_flag |= LFS_O_RDONLY;
 	}
-	if ((flags & 3) == O_WRONLY) {
+	if ((flags & 3) == VFS_O_WRONLY) {
 		mode_flag |= LFS_O_WRONLY;
 	}
-	if ((flags & 3) == O_RDWR) {
+	if ((flags & 3) == VFS_O_RDWR) {
 		mode_flag |= LFS_O_RDWR;
 	}
-	if (flags & O_CREAT) {
+	if (flags & VFS_O_CREAT) {
 		mode_flag |= LFS_O_CREAT;
 	}
-	if (flags & O_EXCL) {
+	if (flags & VFS_O_EXCL) {
 		mode_flag |= LFS_O_EXCL;
 	}
-	if (flags & O_TRUNC) {
+	if (flags & VFS_O_TRUNC) {
 		mode_flag |= LFS_O_TRUNC;
 	}
-	if (flags & O_APPEND) {
+	if (flags & VFS_O_APPEND) {
 		mode_flag |= LFS_O_APPEND;
 	}
 
@@ -222,7 +222,7 @@ int littlefs_read(unsigned char *buf, unsigned int size, unsigned int count, vfs
 	if (ret < 0) {
 		return ret;
 	}
-	return count;
+	return ret / size;
 }
 
 int littlefs_write(unsigned char *buf, unsigned int size, unsigned int count, vfs_file *finfo)
@@ -233,7 +233,7 @@ int littlefs_write(unsigned char *buf, unsigned int size, unsigned int count, vf
 	if (ret < 0) {
 		return ret;
 	}
-	return count;
+	return ret / size;
 }
 
 int littlefs_close(vfs_file *finfo)
@@ -440,10 +440,9 @@ int littlefs_mkdir(const char *pathname)
 {
 	int ret = 0;
 	ret = lfs_mkdir(&lfs, pathname);
-	// ESSENTIAL2: don't print error
-	//if (ret < 0) {
-	//	printf("lfs_mkdir fail %d\r\n", ret);
-	//}
+	if (ret < 0) {
+		printf("lfs_mkdir fail %d\r\n", ret);
+	}
 	return ret;
 }
 

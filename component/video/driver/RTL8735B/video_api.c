@@ -31,6 +31,7 @@
 static isp_info_t isp_info;
 static voe_info_t voe_info = {0};
 static int voe_info_init = 0;
+static int g_max_qp[2] = {0, 0};
 
 #if NONE_FCS_MODE
 static int voe_load_sesnor_init = 0;
@@ -116,6 +117,12 @@ void video_mpu_trigger(void)
 	ptr[1] = 0xff;
 }
 #endif
+
+int video_get_maxqp(int ch)
+{
+	return g_max_qp[ch];
+}
+
 unsigned char *video_get_iq_buf(void)
 {
 	return iq_buf;
@@ -360,6 +367,9 @@ int video_ctrl(int ch, int cmd, int arg)
 
 		if (rc_param->maxQp) {
 			rc_ctrl.maxqp = rc_param->maxQp;
+			if (ch < 2) {
+				g_max_qp[ch] = rc_param->maxQp;
+			}
 		}
 
 		if (rc_param->minQp) {
@@ -804,6 +814,9 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 		if (rcMode) {
 			minQp = 25;
 			maxQP = 48;
+			if (v_stream->stream_id < 2) {
+				g_max_qp[v_stream->stream_id] = maxQP;
+			}
 			bps = v_stream->bps / 2;
 		}
 	}
@@ -889,8 +902,8 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 	}
 
 	if ((codec & CODEC_JPEG) != 0) {
-		sprintf(fps_cmd2, "-n %d -z %d", fps, meta_size);
-		sprintf(cmd2, "%s %d %s -w %d -h %d -r %d -q %d --mode %d --codecFormat %d %s --dbg 1 -i isp"
+		sprintf(fps_cmd2, "-j %d -n %d -z %d", isp_fps, fps, meta_size);
+		sprintf(cmd2, "%s %d %s -w %d -h %d -G %d -q %d --mode %d --codecFormat %d %s --dbg 1 -i isp"
 				, fmt_table[2]
 				, ch
 				, fps_cmd2
@@ -974,9 +987,9 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 		hal_video_isp_set_roi(ch, v_stream->roi.xmin, v_stream->roi.ymin, v_stream->roi.xmax - v_stream->roi.xmin, v_stream->roi.ymax - v_stream->roi.ymin);
 	}
 
-	// if (v_stream->meta_size) {
-	// hal_video_isp_set_isp_meta_out(ch, 1);
-	// }
+	if (v_stream->meta_size) {
+		hal_video_isp_set_isp_meta_out(ch, 1);
+	}
 
 
 	video_dprintf(VIDEO_LOG_INF, "hal_video_open\r\n");

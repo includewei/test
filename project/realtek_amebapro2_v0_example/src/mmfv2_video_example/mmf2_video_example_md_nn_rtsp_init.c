@@ -12,6 +12,7 @@
 #include "module_vipnn.h"
 #include "module_md.h"
 
+#include "nn_utils/class_name.h"
 #include "model_yolo.h"
 
 #include "module_rtsp2.h"
@@ -93,31 +94,22 @@ static rtsp2_params_t rtsp2_v1_params = {
 #define NN_GOP NN_FPS
 #define NN_BPS 1024*1024 //don't care for NN
 #define NN_TYPE VIDEO_RGB
+#define MD_COL 16
+#define MD_ROW 16
 
-#if (USE_NN_MODEL==YOLO_MODEL)
 #define NN_MODEL_OBJ   yolov4_tiny
 #define NN_WIDTH	576 //416
 #define NN_HEIGHT	320 //416
 static float nn_confidence_thresh = 0.5;
 static float nn_nms_thresh = 0.3;
-static int desired_class_num = 4;
 static int desired_class_list[] = {0, 2, 5, 7};
-static const char *tag[80] = {"person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light",
-							  "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-							  "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-							  "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle",
-							  "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
-							  "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed",
-							  "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven",
-							  "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
-							 };
-#else
-#error Please set model correctly. (YOLO_MODEL, MOBILENET_SSD_MODEL)
-#endif
 
 #if USE_SENSOR == SENSOR_GC4653
 #define SENSOR_MAX_WIDTH 2560
 #define SENSOR_MAX_HEIGHT 1440
+#elif USE_SENSOR == SENSOR_SC301
+#define SENSOR_MAX_WIDTH 2048
+#define SENSOR_MAX_HEIGHT 1536
 #elif USE_SENSOR == SENSOR_JXF51
 #define SENSOR_MAX_WIDTH 1536
 #define SENSOR_MAX_HEIGHT 1536
@@ -147,8 +139,10 @@ static video_params_t video_v4_params = {
 };
 
 static md_param_t md_param = {
-	.width = NN_WIDTH,
-	.height = NN_HEIGHT
+	.image_width = NN_WIDTH,
+	.image_height = NN_HEIGHT,
+	.md_row = MD_ROW,
+	.md_col = MD_COL,
 };
 
 static nn_data_param_t roi_nn = {
@@ -188,7 +182,7 @@ static mm_siso_t *siso_md_nn         = NULL;
 #define LIMIT(x, lower, upper) if(x<lower) x=lower; else if(x>upper) x=upper;
 static int check_in_list(int class_indx)
 {
-	for (int i = 0; i < desired_class_num; i++) {
+	for (int i = 0; i < (sizeof(desired_class_list) / sizeof(int)); i++) {
 		if (class_indx == desired_class_list[i]) {
 			return class_indx;
 		}
@@ -236,7 +230,7 @@ static void nn_set_object(void *p, void *img_param)
 				printf("%d,c%d:%d %d %d %d\n\r", i, class_id, xmin, ymin, xmax, ymax);
 				canvas_set_rect(RTSP_CHANNEL, 0, xmin, ymin, xmax, ymax, 3, COLOR_WHITE);
 				char text_str[20];
-				snprintf(text_str, sizeof(text_str), "%s %d", tag[class_id], (int)(res->result[6 * i + 1 ] * 100));
+				snprintf(text_str, sizeof(text_str), "%s %d", coco_name_get_by_id(class_id), (int)(res->result[6 * i + 1 ] * 100));
 				canvas_set_text(RTSP_CHANNEL, 0, xmin, ymin - 32, text_str, COLOR_CYAN);
 			}
 		}
@@ -250,10 +244,10 @@ static void md_process(void *md_result)
 	char *md_res = (char *) md_result;
 
 	int motion = 0, j, k;
-	for (j = 0; j < md_row; j++) {
-		for (k = 0; k < md_col; k++) {
-			//printf("%d ", md_res[j * md_col + k]);
-			if (md_res[j * md_col + k]) {
+	for (j = 0; j < MD_ROW; j++) {
+		for (k = 0; k < MD_COL; k++) {
+			//printf("%d ", md_res[j * MD_COL + k]);
+			if (md_res[j * MD_COL + k]) {
 				motion = 1;
 			}
 		}
@@ -321,8 +315,8 @@ void mmf2_video_example_md_nn_rtsp_init(void)
 		.Tbase = 2,
 		.Tlum = 3
 	};
-	char md_mask [md_col * md_row] = {0};
-	for (int i = 0; i < md_col * md_row; i++) {
+	char md_mask [MD_COL * MD_ROW] = {0};
+	for (int i = 0; i < MD_COL * MD_ROW; i++) {
 		md_mask[i] = 1;
 	}
 	md_ctx  = mm_module_open(&md_module);

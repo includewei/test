@@ -38,7 +38,7 @@
 
 File    : SEGGER_SEMIHOST.c
 Purpose : Semihosting implementation for standard I/O functions,
-          such as terminal input and output according to the SEGGER
+          such as terminal input and output according to the SEGGER 
           semihosting specification.
 Literature:
   [1]  https://wiki.segger.com/SEGGER_Semihosting
@@ -108,17 +108,16 @@ Literature:
 *     = -1: Error. Call not successful.
 *    !=  0: OK. File handle.
 */
-int SEGGER_SEMIHOST_Open(const char *sFilename, int Mode, int LenFilename)
-{
-	SEGGER_SEMIHOST_PARA  aPara[3];
-	int                   r;
-
-	aPara[0].cpC  = sFilename;
-	aPara[1].I    = Mode;
-	aPara[2].I    = LenFilename;
-	r = SEGGER_SEMIHOST_X_Request(SYS_OPEN, aPara);
-
-	return r;
+int SEGGER_SEMIHOST_Open(const char* sFilename, int Mode, int LenFilename) {
+  SEGGER_SEMIHOST_PARA  aPara[3];
+  int                   r;
+  
+  aPara[0].cpC  = sFilename;
+  aPara[1].I    = Mode;
+  aPara[2].I    = LenFilename;
+  r = SEGGER_SEMIHOST_X_Request(SYS_OPEN, aPara);
+  
+  return r;
 }
 
 /*********************************************************************
@@ -135,15 +134,14 @@ int SEGGER_SEMIHOST_Open(const char *sFilename, int Mode, int LenFilename)
 *    =  0: OK.
 *    = -1: Error. Call not successful.
 */
-int SEGGER_SEMIHOST_Close(int hFile)
-{
-	SEGGER_SEMIHOST_PARA  Para;
-	int                   r;
+int SEGGER_SEMIHOST_Close(int hFile) {
+  SEGGER_SEMIHOST_PARA  Para; 
+  int                   r;
+  
+  Para.pV = (void*)hFile;
+  r = SEGGER_SEMIHOST_X_Request(SYS_CLOSE, &Para);
 
-	Para.pV = (void *)hFile;
-	r = SEGGER_SEMIHOST_X_Request(SYS_CLOSE, &Para);
-
-	return r;
+  return r;
 }
 
 /*********************************************************************
@@ -159,13 +157,12 @@ int SEGGER_SEMIHOST_Close(int hFile)
 *  Return value
 *     = -1: Error.
 */
-int SEGGER_SEMIHOST_WriteC(char c)
-{
-	int r;
+int SEGGER_SEMIHOST_WriteC(char c) {
+  int r;
 
-	r = SEGGER_SEMIHOST_X_Request(SYS_WRITEC, (SEGGER_SEMIHOST_PARA *)&c);
-
-	return r;
+  r = SEGGER_SEMIHOST_X_Request(SYS_WRITEC, (SEGGER_SEMIHOST_PARA*)&c);
+  
+  return r;
 }
 
 /*********************************************************************
@@ -181,13 +178,12 @@ int SEGGER_SEMIHOST_WriteC(char c)
 *  Return value
 *     = -1: Error.
 */
-int SEGGER_SEMIHOST_Write0(const char *s)
-{
-	int r;
+int SEGGER_SEMIHOST_Write0(const char* s) {
+  int r;
 
-	r = SEGGER_SEMIHOST_X_Request(SYS_WRITE0, (SEGGER_SEMIHOST_PARA *)s);
-
-	return r;
+  r = SEGGER_SEMIHOST_X_Request(SYS_WRITE0, (SEGGER_SEMIHOST_PARA*)s);
+  
+  return r;
 }
 
 /*********************************************************************
@@ -207,41 +203,40 @@ int SEGGER_SEMIHOST_Write0(const char *s)
 *     =  0: OK.
 *    !=  0: Number of bytes remaining in the buffer.
 */
-int SEGGER_SEMIHOST_Write(int hFile, const char *pBuffer, int NumBytesToWrite)
-{
-	SEGGER_SEMIHOST_PARA  aPara[3];
-	int                   r;
+int SEGGER_SEMIHOST_Write(int hFile, const char* pBuffer, int NumBytesToWrite) {
+  SEGGER_SEMIHOST_PARA  aPara[3];
+  int                   r;
 #if 0 // semihosting support read large size
 
-	aPara[0].I    = hFile;
-	aPara[1].cpC  = pBuffer;
-	aPara[2].I    = NumBytesToWrite;
-	r = SEGGER_SEMIHOST_X_Request(SYS_WRITE, aPara);
+  aPara[0].I    = hFile;
+  aPara[1].cpC  = pBuffer;
+  aPara[2].I    = NumBytesToWrite;
+  r = SEGGER_SEMIHOST_X_Request(SYS_WRITE, aPara);
 #else
 //  int ret;
-	int write_size = NumBytesToWrite;
-	int write_len = 768 * 1024;
-	int cnt = 0;
-	while (write_size > 0) {
-		if (write_size > write_len) {
-			aPara[0].I  = hFile;
-			aPara[1].pC = (char *)(pBuffer + (cnt * write_len));
-			aPara[2].I  = write_len;
-			r = SEGGER_SEMIHOST_X_Request(SYS_WRITE, aPara);
-		} else {
-			aPara[0].I  = hFile;
-			aPara[1].pC = (char *)(pBuffer + (cnt * write_len));
-			aPara[2].I  = write_size;
-			r = SEGGER_SEMIHOST_X_Request(SYS_WRITE, aPara);
-		}
-		if (r != 0) {
-			return r;
-		}
-		write_size -= write_len;
-		cnt++;
+  int write_size = NumBytesToWrite;
+  int write_len = 768*1024;
+  int cnt = 0;
+  while(write_size > 0){
+	if(write_size > write_len){
+		aPara[0].I  = hFile;
+		aPara[1].pC = (char*)(pBuffer+(cnt*write_len));
+		aPara[2].I  = write_len;
+		r = SEGGER_SEMIHOST_X_Request(SYS_WRITE, aPara);
 	}
+	else {
+		aPara[0].I  = hFile;
+		aPara[1].pC = (char*)(pBuffer+(cnt*write_len));
+		aPara[2].I  = write_size;
+		r = SEGGER_SEMIHOST_X_Request(SYS_WRITE, aPara);
+	}
+	if(r != 0)
+		return r;
+	write_size -= write_len;
+	cnt++;
+  }
 #endif
-	return r;
+  return r;
 }
 
 /*********************************************************************
@@ -263,25 +258,24 @@ int SEGGER_SEMIHOST_Write(int hFile, const char *pBuffer, int NumBytesToWrite)
 *  Additional information
 *    int myprintf(const char* s, ...) {
 *      va_list List;
-*
+*    
 *      va_start(List, s);
 *      SEGGER_SEMIHOST_Writef(s, &List);
 *      va_end(List);
-*
+*    
 *      return 0;
 *    }
-*
+*    
 */
-int SEGGER_SEMIHOST_Writef(const char *pFormat, va_list *pArg)
-{
-	SEGGER_SEMIHOST_PARA  aPara[2];
-	int                   r;
+int SEGGER_SEMIHOST_Writef(const char* pFormat, va_list* pArg) {
+  SEGGER_SEMIHOST_PARA  aPara[2];
+  int                   r;
 
-	aPara[0].cpC = pFormat;
-	aPara[1].pV  = (void *)pArg;
-	r = SEGGER_SEMIHOST_X_Request(SYS_WRITEF, aPara);
+  aPara[0].cpC = pFormat;
+  aPara[1].pV  = (void*)pArg;
+  r = SEGGER_SEMIHOST_X_Request(SYS_WRITEF, aPara);
 
-	return r;
+  return r;
 }
 
 /*********************************************************************
@@ -302,41 +296,40 @@ int SEGGER_SEMIHOST_Writef(const char *pFormat, va_list *pArg)
 *    ==  NumBytesToRead:  Failed to read. EOF assumed.
 *     <  NumBytesToRead:  Partially OK. Number of bytes free.
 */
-int SEGGER_SEMIHOST_Read(int hFile, char *pBuffer, int NumBytesToRead)
-{
-	SEGGER_SEMIHOST_PARA  aPara[3];
-	int                   r;
+int SEGGER_SEMIHOST_Read(int hFile, char* pBuffer, int NumBytesToRead) {
+  SEGGER_SEMIHOST_PARA  aPara[3];
+  int                   r;
 #if 0 // semihosting support read large size
-	aPara[0].I  = hFile;
-	aPara[1].pC = pBuffer;
-	aPara[2].I  = NumBytesToRead;
-	r = SEGGER_SEMIHOST_X_Request(SYS_READ, aPara);
+  aPara[0].I  = hFile;
+  aPara[1].pC = pBuffer;
+  aPara[2].I  = NumBytesToRead;
+  r = SEGGER_SEMIHOST_X_Request(SYS_READ, aPara);
 #else
 //  int ret;
-	int read_size = NumBytesToRead;
-	int read_len = 768 * 1024;
-	int cnt = 0;
-	while (read_size > 0) {
-		if (read_size > read_len) {
-			aPara[0].I  = hFile;
-			aPara[1].pC = pBuffer + (cnt * read_len);
-			aPara[2].I  = read_len;
-			r = SEGGER_SEMIHOST_X_Request(SYS_READ, aPara);
-		} else {
-			aPara[0].I  = hFile;
-			aPara[1].pC = pBuffer + (cnt * read_len);
-			aPara[2].I  = read_size;
-			r = SEGGER_SEMIHOST_X_Request(SYS_READ, aPara);
-		}
-		if (r != 0) {
-			return r;
-		}
-		read_size -= read_len;
-		cnt++;
+  int read_size = NumBytesToRead;
+  int read_len = 768*1024;
+  int cnt = 0;
+  while(read_size > 0){
+	if(read_size > read_len){
+		aPara[0].I  = hFile;
+		aPara[1].pC = pBuffer+(cnt*read_len);
+		aPara[2].I  = read_len;
+		r = SEGGER_SEMIHOST_X_Request(SYS_READ, aPara);
 	}
+	else {
+		aPara[0].I  = hFile;
+		aPara[1].pC = pBuffer+(cnt*read_len);
+		aPara[2].I  = read_size;
+		r = SEGGER_SEMIHOST_X_Request(SYS_READ, aPara);
+	}
+	if(r != 0)
+		return r;
+	read_size -= read_len;
+	cnt++;
+  }
 #endif
 
-	return r;
+  return r;
 }
 
 /*********************************************************************
@@ -350,13 +343,12 @@ int SEGGER_SEMIHOST_Read(int hFile, char *pBuffer, int NumBytesToRead)
 *     = -1: Error.
 *    != -1: Byte read from the console.
 */
-int SEGGER_SEMIHOST_ReadC(void)
-{
-	int   r;
+int SEGGER_SEMIHOST_ReadC(void) {
+  int   r;
+  
+  r = SEGGER_SEMIHOST_X_Request(SYS_READC, (SEGGER_SEMIHOST_PARA*)0);
 
-	r = SEGGER_SEMIHOST_X_Request(SYS_READC, (SEGGER_SEMIHOST_PARA *)0);
-
-	return r;
+  return r;
 }
 
 /*********************************************************************
@@ -375,15 +367,14 @@ int SEGGER_SEMIHOST_ReadC(void)
 *    =  0:      File identified.
 *    Else:      Error.
 */
-int SEGGER_SEMIHOST_IsTTY(int hFile)
-{
-	SEGGER_SEMIHOST_PARA  Para;
-	int   r;
+int SEGGER_SEMIHOST_IsTTY(int hFile) {
+  SEGGER_SEMIHOST_PARA  Para;
+  int   r;
+  
+  Para.I = hFile;
+  r = SEGGER_SEMIHOST_X_Request(SYS_ISTTY, &Para);
 
-	Para.I = hFile;
-	r = SEGGER_SEMIHOST_X_Request(SYS_ISTTY, &Para);
-
-	return r;
+  return r;	
 }
 
 /*********************************************************************
@@ -401,16 +392,15 @@ int SEGGER_SEMIHOST_IsTTY(int hFile)
 *    = 0: OK.
 *    < 0: Error.
 */
-int SEGGER_SEMIHOST_Seek(int hFile, int Pos)
-{
-	SEGGER_SEMIHOST_PARA  aPara[2];
-	int                   r;
+int SEGGER_SEMIHOST_Seek(int hFile, int Pos) {
+  SEGGER_SEMIHOST_PARA  aPara[2];
+  int                   r;
+  
+  aPara[0].I = hFile;
+  aPara[1].I = Pos;
+  r = SEGGER_SEMIHOST_X_Request(SYS_SEEK, aPara);
 
-	aPara[0].I = hFile;
-	aPara[1].I = Pos;
-	r = SEGGER_SEMIHOST_X_Request(SYS_SEEK, aPara);
-
-	return r;
+  return r;
 }
 
 /*********************************************************************
@@ -422,20 +412,19 @@ int SEGGER_SEMIHOST_Seek(int hFile, int Pos)
 *
 *  Parameters
 *    hFile:            Handle to the open file.
-*
+*    
 *  Return value
 *    >= 0:  OK. Length of the file.
 *    -1:    Error.
 */
-int SEGGER_SEMIHOST_FLen(int hFile)
-{
-	SEGGER_SEMIHOST_PARA  Para;
-	int                   r;
+int SEGGER_SEMIHOST_FLen(int hFile) {
+  SEGGER_SEMIHOST_PARA  Para;
+  int                   r;
+  
+  Para.I = hFile;
+  r = SEGGER_SEMIHOST_X_Request(SYS_FLEN, &Para);
 
-	Para.I = hFile;
-	r = SEGGER_SEMIHOST_X_Request(SYS_FLEN, &Para);
-
-	return r;
+  return r;
 }
 
 /*********************************************************************
@@ -443,33 +432,32 @@ int SEGGER_SEMIHOST_FLen(int hFile)
 *       SEGGER_SEMIHOST_GetCmdLine()
 *
 *  Function description
-*    Get command line for executable called
+*    Get command line for executable called 
 *
 *  Parameters
 *    pBuffer:           Pointer to buffer to store command line.
 *    psCmdLine:         Pointer to store pointer to command line to.
-*    pNumBytesCmdLine:  [In]  Number of bytes in the buffer.
+*    pNumBytesCmdLine:  [In]  Number of bytes in the buffer. 
 *                       [Out] Lenght of the command line pointed to by psCmdLine.
 *
 *  Return value
 *     = 0:  OK.
 *     = -1: Error. Call not successful.
 */
-int SEGGER_SEMIHOST_GetCmdLine(char *pBuffer, char **psCmdLine, int *pNumBytesCmdLine)
-{
-	SEGGER_SEMIHOST_PARA  aPara[2];
-	int                   r;
-
-	aPara[0].pC = (void *)pBuffer;
-	aPara[1].pV = (void *)(*pNumBytesCmdLine);
-	r = SEGGER_SEMIHOST_X_Request(SYS_GET_CMDLINE, aPara);
-
-	if (r == 0) {
-		*psCmdLine        = aPara[0].pC;
-		*pNumBytesCmdLine = aPara[1].I;
-	}
-
-	return r;
+int SEGGER_SEMIHOST_GetCmdLine(char* pBuffer, char** psCmdLine, int* pNumBytesCmdLine) {
+  SEGGER_SEMIHOST_PARA  aPara[2];
+  int                   r;
+  
+  aPara[0].pC = (void*)pBuffer;
+  aPara[1].pV = (void*)(*pNumBytesCmdLine);
+  r = SEGGER_SEMIHOST_X_Request(SYS_GET_CMDLINE, aPara);
+  
+  if (r == 0) {
+    *psCmdLine        = aPara[0].pC;
+    *pNumBytesCmdLine = aPara[1].I;
+  }
+  
+  return r;
 }
 
 /*********************************************************************
@@ -489,21 +477,20 @@ int SEGGER_SEMIHOST_GetCmdLine(char *pBuffer, char **psCmdLine, int *pNumBytesCm
 *     = 0:  OK.
 *     = -1: Error. Call not successful.
 */
-int SEGGER_SEMIHOST_TmpName(char *pBuffer, int FileId, int NumBytesBuffer)
-{
-	SEGGER_SEMIHOST_PARA  aPara[3];
-	int                   r;
-
-	aPara[0].pC = pBuffer;
-	aPara[1].I  = FileId;
-	aPara[2].I  = NumBytesBuffer;
-	r = SEGGER_SEMIHOST_X_Request(SYS_TMPNAME, aPara);
-
-	if (r == 0) {
-		pBuffer = aPara[0].pC;
-	}
-
-	return r;
+int SEGGER_SEMIHOST_TmpName(char* pBuffer, int FileId, int NumBytesBuffer) {
+  SEGGER_SEMIHOST_PARA  aPara[3];
+  int                   r;
+  
+  aPara[0].pC = pBuffer;
+  aPara[1].I  = FileId;
+  aPara[2].I  = NumBytesBuffer;
+  r = SEGGER_SEMIHOST_X_Request(SYS_TMPNAME, aPara);
+  
+  if (r == 0) {
+    pBuffer = aPara[0].pC;
+  }
+  
+  return r;
 }
 
 /*********************************************************************
@@ -521,16 +508,15 @@ int SEGGER_SEMIHOST_TmpName(char *pBuffer, int FileId, int NumBytesBuffer)
 *     =  0: OK. Delete successful.
 *    !=  0: Error.
 */
-int SEGGER_SEMIHOST_Remove(const char *pPath, int NumBytesPath)
-{
-	SEGGER_SEMIHOST_PARA  aPara[2];
-	int                   r;
-
-	aPara[0].cpC  = pPath;
-	aPara[1].I    = NumBytesPath;
-	r = SEGGER_SEMIHOST_X_Request(SYS_REMOVE, aPara);
-
-	return r;
+int SEGGER_SEMIHOST_Remove(const char* pPath, int NumBytesPath) {
+  SEGGER_SEMIHOST_PARA  aPara[2];
+  int                   r;
+  
+  aPara[0].cpC  = pPath;
+  aPara[1].I    = NumBytesPath;
+  r = SEGGER_SEMIHOST_X_Request(SYS_REMOVE, aPara);
+  
+  return r;
 }
 
 /*********************************************************************
@@ -550,18 +536,17 @@ int SEGGER_SEMIHOST_Remove(const char *pPath, int NumBytesPath)
 *     =  0: OK.
 *    !=  0: Error.
 */
-int SEGGER_SEMIHOST_Rename(const char *pFileName, int NumBytesFileName, const char *pNewName, int NumBytesNewName)
-{
-	SEGGER_SEMIHOST_PARA  aPara[4];
-	int                   r;
-
-	aPara[0].cpC  = pFileName;
-	aPara[1].I    = NumBytesFileName;
-	aPara[2].cpC  = pNewName;
-	aPara[3].I    = NumBytesNewName;
-	r = SEGGER_SEMIHOST_X_Request(SYS_RENAME, aPara);
-
-	return r;
+int SEGGER_SEMIHOST_Rename(const char* pFileName, int NumBytesFileName, const char* pNewName, int NumBytesNewName) {
+  SEGGER_SEMIHOST_PARA  aPara[4];
+  int                   r;
+  
+  aPara[0].cpC  = pFileName;
+  aPara[1].I    = NumBytesFileName;
+  aPara[2].cpC  = pNewName;
+  aPara[3].I    = NumBytesNewName;
+  r = SEGGER_SEMIHOST_X_Request(SYS_RENAME, aPara);
+  
+  return r;
 }
 
 /*********************************************************************
@@ -576,13 +561,12 @@ int SEGGER_SEMIHOST_Rename(const char *pFileName, int NumBytesFileName, const ch
 *     = -1: Error.
 *    != -1: Number of centiseconds the execution runs.
 */
-int SEGGER_SEMIHOST_Clock(void)
-{
-	int   r;
-
-	r = SEGGER_SEMIHOST_X_Request(SYS_CLOCK, (SEGGER_SEMIHOST_PARA *)0);
-
-	return r;
+int SEGGER_SEMIHOST_Clock(void) {
+  int   r;
+  
+  r = SEGGER_SEMIHOST_X_Request(SYS_CLOCK, (SEGGER_SEMIHOST_PARA*)0);
+  
+  return r;
 }
 
 /*********************************************************************
@@ -595,13 +579,12 @@ int SEGGER_SEMIHOST_Clock(void)
 *  Return value
 *    !=  0: Number of seconds.
 */
-int SEGGER_SEMIHOST_Time(void)
-{
-	int   r;
-
-	r = SEGGER_SEMIHOST_X_Request(SYS_TIME, (SEGGER_SEMIHOST_PARA *)0);
-
-	return r;
+int SEGGER_SEMIHOST_Time(void) {
+  int   r;
+  
+  r = SEGGER_SEMIHOST_X_Request(SYS_TIME, (SEGGER_SEMIHOST_PARA*)0);
+  
+  return r;
 }
 
 /*********************************************************************
@@ -618,17 +601,16 @@ int SEGGER_SEMIHOST_Time(void)
 *  Return value
 *    Return status of command.
 */
-int SEGGER_SEMIHOST_System(const char *pCommand, int NumBytesCommand)
-{
-	SEGGER_SEMIHOST_PARA  aPara[2];
-	int                   r;
+int SEGGER_SEMIHOST_System(const char* pCommand, int NumBytesCommand) {
+  SEGGER_SEMIHOST_PARA  aPara[2];
+  int                   r;
+  
+  aPara[0].cpC  = pCommand;
+  aPara[1].I    = NumBytesCommand;
 
-	aPara[0].cpC  = pCommand;
-	aPara[1].I    = NumBytesCommand;
-
-	r = SEGGER_SEMIHOST_X_Request(SYS_SYSTEM, aPara);
-
-	return r;
+  r = SEGGER_SEMIHOST_X_Request(SYS_SYSTEM, aPara);
+  
+  return r;
 }
 
 /*********************************************************************
@@ -642,13 +624,12 @@ int SEGGER_SEMIHOST_System(const char *pCommand, int NumBytesCommand)
 *  Return value
 *    return calue of C library errno
 */
-int SEGGER_SEMIHOST_Errno(void)
-{
-	int   r;
+int SEGGER_SEMIHOST_Errno(void) {
+  int   r;
 
-	r = SEGGER_SEMIHOST_X_Request(SYS_ERRNO, (SEGGER_SEMIHOST_PARA *)0);
-
-	return r;
+  r = SEGGER_SEMIHOST_X_Request(SYS_ERRNO, (SEGGER_SEMIHOST_PARA*)0);
+  
+  return r;
 }
 
 /*********************************************************************
@@ -664,15 +645,14 @@ int SEGGER_SEMIHOST_Errno(void)
 *  Return value
 *     Do not care.
 */
-int SEGGER_SEMIHOST_Exit(int ExitCode)
-{
-	SEGGER_SEMIHOST_PARA  Para;
-	int                   r;
+int SEGGER_SEMIHOST_Exit(int ExitCode) {
+  SEGGER_SEMIHOST_PARA  Para;
+  int                   r;
+  
+  Para.I = ExitCode;
+  r = SEGGER_SEMIHOST_X_Request(SYS_EXIT, &Para);
 
-	Para.I = ExitCode;
-	r = SEGGER_SEMIHOST_X_Request(SYS_EXIT, &Para);
-
-	return r;
+  return r;
 }
 
 /*********************************************************************
@@ -686,13 +666,12 @@ int SEGGER_SEMIHOST_Exit(int ExitCode)
 *    != 1: No debugger connected.
 *    == 1: Debugger connected.
 */
-int SEGGER_SEMIHOST_IsConnected(void)
-{
-	int r;
+int SEGGER_SEMIHOST_IsConnected(void) {
+  int r;
 
-	r = SEGGER_SEMIHOST_X_Request(SYS_IS_CONNECTED, (SEGGER_SEMIHOST_PARA *)0);
+  r = SEGGER_SEMIHOST_X_Request(SYS_IS_CONNECTED, (SEGGER_SEMIHOST_PARA*)0);
 
-	return r;
+  return r;
 }
 
 /*********************************************************************
@@ -701,17 +680,16 @@ int SEGGER_SEMIHOST_IsConnected(void)
 *
 *  Function description
 *    Dummy call for generic implementation.
-*    The debugger may set a breakpoint on this function,
+*    The debugger may set a breakpoint on this function, 
 *    handle the semihosting request,
 *    and return to the caller.
 *
 *  Return value
 *    Return parameter r0 if debugger is not connected.
 */
-int __attribute__((noinline)) SEGGER_SEMIHOST_DebugHalt(int r0, int r1)
-{
-	(void)r1;   // Avoid unused parameter warning
-	return r0;
+int __attribute__((noinline)) SEGGER_SEMIHOST_DebugHalt(int r0, int r1) {
+  (void)r1;   // Avoid unused parameter warning
+  return r0;
 }
 
 /*************************** End of file ****************************/

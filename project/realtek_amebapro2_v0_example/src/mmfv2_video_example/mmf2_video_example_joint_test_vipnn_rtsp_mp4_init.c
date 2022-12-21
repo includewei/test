@@ -22,6 +22,7 @@
 #include "log_service.h"
 #include "avcodec.h"
 
+#include "nn_utils/class_name.h"
 #include "model_yolo.h"
 #include "model_yamnet_s.h"
 #include "model_yamnet.h"
@@ -185,7 +186,7 @@ static mp4_params_t mp4_v1_params = {
 	.fatfs_buf_size = 224 * 1024, /* 32kb multiple */
 };
 
-// NN model selction //
+// NN model config //
 #define ENABLE_NN_FACERECOG   	0   /* fix here: enable NN face detection/recognition */
 #define ENABLE_NN_YOLO       	1   /* fix here: enable NN yolo */
 #define ENABLE_NN_YAMNET       	1   /* fix here: enable NN audio classification */
@@ -218,17 +219,7 @@ static mp4_params_t mp4_v1_params = {
 
 static float nn_confidence_thresh = 0.5;
 static float nn_nms_thresh = 0.3;
-static int desired_class_num = 4;
 static int desired_class_list[] = {0, 2, 5, 7};
-static const char *tag[80] = {"person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light",
-							  "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-							  "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-							  "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle",
-							  "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
-							  "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed",
-							  "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven",
-							  "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
-							 };
 
 #if USE_SENSOR == SENSOR_GC4653
 #define SENSOR_MAX_WIDTH 2560
@@ -263,9 +254,13 @@ static video_params_t video_v4_params = {
 #endif
 };
 
+#define MD_COL 16
+#define MD_ROW 16
 static md_param_t md_param = {
-	.width = NN_WIDTH,
-	.height = NN_HEIGHT
+	.image_width = NN_WIDTH,
+	.image_height = NN_HEIGHT,
+	.md_row = MD_ROW,
+	.md_col = MD_COL
 };
 
 static nn_data_param_t roi_nn = {
@@ -348,7 +343,7 @@ static void audio_params_customized_setting(void)
 
 static int check_in_list(int class_indx)
 {
-	for (int i = 0; i < desired_class_num; i++) {
+	for (int i = 0; i < (sizeof(desired_class_list) / sizeof(int)); i++) {
 		if (class_indx == desired_class_list[i]) {
 			return class_indx;
 		}
@@ -405,7 +400,7 @@ static void nn_set_object(void *p, void *img_param)
 			printf("%d,c%d:%d %d %d %d\n\r", i, class_id, xmin, ymin, xmax, ymax);
 			canvas_set_rect(RTSP_CHANNEL, 0, xmin, ymin, xmax, ymax, 3, COLOR_WHITE);
 			char text_str[20];
-			snprintf(text_str, sizeof(text_str), "%s %d", tag[class_id], (int)(res->result[6 * i + 1 ] * 100));
+			snprintf(text_str, sizeof(text_str), "%s %d", coco_name_get_by_id(class_id), (int)(res->result[6 * i + 1 ] * 100));
 			canvas_set_text(RTSP_CHANNEL, 0, xmin, ymin - 32, text_str, COLOR_CYAN);
 		}
 	}
@@ -420,10 +415,10 @@ static void md_process(void *md_result)
 	int *md_res = (int *) md_result;
 
 	int motion = 0, j, k;
-	for (j = 0; j < md_row; j++) {
-		for (k = 0; k < md_col; k++) {
+	for (j = 0; j < MD_ROW; j++) {
+		for (k = 0; k < MD_COL; k++) {
 			//printf("%d ", md_res[j * col + k]);
-			if (md_res[j * md_col + k]) {
+			if (md_res[j * MD_COL + k]) {
 				motion = 1;
 			}
 		}
@@ -568,25 +563,10 @@ void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 		.Tbase = 2,
 		.Tlum = 3
 	};
-	/*
-	int md_mask [16 * 16] = {
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-	};*/
+	/*char md_mask [MD_COL * MD_ROW] = {0};
+	for (int i = 0; i < MD_COL * MD_ROW; i++) {
+		md_mask[i] = 1;
+	}*/
 
 	md_ctx  = mm_module_open(&md_module);
 	if (md_ctx) {

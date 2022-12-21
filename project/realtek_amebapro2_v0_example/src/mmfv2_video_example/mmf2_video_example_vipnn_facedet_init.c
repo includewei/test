@@ -89,8 +89,6 @@ static rtsp2_params_t rtsp2_v1_params = {
 #define NN_WIDTH    576//640
 #define NN_HEIGHT   320//640
 
-static const char *tag[1] = {"face"};
-
 static video_params_t video_v4_params = {
 	.stream_id 		= NN_CHANNEL,
 	.type 			= NN_TYPE,
@@ -172,7 +170,7 @@ static void nn_set_object(void *p, void *img_param)
 				printf("%d,c%d:%d %d %d %d\n\r", i, class_id, xmin, ymin, xmax, ymax);
 				canvas_set_rect(RTSP_CHANNEL, 0, xmin, ymin, xmax, ymax, 3, COLOR_WHITE);
 				char text_str[20];
-				snprintf(text_str, sizeof(text_str), "%s %d", tag[class_id], (int)(face_res->result[6 * i + 1 ] * 100));
+				snprintf(text_str, sizeof(text_str), "%s %d", "face", (int)(face_res->result[6 * i + 1 ] * 100));
 				canvas_set_text(RTSP_CHANNEL, 0, xmin, ymin - 32, text_str, COLOR_CYAN);
 
 				for (int j = 0; j < 5; j++) {

@@ -106,6 +106,12 @@ void wifi_set_tcpssl_keepalive(void)
 	rtw_hal_set_tcp_mode();
 }
 
+extern void rtw_hal_set_ssl_counter_report(void);
+void wifi_set_ssl_counter_report(void)
+{
+	rtw_hal_set_ssl_counter_report();
+}
+
 #endif
 
 #ifdef CONFIG_ARP_KEEP_ALIVE
@@ -722,6 +728,12 @@ void wifi_wowlan_set_serverkeepalive(uint16_t timeout, char *pattern, uint8_t le
 	rtw_hal_set_ssl_serverkeepalive(timeout, pattern, len, prefix_len);
 }
 #endif
+
+extern void rtw_hal_set_patternoffset(uint8_t offset);
+void wifi_wowlan_set_patternoffset(uint8_t offset)
+{
+	rtw_hal_set_patternoffset(offset);
+}
 
 #endif
 

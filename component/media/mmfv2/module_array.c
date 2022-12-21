@@ -191,13 +191,15 @@ void frame_timer_handler(uint32_t hid)
 		if (ctx->params.type == AVMEDIA_TYPE_AUDIO) {
 			if (ctx->params.codec_id == AV_CODEC_ID_PCMU || ctx->params.codec_id == AV_CODEC_ID_PCMA || ctx->params.codec_id == AV_CODEC_ID_PCM_RAW) {
 				output_item->size = (remain_len > ctx->params.u.a.frame_size) ? ctx->params.u.a.frame_size : remain_len;
-				if (ctx->params.codec_id == AV_CODEC_ID_PCM_RAW && ctx->array_sweepdb_en) {
+				if (ctx->params.codec_id == AV_CODEC_ID_PCM_RAW && ctx->array_sweepdb_en && ctx->array_copy.data_addr) {
 					memcpy((void *)(ctx->array_copy.data_addr + ctx->array.data_offset), (void *)(ctx->array.data_addr + ctx->array.data_offset), output_item->size);
 					output_item->data_addr = ctx->array_copy.data_addr + ctx->array.data_offset;
 					short *pcm_pro_buf = (short *)output_item->data_addr;
 					for (int i = 0; i < output_item->size / 2; i++) {
 						pcm_pro_buf[i] = (short)((float)pcm_pro_buf[i] * dB_aPOW[ctx->dB_Sweep]);
 					}
+				} else {
+					output_item->data_addr = ctx->array.data_addr + ctx->array.data_offset;
 				}
 			} else if (ctx->params.codec_id == AV_CODEC_ID_MP4A_LATM) {
 				output_item->size = array_get_aac_frame_size((unsigned char *)(ctx->array.data_addr + ctx->array.data_offset),
@@ -248,6 +250,10 @@ int array_control(void *p, int cmd, int arg)
 		break;
 	case CMD_ARRAY_SET_ARRAY:
 		memcpy(&ctx->array, (void *)arg, sizeof(array_t));
+		if (ctx->array_copy.data_addr) {
+			free((void *)ctx->array_copy.data_addr);
+			ctx->array_copy.data_addr = 0;
+		}
 		ctx->array_copy.data_addr = (uint32_t)malloc(ctx->array.data_len);
 		ctx->array_copy.data_len = ctx->array.data_len;
 		break;

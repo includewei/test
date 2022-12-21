@@ -242,11 +242,10 @@ SECTIONS
 
 		__bss_start__ = .;
 		*lib_a*(.bss*)
-		*(.bss*)
-		*(COMMON)
 		*hal_sys_ctrl.*o*(.bss*)
 		*hal_dram*.*o*(.bss*)
 		*hal_flash.*o*(.bss*)
+		*ram_start.*o*(.bss*)
 		*(.ram.hal_pmc.bss*)
 		__bss_end__ = .;
 		__sram_heap_start__ = .;
@@ -298,6 +297,8 @@ SECTIONS
 	{
 		. = ALIGN(4);
 		__eram_bss_start__ = .;	
+		*(.bss*)
+		*(COMMON)
 		*(.lpddr.bss*)
 		__eram_bss_end__ = .;
 		__eram_heap_start__ = .;

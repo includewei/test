@@ -3532,6 +3532,9 @@ static portTASK_FUNCTION( prvIdleTask, pvParameters )
                     mtCOVERAGE_TEST_MARKER();
                 }
             }
+        #else
+        /* enter power saving mode until next interrupt */
+        asm(" wfi");
         #endif /* configUSE_TICKLESS_IDLE */
     }
 }

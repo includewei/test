@@ -148,6 +148,13 @@ void rtc_disable_alarm(void);
 ///@name AmebaPro2
 ///@{
 /**
+  * @brief  Initializes the RTC device with calibration setting, include clock, RTC registers and function.
+  * @param  none
+  * @retval none
+  */
+void rtc_init_with_cali(void);
+
+/**
   * @brief  Set the specified RTC Alarm and interrupt.
   * @param  alarm: alarm object define in application software.
   * @param  alarmHandler:  alarm interrupt callback function.

@@ -34,84 +34,80 @@ extern unsigned(*console_stdio_write_buffer)(unsigned fd, const void *buf, unsig
 extern unsigned(*remote_stdio_write_buffer)(unsigned fd, const void *buf, unsigned len);
 struct _reent;
 
-#define LOWIO_STDOUT_BUF_SIZE 2048
-static char stdout_buffer[LOWIO_STDOUT_BUF_SIZE + 4];
-int convert2crlf(char *orig, int len, char *new, int new_sz)
+#define CRLF_CONVERT 1
+static void __write_to_interface_buffer(int file, const void *ptr, size_t len)
+{
+	if (console_stdio_write_buffer) {
+		console_stdio_write_buffer(0, (void *)ptr, len);
+	}
+	if (remote_stdio_write_buffer) {
+		remote_stdio_write_buffer(0, (void *)ptr, len);
+	}
+}
+
+
+char *strnchr(char *str, char c, int len)
+{
+	char *o = str;
+	while (str - o < len) {
+		if (*str == c) {
+			return str;
+		}
+		str++;
+	}
+	return NULL;
+}
+
+void __write_to_interface_buffer_with_crlf(int file, const void *ptr, size_t len)
 {
 	int cnt = 0;
-	char *o = orig;
+	char *orig = (char *)ptr;
+	char *o = (char *)ptr;
 	char *p;
 
-	p = strchr(o, '\n');
+	p = strnchr(o, '\n', len);
 
-	while (p && p - orig < len && cnt < new_sz) {
+	while (p && p - orig < len) {
 		int delta_size = p - o;
-		if (cnt + delta_size + 2 >= new_sz) {
-			delta_size = new_sz - cnt - 2;
-		}
 
 		if (delta_size > 0) {
-			memcpy(&new[cnt], o, delta_size);
-			cnt += delta_size;
+			__write_to_interface_buffer(file, o, delta_size);
 		}
-		memcpy(&new[cnt], "\n\r", 2);
-		cnt += 2;
+		__write_to_interface_buffer(file, "\n\r", 2);
 
 		o = p + 1;
-		p = strchr(o, '\n');
-	}
-	if (o - orig < len && cnt < new_sz) {
-		int rest_size = len - (o - orig);
-		if (rest_size + cnt > new_sz) {
-			rest_size = new_sz - cnt;
-		}
-
-		memcpy(&new[cnt], o, rest_size);
-		cnt += rest_size;
-		o += rest_size;
+		p = strnchr(o, '\n', len);
 	}
 
-	// extra 4 byte is for writing extra character
-	// some character still not printed
-	if (o - orig < len) {
-		new[cnt] = '.';
-		new[cnt + 1] = '.';
-		new[cnt + 2] = '.';
-		cnt += 3;
+	int rest_size = len - (o - orig);
+	if (rest_size > 0) {
+		__write_to_interface_buffer(file, o, rest_size);
 	}
 
-	new[cnt] = 0;
-	return cnt;
 }
 
 size_t _write(int file, const void *ptr, size_t len)
 {
 	(void) file;  /* Not used, avoid warning */
-	int conv_len = convert2crlf((char *)ptr, len, stdout_buffer, LOWIO_STDOUT_BUF_SIZE);
-
-	if (console_stdio_write_buffer) {
-		console_stdio_write_buffer(0, (void *)stdout_buffer, conv_len);
-	}
-	if (remote_stdio_write_buffer) {
-		remote_stdio_write_buffer(0, (void *)stdout_buffer, conv_len);
-	}
-
+	//int conv_len = convert2crlf((char *)ptr, len, stdout_buffer, LOWIO_STDOUT_BUF_SIZE);
+#if CRLF_CONVERT
+	__write_to_interface_buffer_with_crlf(0, (void *)ptr, len);
+#else
+	__write_to_interface_buffer(0, (void *)ptr, len);
+#endif
 	return len;
 }
 
-_ssize_t _write_r(struct _reent *r, int file, const void *ptr, size_t len)
+_ssize_t  _write_r(struct _reent *r, int file, const void *ptr, size_t len)
 {
 	(void) file;  /* Not used, avoid warning */
 	(void) r;     /* Not used, avoid warning */
 
-	int conv_len = convert2crlf((char *)ptr, len, stdout_buffer, LOWIO_STDOUT_BUF_SIZE);
-
-	if (console_stdio_write_buffer) {
-		console_stdio_write_buffer(0, (void *)stdout_buffer, conv_len);
-	}
-	if (remote_stdio_write_buffer) {
-		remote_stdio_write_buffer(0, (void *)stdout_buffer, conv_len);
-	}
+#if CRLF_CONVERT
+	__write_to_interface_buffer_with_crlf(0, (void *)ptr, len);
+#else
+	__write_to_interface_buffer(0, (void *)ptr, len);
+#endif
 	return len;
 }
 

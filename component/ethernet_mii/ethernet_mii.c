@@ -56,6 +56,18 @@ extern int lwip_init_done;
 
 static _sema mii_linkup_sema;
 
+#include "device_lock.h"
+#include "hal_otp.h"
+void hal_eth_otp_lock(void)
+{
+	device_mutex_lock(RT_DEV_LOCK_EFUSE);
+	rtw_enter_critical(NULL, NULL);
+}
+void hal_eth_otp_unlock(void)
+{
+	rtw_exit_critical(NULL, NULL);
+	device_mutex_unlock(RT_DEV_LOCK_EFUSE);
+}
 
 void mii_rx_thread(void *param)
 {

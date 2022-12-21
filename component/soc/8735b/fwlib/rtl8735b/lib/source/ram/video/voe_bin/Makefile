@@ -55,6 +55,8 @@ all:
 	$(OBJCOPY) -I binary -O elf32-littlearm -B arm sensor_sc2336.bin $(OBJCOPYDIR)/sensor_sc2336.o;
 	$(OBJCOPY) -I binary -O elf32-littlearm -B arm sensor_imx327.bin $(OBJCOPYDIR)/sensor_imx327.o;	
 	$(OBJCOPY) -I binary -O elf32-littlearm -B arm iq.bin $(OBJCOPYDIR)/iq.o;
+	$(OBJCOPY) -I binary -O elf32-littlearm -B arm iq_ext.bin $(OBJCOPYDIR)/iq_ext.o;
+	$(OBJCOPY) -I binary -O elf32-littlearm -B arm iq_linear.bin $(OBJCOPYDIR)/iq_linear.o;		
 	$(OBJCOPY) -I binary -O elf32-littlearm -B arm voeiram.bin $(OBJCOPYDIR)/voeiram.o;
 	$(OBJCOPY) -I binary -O elf32-littlearm -B arm fcs_data_ccut.bin $(OBJCOPYDIR)/fcs_data_ccut.o;	
 

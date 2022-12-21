@@ -125,8 +125,8 @@ typedef struct video_meta_s {
 	uint32_t video_addr;
 	uint32_t video_len;
 	uint32_t meta_offset;
-	//isp_meta_t *isp_meta_data;
-	//isp_statis_meta_t *isp_statis_meta;
+	isp_meta_t *isp_meta_data;
+	isp_statis_meta_t *isp_statis_meta;
 	uint32_t user_buf[VIDEO_META_USER_SIZE];
 } video_meta_t;
 
@@ -200,6 +200,8 @@ int voe_boot_fsc_id(void);
 void video_set_fcs_queue_info(int start_time, int end_time);
 
 void video_get_fcs_queue_info(int *start_time, int *end_time);
+
+int video_get_maxqp(int ch);
 
 //////////////////////
 #define VOE_NAND_FLASH_OFFSET 0x8000000

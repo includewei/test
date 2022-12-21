@@ -236,7 +236,7 @@ WIFI_RETRY_LOOP:
 		ret = wifi_connect(&wifi, 1);
 		if (ret != RTW_SUCCESS) {
 			wifi_retry_connect--;
-			if (wifi_retry_connect > 0) {
+			if ((wifi_retry_connect > 0) && (p_wifi_do_fast_connect != NULL)) {
 				/* Add the delay to wait for the _rtw_join_timeout_handler
 				 * If there is no this delay, there are some error when rhe AP
 				 * send the disassociation frame. It will cause the connection
@@ -313,6 +313,8 @@ void wifi_fast_connect_enable(u8 enable)
 	if (enable == 0) {
 		p_wifi_do_fast_connect = NULL;
 		p_store_fast_connect_info = NULL;
+	} else if (enable == 0xff) {
+		p_wifi_do_fast_connect = NULL;
 	} else {
 #if ATCMD_VER == ATVER_2
 		struct wlan_fast_reconnect read_data = {0};

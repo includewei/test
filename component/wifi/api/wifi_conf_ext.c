@@ -697,4 +697,14 @@ int wifi_del_station(unsigned char wlan_idx, unsigned char *hwaddr)
 	return rltk_del_station(wlan_idx, hwaddr);
 }
 
+int wifi_set_ra_start_rate(unsigned char rate)
+{
+	return rltk_wlan_set_ra_start_rate(rate);
+}
+
+int wifi_set_ra_max_rate(unsigned char max_rate)
+{
+	return rltk_wlan_set_ra_max_rate(max_rate);
+}
+
 #endif	//#if CONFIG_WLAN

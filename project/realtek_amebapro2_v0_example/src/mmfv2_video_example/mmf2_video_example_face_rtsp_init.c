@@ -78,6 +78,7 @@ static rtsp2_params_t rtsp2_v1_params = {
 	}
 };
 
+// NN model config //
 #define NN_CHANNEL 4
 #define NN_RESOLUTION VIDEO_VGA //don't care for NN
 #define NN_FPS 10

@@ -6785,6 +6785,7 @@ struct retention_ssl {
 	uint8_t cipher_key_enc[32]; // aes256
 	uint8_t cipher_key_dec[32]; // aes256
 	uint8_t in_ctr[8];
+	uint8_t out_ctr[8];
 };
 
 __attribute__((section (".retention.data"))) struct retention_ssl retention_ssl;
@@ -6807,6 +6808,8 @@ int mbedtls_ssl_retain(mbedtls_ssl_context *ssl)
 	memcpy(retention_ssl.cipher_key_dec, ((mbedtls_aes_context *) ssl->transform->cipher_ctx_dec.cipher_ctx)->rk, 32);
 	// in_ctr
 	memcpy(retention_ssl.in_ctr, ssl->in_ctr, 8);
+	// out_ctr
+	memcpy(retention_ssl.out_ctr, ssl->cur_out_ctr, 8);
 
 	dcache_clean_invalidate_by_addr((uint32_t *) &retention_ssl, sizeof(retention_ssl));
 	return 0;
@@ -6877,7 +6880,13 @@ int mbedtls_ssl_resume(mbedtls_ssl_context *ssl, uint8_t in_ctr[8], uint8_t out_
 		ssl->handshake = NULL;
 	}
 
-	// ctr
+	uint8_t zero_ctr[8];
+	memset(zero_ctr, 0, 8);
+
+	// in_ctr
+	if (memcmp(zero_ctr, in_ctr, 8) == 0) {
+		in_ctr[7] = 1;
+	}
 	uint16_t ctr_carry = 0;
 	for (int i = 8; i > 0; i --) {
 		uint16_t ctr_prev = (uint16_t) retention_ssl.in_ctr[i - 1];
@@ -6885,14 +6894,22 @@ int mbedtls_ssl_resume(mbedtls_ssl_context *ssl, uint8_t in_ctr[8], uint8_t out_
 		in_ctr[i - 1] = (uint8_t) ((ctr_prev + ctr_inc + ctr_carry) & 0x00ff);
 		ctr_carry = ((ctr_prev + ctr_inc + ctr_carry) & 0xff00) >> 8;
 	}
-	for (int i = 8; i > 0; i --) {
-		if (++ out_ctr[i - 1] != 0) {
-			break;
-		}
-	}
 	memcpy(ssl->in_ctr, in_ctr, 8);
-	memcpy(ssl->out_ctr, out_ctr, 8);
-	memcpy(ssl->cur_out_ctr, out_ctr, 8);
+
+	// out_ctr
+	if (memcmp(zero_ctr, out_ctr, 8) == 0) {
+		memcpy(ssl->out_ctr, retention_ssl.out_ctr, 8);
+		memcpy(ssl->cur_out_ctr, retention_ssl.out_ctr, 8);
+	}
+	else {
+		for (int i = 8; i > 0; i --) {
+			if (++ out_ctr[i - 1] != 0) {
+				break;
+			}
+		}
+		memcpy(ssl->out_ctr, out_ctr, 8);
+		memcpy(ssl->cur_out_ctr, out_ctr, 8);
+	}
 
 	return 0;
 }

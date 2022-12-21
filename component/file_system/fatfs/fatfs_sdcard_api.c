@@ -21,14 +21,30 @@ static uint32_t fatfs_sd_buf_pos;
 #define DEMO_Board_SD_POWER_PIN    PF_16
 #define SD_POWER_RESET_DELAY_TIME 100
 static gpio_t gpio_sd_power;
+static int sd_gpio_init_status = 0;
 
 void sd_gpio_init(void)
 {
-	gpio_init(&gpio_sd_power, DEMO_Board_SD_POWER_PIN);
-	gpio_dir(&gpio_sd_power, PIN_OUTPUT);    // Direction: Output
-	gpio_mode(&gpio_sd_power, PullNone);     // No pull
-	gpio_write(&gpio_sd_power, 0);
-	vTaskDelay(SD_POWER_RESET_DELAY_TIME);
+	if (sd_gpio_init_status == 0) {
+		sd_gpio_init_status = 1;
+		gpio_init(&gpio_sd_power, DEMO_Board_SD_POWER_PIN);
+		gpio_dir(&gpio_sd_power, PIN_OUTPUT);    // Direction: Output
+		gpio_mode(&gpio_sd_power, PullNone);     // No pull
+		gpio_write(&gpio_sd_power, 0);
+		vTaskDelay(SD_POWER_RESET_DELAY_TIME);
+	} else {
+		printf("The sd gpio pin has already init\r\n");
+	}
+}
+
+void sd_gpio_deinit(void)
+{
+	if (sd_gpio_init_status) {
+		gpio_deinit(&gpio_sd_power);
+		sd_gpio_init_status = 0;
+	} else {
+		printf("It don't have init the sd card\r\n");
+	}
 }
 
 void sd_gpio_power_reset(void)

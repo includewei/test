@@ -46,10 +46,6 @@ void init_thread(void *param)
 
 #if CONFIG_WLAN
 	wifi_on(RTW_MODE_STA);
-#if CONFIG_AUTO_RECONNECT
-	//setup reconnection flag
-	wifi_config_autoreconnect(1, AUTO_RECONNECT_COUNT, AUTO_RECONNECT_INTERVAL);
-#endif
 	printf("\n\r%s(%d), Available heap 0x%x\n", __FUNCTION__, __LINE__, xPortGetFreeHeapSize());
 #endif
 

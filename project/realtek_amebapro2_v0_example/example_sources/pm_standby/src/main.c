@@ -10,8 +10,8 @@
 
 //wake up by Stimer    : 0
 //wake up by AON_GPIO  : 1
-//wake up by UART      : 2
-//wake up by Gtimer    : 3
+//wake up by UART      : 2	//Only support 4MHz clock source
+//wake up by Gtimer    : 3	//Only support 4MHz clock source
 //wake up by PON_GPIO  : 4
 //wake up by RTC       : 5
 #define WAKEUP_SOURCE 0

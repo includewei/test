@@ -261,7 +261,6 @@ int  flash_stream_read(flash_t *obj, uint32_t address, uint32_t len, uint8_t *da
 {
 	flash_init(obj);
 
-	dcache_invalidate_by_addr((uint32_t *)(SPI_FLASH_BASE + address), len);
 	hal_flash_stream_read((obj->phal_spic_adaptor), len, address, data);
 	return 1;
 }
@@ -301,7 +300,6 @@ int  flash_burst_read(flash_t *obj, uint32_t address, uint32_t Length, uint8_t *
 {
 	flash_init(obj);
 
-	dcache_invalidate_by_addr((uint32_t *)(SPI_FLASH_BASE + address), Length);
 	hal_flash_stream_read((obj->phal_spic_adaptor), Length, address, data);
 	return 1;
 }

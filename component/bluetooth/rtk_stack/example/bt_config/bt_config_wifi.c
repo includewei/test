@@ -358,6 +358,13 @@ void BC_status_monitor(void *p_param)
 	os_task_delete(NULL);
 }
 
+void bt_config_create_secure_context(void)
+{
+	#if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
+		rtw_create_secure_context(configMINIMAL_SECURE_STACK_SIZE + 256);
+	#endif
+}
+
 void bt_config_wifi_init(void)
 {
 	BC_cmd_task_init();

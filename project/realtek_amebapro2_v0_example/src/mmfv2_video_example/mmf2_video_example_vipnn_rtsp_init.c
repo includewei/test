@@ -14,6 +14,7 @@
 #include "avcodec.h"
 
 #include "img_sample/input_image_640x360x3.h"
+#include "nn_utils/class_name.h"
 #include "model_yolo.h"
 
 #include "hal_video.h"
@@ -78,10 +79,7 @@ static rtsp2_params_t rtsp2_v1_params = {
 	}
 };
 
-// NN model selction //
-#define YOLO_MODEL              1
-#define USE_NN_MODEL            YOLO_MODEL
-
+// NN model config //
 #define NN_CHANNEL 4
 #define NN_RESOLUTION VIDEO_VGA //don't care for NN
 #define NN_FPS 10
@@ -89,26 +87,12 @@ static rtsp2_params_t rtsp2_v1_params = {
 #define NN_BPS 1024*1024 //don't care for NN
 #define NN_TYPE VIDEO_RGB
 
-#if (USE_NN_MODEL==YOLO_MODEL)
 #define NN_MODEL_OBJ   yolov4_tiny  // yolov7_tiny
 #define NN_WIDTH	416
 #define NN_HEIGHT	416
 static float nn_confidence_thresh = 0.5;
 static float nn_nms_thresh = 0.3;
-static int desired_class_num = 4;
 static int desired_class_list[] = {0, 2, 5, 7};
-static const char *tag[80] = {"person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light",
-							  "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-							  "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-							  "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle",
-							  "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
-							  "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed",
-							  "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven",
-							  "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
-							 };
-#else
-#error Please set model correctly. (YOLO_MODEL)
-#endif
 
 #if USE_SENSOR == SENSOR_GC4653
 #define SENSOR_MAX_WIDTH 2560
@@ -190,7 +174,7 @@ static mm_siso_t *siso_array_vipnn         = NULL;
 
 static int check_in_list(int class_indx)
 {
-	for (int i = 0; i < desired_class_num; i++) {
+	for (int i = 0; i < (sizeof(desired_class_list) / sizeof(int)); i++) {
 		if (class_indx == desired_class_list[i]) {
 			return class_indx;
 		}
@@ -246,7 +230,7 @@ static void nn_set_object(void *p, void *img_param)
 				printf("%d,c%d:%d %d %d %d\n\r", i, class_id, xmin, ymin, xmax, ymax);
 				canvas_set_rect(RTSP_CHANNEL, 0, xmin, ymin, xmax, ymax, 3, COLOR_WHITE);
 				char text_str[20];
-				snprintf(text_str, sizeof(text_str), "%s %d", tag[class_id], (int)(res->result[6 * i + 1 ] * 100));
+				snprintf(text_str, sizeof(text_str), "%s %d", coco_name_get_by_id(class_id), (int)(res->result[6 * i + 1 ] * 100));
 				canvas_set_text(RTSP_CHANNEL, 0, xmin, ymin - 32, text_str, COLOR_CYAN);
 			}
 		}

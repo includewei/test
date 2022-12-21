@@ -46,31 +46,30 @@ int md_handle(void *p, void *input, void *output)
 	mm_queue_item_t *output_item = (mm_queue_item_t *)output;
 	int i, j, k, l;
 
-	//printf("width = %d,height = %d\n",ctx->params->width, ctx->params->height);
+	//printf("width = %d,height = %d\n",ctx->params->image_width, ctx->params->image_height);
 	//printf("image size = %d\n",input_item->size);
 
-#if MD_AFTER_AE_STABLE
-	if (ctx->motion_detect_ctx->AE_stable == 0) {
-		printf("AE not sable\n\r");
-		ctx->motion_detect_ctx->AE_stable = check_AE_stable();
-		return 0;
+	if (ctx->motion_detect_ctx->en_AE_stable) {
+		if (ctx->motion_detect_ctx->AE_stable == 0) {
+			printf("AE not sable\n\r");
+			ctx->motion_detect_ctx->AE_stable = check_AE_stable();
+			return 0;
+		}
 	}
-#endif
 
-	if (ctx->motion_detect_ctx->count % MOTION_DETECT_INTERVAL == 0) {
+	if (ctx->motion_detect_ctx->count % ctx->motion_detect_ctx->detect_interval == 0) {
 		unsigned long tick1 = xTaskGetTickCount();
-		md_get_YRGB_value(ctx->motion_detect_ctx, ctx->params->width, ctx->params->height, (unsigned char *)input_item->data_addr);
+		md_get_YRGB_value(ctx->motion_detect_ctx, ctx->params, (unsigned char *)input_item->data_addr);
 		//printf("\r\nCalculate YRGB after %dms.\n", (xTaskGetTickCount() - tick1));
 	}
-
 	if (ctx->motion_detect_ctx->count == 0) {
-		printf("initial_bgmodel\n\r");
-		initial_bgmodel(ctx->motion_detect_ctx);
+		printf("md initial bgmodel\n\r");
+		md_initial_bgmodel(ctx->motion_detect_ctx, ctx->params);
 	}
-	if (ctx->motion_detect_ctx->count % MOTION_DETECT_INTERVAL == 0) {
-		motion_detect(ctx->motion_detect_ctx);
-		if (ctx->motion_detect_ctx->count == MOTION_DETECT_INTERVAL * 1000) {
-			ctx->motion_detect_ctx->count = MOTION_DETECT_INTERVAL;
+	if (ctx->motion_detect_ctx->count % ctx->motion_detect_ctx->detect_interval == 0) {
+		motion_detect(ctx->motion_detect_ctx, ctx->params);
+		if (ctx->motion_detect_ctx->count == ctx->motion_detect_ctx->detect_interval * 1000) {
+			ctx->motion_detect_ctx->count = ctx->motion_detect_ctx->detect_interval;
 		}
 		if (ctx->disp_postproc) {
 			ctx->disp_postproc(ctx->motion_detect_ctx->md_result);
@@ -102,6 +101,14 @@ int md_control(void *p, int cmd, int arg)
 	switch (cmd) {
 	case CMD_MD_SET_PARAMS:
 		ctx->params = (md_param_t *)arg;
+		if (ctx->params->md_row > MD_MAX_ROW) {
+			printf("Motion Detect: md row cannot exceed %d\r\n", MD_MAX_ROW);
+			ctx->params->md_row = MD_MAX_ROW;
+		}
+		if (ctx->params->md_col > MD_MAX_COL) {
+			printf("Motion Detect: md col cannot exceed %d\r\n", MD_MAX_COL);
+			ctx->params->md_col = MD_MAX_COL;
+		}
 		break;
 	case CMD_MD_SET_MD_THRESHOLD:
 		memcpy(ctx->motion_detect_ctx->md_threshold, (motion_detect_threshold_t *)arg, sizeof(motion_detect_threshold_t));
@@ -120,9 +127,9 @@ int md_control(void *p, int cmd, int arg)
 	case CMD_MD_SET_MD_MASK:
 		memcpy(ctx->motion_detect_ctx->md_mask, (char *)arg, sizeof(ctx->motion_detect_ctx->md_mask));
 		printf("Set MD Mask: \r\n");
-		for (int j = 0; j < md_row; j++) {
-			for (int k = 0; k < md_col; k++) {
-				printf("%d ", ctx->motion_detect_ctx->md_mask[j * md_col + k]);
+		for (int j = 0; j < ctx->params->md_row; j++) {
+			for (int k = 0; k < ctx->params->md_col; k++) {
+				printf("%d ", ctx->motion_detect_ctx->md_mask[j * ctx->params->md_col + k]);
 			}
 			printf("\r\n");
 		}
@@ -144,6 +151,15 @@ int md_control(void *p, int cmd, int arg)
 		break;
 	case CMD_MD_SET_TRIG_BLK:
 		ctx->motion_detect_ctx->md_trigger_block_threshold = arg;
+		break;
+	case CMD_MD_SET_AE_STABLE:
+		ctx->motion_detect_ctx->en_AE_stable = arg;
+		break;
+	case CMD_MD_SET_DYN_THR:
+		ctx->motion_detect_ctx->en_dyn_thr_flag = arg;
+		break;
+	case CMD_MD_SET_DETECT_INTERVAL:
+		ctx->motion_detect_ctx->detect_interval = arg;
 		break;
 	}
 
@@ -183,17 +199,17 @@ void *md_create(void *parent)
 	ctx->motion_detect_ctx->max_turn_off = 15;
 	ctx->motion_detect_ctx->md_trigger_block_threshold = 1;
 
+	ctx->motion_detect_ctx->en_AE_stable = 1;
+	ctx->motion_detect_ctx->detect_interval = 1;
+
 	ctx->motion_detect_ctx->md_threshold = (motion_detect_threshold_t *) malloc(sizeof(motion_detect_threshold_t));
 	ctx->motion_detect_ctx->md_threshold->Tbase = 2;
 	ctx->motion_detect_ctx->md_threshold->Tlum = 3;
 	ctx->motion_detect_ctx->Tauto = 1;
 	ctx->disp_postproc = NULL;
 
-	for (int i = 0; i < md_col * md_row; i++) {
+	for (int i = 0; i < MD_MAX_COL * MD_MAX_ROW; i++) {
 		ctx->motion_detect_ctx->md_mask[i] = 1;
-	}
-	if (DYNAMIC_THRESHOLD) {
-		ctx->motion_detect_ctx->md_threshold->Tbase = 2;
 	}
 
 	ctx->parent = parent;
@@ -208,7 +224,7 @@ void *md_new_item(void *p)
 {
 	md_ctx_t *ctx = (md_ctx_t *)p;
 
-	return (void *)malloc(ctx->params->width * ctx->params->height * 3);
+	return (void *)malloc(ctx->params->image_width * ctx->params->image_height * 3);
 }
 
 void *md_del_item(void *p, void *d)

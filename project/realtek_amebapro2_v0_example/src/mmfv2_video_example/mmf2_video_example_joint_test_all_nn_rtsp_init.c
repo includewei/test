@@ -14,6 +14,7 @@
 #include "video_example_media_framework.h"
 #include "avcodec.h"
 
+#include "nn_utils/class_name.h"
 #include "model_yolo.h"
 #include "model_mobilefacenet.h"
 #include "model_scrfd.h"
@@ -100,6 +101,7 @@ static nn_data_param_t aud_info = {
 	}
 };
 
+// NN model config //
 #define NN_CHANNEL 4
 #define NN_RESOLUTION VIDEO_VGA //don't care for NN
 #define NN_FPS 10
@@ -115,17 +117,7 @@ static nn_data_param_t aud_info = {
 #define NN_MODEL3_OBJ   yolov4_tiny
 static float nn_confidence_thresh = 0.5;
 static float nn_nms_thresh = 0.3;
-static int desired_class_num = 4;
 static int desired_class_list[] = {0, 2, 5, 7};
-static const char *tag[80] = {"person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light",
-							  "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-							  "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-							  "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle",
-							  "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
-							  "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed",
-							  "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven",
-							  "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
-							 };
 
 
 static video_params_t video_v4_params = {
@@ -246,7 +238,7 @@ static void face_draw_object(void *p, void *img_param)
 
 static int check_in_list(int class_indx)
 {
-	for (int i = 0; i < desired_class_num; i++) {
+	for (int i = 0; i < (sizeof(desired_class_list) / sizeof(int)); i++) {
 		if (class_indx == desired_class_list[i]) {
 			return class_indx;
 		}
@@ -295,12 +287,11 @@ static void objdet_draw_object(void *p, void *img_param)
 				LIMIT(ymax, 0, im_h)
 
 				char text_str[20];
-				snprintf(text_str, sizeof(text_str), "%s", tag[class_id]);
+				snprintf(text_str, sizeof(text_str), "%s", coco_name_get_by_id(class_id));
 				canvas_set_rect(RTSP_CHANNEL, 0, xmin, ymin, xmax, ymax, 3, COLOR_CYAN);
 				canvas_set_text(RTSP_CHANNEL, 0, xmin, ymin - 40, text_str, COLOR_CYAN);
 			}
 		}
-		canvas_update(RTSP_CHANNEL, 0);
 
 		int human_cnt = 0;
 		for (i = 0; i < res->obj_num; i++) {
@@ -318,6 +309,7 @@ static void objdet_draw_object(void *p, void *img_param)
 			simo_pause(simo_video_yolo_facedet, MM_OUTPUT0);
 		}
 	}
+	canvas_update(RTSP_CHANNEL, 0);
 }
 
 

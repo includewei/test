@@ -102,6 +102,9 @@ static void example_mmf2_video_surport(void)
 	// V1 parameter change
 	//mmf2_video_example_v1_param_change_init();
 
+	// V1 rate control example
+	//mmf2_video_example_v1_rate_control_init();
+
 	//HTTP File Server
 	//mmf2_video_example_av_mp4_httpfs_init();
 

@@ -309,6 +309,15 @@ void hal_rtl_eth_get_mac_addr(hal_eth_adapter_t *peth_adapter, u8 *addr)
 }
 
 
+__weak void hal_eth_otp_lock(void);
+__weak void hal_eth_otp_unlock(void);
+__weak void hal_eth_otp_lock(void)
+{
+}
+__weak void hal_eth_otp_unlock(void)
+{
+}
+
 /**
  *  @brief To initialize the Ethernet controller.
  *
@@ -386,7 +395,9 @@ hal_status_t hal_rtl_eth_init(hal_eth_adapter_t *peth_adapter)
 
 	tmp = hal_rtl_eth_rd_phy_reg(peth_adapter, FEPHY_REG_PAGE_BC0, FEPHY_REG_ADDR_23);
 	tmp = tmp & 0xFF00;
+	hal_eth_otp_lock();
 	rd_data = hal_otp_byte_rd_syss(0x497);
+	hal_eth_otp_unlock();
 	if (rd_data & BIT4) {
 		// set default idac value = 0x6 (bit[7:4]: idac_fine_mdix, bit[3:0]: idac_fine_mdi)
 		hal_rtl_eth_wr_phy_reg(peth_adapter, FEPHY_REG_PAGE_BC0, FEPHY_REG_ADDR_23, tmp | 0x66);

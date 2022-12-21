@@ -74,6 +74,9 @@ int rltk_wlan_get_wifi_mac_address(__u8 *mac);
 int rltk_wlan_set_bt_mac_address(__u8 *bt_mac);
 int rltk_wlan_get_bt_mac_address(__u8 *mac);
 int rltk_wlan_get_ap_dtim(__u8 *dtim_period);
+int rltk_wlan_set_ra_start_rate(__u8 rate);
+int rltk_wlan_set_ra_max_rate(__u8 rate);
+int rltk_wlan_set_ra_mask_en(__u8 enable);
 
 void rltk_psk_info_set(struct psk_info *psk_data);
 void rltk_psk_info_get(struct psk_info *psk_data);

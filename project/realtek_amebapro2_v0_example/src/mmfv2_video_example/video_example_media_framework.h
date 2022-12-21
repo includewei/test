@@ -54,6 +54,8 @@ void mmf2_video_example_array_rtsp_init(void);
 
 void mmf2_video_example_v1_param_change_init(void);
 
+void mmf2_video_example_v1_rate_control_init(void);
+
 void mmf2_video_example_vipnn_rtsp_init(void);
 
 void mmf2_video_example_face_rtsp_init(void);

@@ -41,7 +41,7 @@ This is a simple guide to amazon freertos demo, user can refer `AmebaPro2_Amazon
 
 ## Configure mbedtls setting
 
-- In this project, we use mbedtls-2.16.6, same as KVS webrtc. Set mbedtls version to 2.16.6 in `project/realtek_amebapro2_v0_example/GCC-RELEASE/application/CMakeLists.txt`
+- In this project, we use mbedtls-2.16.6, same as KVS webrtc. Set mbedtls version to 2.16.6 in `project/realtek_amebapro2_v0_example/GCC-RELEASE/config.cmake`
   ```
   set(mbedtls "mbedtls-2.16.6")
   ```

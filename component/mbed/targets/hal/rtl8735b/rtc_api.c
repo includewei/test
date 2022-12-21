@@ -63,6 +63,16 @@ void rtc_init(void)
 	sw_rtc_en = 1;
 }
 
+void rtc_init_with_cali(void)
+{
+	uint32_t cali;
+	// Enable RTC function
+	hal_sdm_32k_enable(0);
+	hal_32k_s1_sel(1);
+	hal_rtc_init(&rtc_veri_adpt); // gianni nsc developemnet
+	sw_rtc_en = 1;
+	hal_rtc_set_comp(&rtc_veri_adpt, 1);
+}
 void rtc_free(void)
 {
 	// Disable RTC function

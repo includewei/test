@@ -243,6 +243,7 @@ list(
 	${sdk_root}/component/at_cmd/atcmd_isp.c
 	${sdk_root}/component/at_cmd/atcmd_ftl.c
 	${sdk_root}/component/at_cmd/atcmd_ethernet.c
+	${sdk_root}/component/at_cmd/atcmd_stub.c
 	${sdk_root}/component/at_cmd/log_service.c
 	${sdk_root}/component/soc/8735b/misc/driver/rtl_console.c
 	${sdk_root}/component/soc/8735b/misc/driver/low_level_io.c
@@ -311,11 +312,18 @@ list(
 	#ota
 	${sdk_root}/component/soc/8735b/misc/platform/ota_8735b.c
 	${sdk_root}/component/soc/8735b/misc/platform/ota_8735b_fwfs.c
+	${sdk_root}/component/soc/8735b/misc/platform/dfu_8735b.c
 	#httplite
 	${sdk_root}/component/network/httplite/http_client.c
 	#tftp
 	${sdk_root}/component/network/tftp/tftp_client.c
 	${sdk_root}/component/network/tftp/tftp_server.c
+	#coap
+	${sdk_root}/component/network/coap/sn_coap_ameba_port.c
+	${sdk_root}/component/network/coap/sn_coap_builder.c
+	${sdk_root}/component/network/coap/sn_coap_header_check.c
+	${sdk_root}/component/network/coap/sn_coap_parser.c
+	${sdk_root}/component/network/coap/sn_coap_protocol.c
 )
 
 #lwip
@@ -719,6 +727,7 @@ list(
 	${prj_root}/src/test_model/nn_utils/iou.c
 	${prj_root}/src/test_model/nn_utils/nms.c
 	${prj_root}/src/test_model/nn_utils/tensor.c
+	${prj_root}/src/test_model/nn_utils/class_name.c
 )
 #NN module
 list(
@@ -976,12 +985,15 @@ list(
 	${sdk_root}/component/audio/3rdparty/faac/libfaac
 	${prj_root}/component/file_system/fatfs/r0.14
 	${sdk_root}/component/soc/8735b/fwlib/rtl8735b/lib/source/ram/video/osd
+	${sdk_root}/component/video/osd2
 	${sdk_root}/component/video/md
 	${sdk_root}/component/wifi/wifi_config
 	
 	${sdk_root}/component/media/framework
 	${sdk_root}/component/soc/8735b/misc/driver
 	${sdk_root}/component/soc/8735b/misc/driver/xmodem
+
+	${sdk_root}/component/network/coap/include
 )
 
 target_include_directories( ${app} PUBLIC ${app_inc_path} )

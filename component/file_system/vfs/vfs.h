@@ -12,15 +12,15 @@ extern "C" {
 
 typedef int(*qsort_compar)(const void *, const void *);
 
-#define O_ACCMODE	0x00000003
-#define O_RDONLY	0x00000000
-#define O_WRONLY	0x00000001
-#define O_RDWR		0x00000002
-#define O_CREAT		0x00000100
-#define O_EXCL		0X00000200
-#define O_TRUNC		0x00001000
-#define O_APPEND	0x00002000
-#define O_CLOEXEC	0x02000000
+#define VFS_O_ACCMODE	0x00000003
+#define VFS_O_RDONLY	0x00000000
+#define VFS_O_WRONLY	0x00000001
+#define VFS_O_RDWR		0x00000002
+#define VFS_O_CREAT		0x00000100
+#define VFS_O_EXCL		0X00000200
+#define VFS_O_TRUNC		0x00001000
+#define VFS_O_APPEND	0x00002000
+#define VFS_O_CLOEXEC	0x02000000
 
 #define VFS_FATFS       0X00
 #define VFS_LITTLEFS    0X01

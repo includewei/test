@@ -104,6 +104,11 @@ target_link_options(
 	"LINKER:SHELL:-T ${ld_script}"
 	"LINKER:SHELL:-Map=${CMAKE_CURRENT_BINARY_DIR}/bootloader.map"
 	"LINKER:-wrap,puts"
+	"LINKER:-wrap,printf"
+	"LINKER:-wrap,sprintf"
+	"LINKER:-wrap,snprintf"
+	"LINKER:-wrap,vsnprintf"
+	"LINKER:-wrap,vprintf"		
 )
 
 set_target_properties(${bootloader} PROPERTIES LINK_DEPENDS ${ld_script})

@@ -62,6 +62,11 @@ list(
 )
 
 list(
+	APPEND webrtc_kvs_string_rename_flag
+	strnchr=webrtc_strnchr
+)
+
+list(
 	APPEND kvs_webrtc_flags
 	CONFIG_BUILD_RAM=1 
 	CONFIG_BUILD_LIB=1 
@@ -76,6 +81,7 @@ list(
 	${wslay_flags}
 
 	${webrtc_netio_func_rename_flag}
+	${webrtc_kvs_string_rename_flag}
 )
 if(USE_DATA_CHANNEL)
 list(

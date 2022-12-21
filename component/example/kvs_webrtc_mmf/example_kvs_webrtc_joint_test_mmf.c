@@ -160,17 +160,20 @@ static mp4_params_t mp4_v1_params = {
 #define NN_HEIGHT	416
 static float nn_confidence_thresh = 0.4;
 static float nn_nms_thresh = 0.3;
-static int desired_class_num = 4;
-static int desired_class_list[] = {0, 2, 5, 7};
-static const char *tag[80] = {"person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light",
-							  "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-							  "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-							  "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle",
-							  "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
-							  "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "sofa", "pottedplant", "bed",
-							  "diningtable", "toilet", "tvmonitor", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven",
-							  "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
-							 };
+
+#if USE_SENSOR == SENSOR_GC4653
+#define SENSOR_MAX_WIDTH 2560
+#define SENSOR_MAX_HEIGHT 1440
+#elif USE_SENSOR == SENSOR_SC301
+#define SENSOR_MAX_WIDTH 2048
+#define SENSOR_MAX_HEIGHT 1536
+#elif USE_SENSOR == SENSOR_JXF51
+#define SENSOR_MAX_WIDTH 1536
+#define SENSOR_MAX_HEIGHT 1536
+#else
+#define SENSOR_MAX_WIDTH 1920
+#define SENSOR_MAX_HEIGHT 1080
+#endif
 
 static video_params_t video_v4_params = {
 	.stream_id 		= NN_CHANNEL,
@@ -187,8 +190,8 @@ static video_params_t video_v4_params = {
 	.roi = {
 		.xmin = 0,
 		.ymin = 0,
-		.xmax = 1920, //ORIGIN WIDTH
-		.ymax = 1080, //ORIGIN WIDTH
+		.xmax = SENSOR_MAX_WIDTH,
+		.ymax = SENSOR_MAX_HEIGHT,
 	}
 };
 
@@ -205,122 +208,6 @@ static nn_data_param_t roi_nn = {
 		}
 	}
 };
-
-//--------------------------------------------
-// Draw Rect
-//--------------------------------------------
-#define OSD_ENABLE  0
-
-#define LIMIT(x, lower, upper) if(x<lower) x=lower; else if(x>upper) x=upper;
-
-#include "nn_osd_draw.h"
-static nn_osd_draw_obj_t nn_object;
-
-#if OSD_ENABLE
-static nn_osd_rect_t osd_rect = {
-	.line_width = 3,
-	.color = {
-		.r = 255,
-		.g = 255,
-		.b = 255
-	}
-};
-static nn_osd_text_t osd_text = {
-	.color = {
-		.r = 0,
-		.g = 255,
-		.b = 255
-	}
-};
-#endif
-
-static int check_in_list(int class_indx)
-{
-	for (int i = 0; i < desired_class_num; i++) {
-		if (class_indx == desired_class_list[i]) {
-			return class_indx;
-		}
-	}
-	return -1;
-}
-
-static void nn_set_object(void *p, void *img_param)
-{
-	int i = 0;
-	objdetect_res_t *res = (objdetect_res_t *)p;
-	nn_data_param_t *im = (nn_data_param_t *)img_param;
-
-	if (!p || !img_param)	{
-		return;
-	}
-
-	int im_h = WEBRTC_HEIGHT;
-	int im_w = WEBRTC_WIDTH;
-
-	float ratio_h = (float)im_h / (float)im->img.height;
-	float ratio_w = (float)im_w / (float)im->img.width;
-	int roi_h = (int)((im->img.roi.ymax - im->img.roi.ymin) * ratio_h);
-	int roi_w = (int)((im->img.roi.xmax - im->img.roi.xmin) * ratio_w);
-	int roi_x = (int)(im->img.roi.xmin * ratio_w);
-	int roi_y = (int)(im->img.roi.ymin * ratio_h);
-
-	printf("object num = %d\r\n", res->obj_num);
-	if (res->obj_num > 0) {
-		nn_object.obj_num = 0;
-		for (i = 0; i < res->obj_num; i++) {
-			int obj_class = (int)res->result[6 * i ];
-#if OSD_ENABLE
-			if (nn_object.obj_num == OSD_OBJ_MAX_NUM) {
-				break;
-			}
-#endif
-			//printf("obj_class = %d\r\n",obj_class);
-
-			int class_id = check_in_list(obj_class); //show class in desired_class_list
-			//int class_id = obj_class; //coco label
-			if (class_id != -1) {
-				int ind = nn_object.obj_num;
-				nn_object.rect[ind].ymin = (int)(res->result[6 * i + 3] * roi_h) + roi_y;
-				LIMIT(nn_object.rect[ind].ymin, 0, im_h - 1)
-
-				nn_object.rect[ind].xmin = (int)(res->result[6 * i + 2] * roi_w) + roi_x;
-				LIMIT(nn_object.rect[ind].xmin, 0, im_w - 1)
-
-				nn_object.rect[ind].ymax = (int)(res->result[6 * i + 5] * roi_h) + roi_y;
-				LIMIT(nn_object.rect[ind].ymax, 0, im_h - 1)
-
-				nn_object.rect[ind].xmax = (int)(res->result[6 * i + 4] * roi_w) + roi_x;
-				LIMIT(nn_object.rect[ind].xmax, 0, im_w - 1)
-
-				nn_object.class[ind] = class_id;
-				nn_object.score[ind] = (int)(res->result[6 * i + 1 ] * 100);
-				nn_object.obj_num++;
-				printf("%d,c%d:%d %d %d %d\n\r", i, nn_object.class[ind], nn_object.rect[ind].xmin, nn_object.rect[ind].ymin, nn_object.rect[ind].xmax,
-					   nn_object.rect[ind].ymax);
-			}
-		}
-	} else {
-		nn_object.obj_num = 0;
-	}
-
-#if OSD_ENABLE
-	int nn_osd_ready2draw = nn_osd_get_status();
-	if (nn_osd_ready2draw == 1) {
-		for (i = 0; i < OSD_OBJ_MAX_NUM; i++) {
-			if (i < nn_object.obj_num) {
-				snprintf(osd_text.text_str, sizeof(osd_text.text_str), "%s %d", tag[nn_object.class[i]], nn_object.score[i]);
-				memcpy(&osd_rect.rect, &nn_object.rect[i], sizeof(nn_rect_t));
-				nn_osd_set_rect_with_text(i, &osd_text, &osd_rect);
-			} else {
-				nn_osd_clear_bitmap(i);
-			}
-			//printf("num=%d  %d, %d, %d, %d.\r\n", g_results.num, g_results.obj[i].left, g_results.obj[i].right, g_results.obj[i].top, g_results.obj[i].bottom);
-		}
-		nn_osd_update();
-	}
-#endif
-
-}
 
 #include "wifi_conf.h"
 #include "lwip_netconf.h"
@@ -355,6 +242,54 @@ static mm_siso_t *siso_webrtc_a2            = NULL;
 static mm_siso_t *siso_a2_audio             = NULL;
 static mm_siso_t *siso_video_vipnn         	= NULL;
 static mm_mimo_t *mimo_kvs_webrtc_v3_a1     = NULL;
+
+#define LIMIT(x, lower, upper) if(x<lower) x=lower; else if(x>upper) x=upper;
+static void nn_set_object(void *p, void *img_param)
+{
+	int i = 0;
+	objdetect_res_t *res = (objdetect_res_t *)p;
+	nn_data_param_t *im = (nn_data_param_t *)img_param;
+
+	if (!p || !img_param)	{
+		return;
+	}
+
+	int im_h = V1_HEIGHT;
+	int im_w = V1_WIDTH;
+
+	float ratio_w = (float)im_w / (float)im->img.width;
+	float ratio_h = (float)im_h / (float)im->img.height;
+	int roi_h, roi_w, roi_x, roi_y;
+	if (video_v4_params.use_roi == 1) { //resize
+		roi_w = (int)((im->img.roi.xmax - im->img.roi.xmin) * ratio_w);
+		roi_h = (int)((im->img.roi.ymax - im->img.roi.ymin) * ratio_h);
+		roi_x = (int)(im->img.roi.xmin * ratio_w);
+		roi_y = (int)(im->img.roi.ymin * ratio_h);
+	} else {  //crop
+		float ratio = ratio_h < ratio_w ? ratio_h : ratio_w;
+		roi_w = (int)((im->img.roi.xmax - im->img.roi.xmin) * ratio);
+		roi_h = (int)((im->img.roi.ymax - im->img.roi.ymin) * ratio);
+		roi_x = (int)(im->img.roi.xmin * ratio + (im_w - roi_w) / 2);
+		roi_y = (int)(im->img.roi.ymin * ratio + (im_h - roi_h) / 2);
+	}
+
+	printf("object num = %d\r\n", res->obj_num);
+	if (res->obj_num > 0) {
+		for (i = 0; i < res->obj_num; i++) {
+			int class_id = (int)res->result[6 * i ];
+
+			int xmin = (int)(res->result[6 * i + 2] * roi_w) + roi_x;
+			int ymin = (int)(res->result[6 * i + 3] * roi_h) + roi_y;
+			int xmax = (int)(res->result[6 * i + 4] * roi_w) + roi_x;
+			int ymax = (int)(res->result[6 * i + 5] * roi_h) + roi_y;
+			LIMIT(xmin, 0, im_w)
+			LIMIT(xmax, 0, im_w)
+			LIMIT(ymin, 0, im_h)
+			LIMIT(ymax, 0, im_h)
+			printf("%d,c%d:%d %d %d %d\n\r", i, class_id, xmin, ymin, xmax, ymax);
+		}
+	}
+}
 
 void example_kvs_webrtc_joint_test_mmf_thread(void *param)
 {
@@ -547,10 +482,6 @@ void example_kvs_webrtc_joint_test_mmf_thread(void *param)
 		printf("siso_video_vipnn open fail\n\r");
 		goto example_kvs_webrtc_cleanup;
 	}
-
-#if OSD_ENABLE
-	nn_osd_start(WEBRTC_CHANNEL, 16, 32, WEBRTC_WIDTH, WEBRTC_HEIGHT);
-#endif
 
 example_kvs_webrtc_cleanup:
 

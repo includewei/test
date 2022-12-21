@@ -759,6 +759,8 @@ static int wps_find_out_triger_wps_AP(char *target_ssid, unsigned char *target_b
 	scan_param.scan_user_data = &wps_arg;
 	scan_param.scan_user_callback = wps_scan_result_handler;
 
+	wifi_scan_abort();
+
 	if (wifi_scan_networks(&scan_param, 0) != RTW_SUCCESS) {
 		printf("\n\rERROR: wifi scan failed");
 		goto exit;
@@ -857,6 +859,14 @@ static void wps_filter_cred_by_scan(struct dev_credential *dev_cred, int cred_cn
 
 int wps_start(u16 wps_config, char *pin, u8 channel, char *ssid)
 {
+	//Disable fast connect but store ap profile to flash
+	extern void wifi_fast_connect_enable(u8 enable);
+	wifi_fast_connect_enable(0xff);
+#if CONFIG_AUTO_RECONNECT
+	//Disable Auto connect
+	wifi_config_autoreconnect(RTW_AUTORECONNECT_DISABLE, 0, 0);
+#endif
+
 	struct dev_credential *dev_cred;
 	rtw_network_info_t wifi = {0};
 	char target_ssid[64];
@@ -1030,7 +1040,18 @@ int wps_start(u16 wps_config, char *pin, u8 channel, char *ssid)
 	if (dev_cred[select_index].ssid[0] != 0 && dev_cred[select_index].ssid_len <= 32) {
 		wps_config_wifi_setting(&wifi, &dev_cred[select_index]);
 		wifi_set_wps_phase(DISABLE);
-		ret = wps_connect_to_AP_by_certificate(&wifi);
+
+#ifdef CONFIG_SAE_SUPPORT
+		if (wifi_user_config.rtw_cmd_tsk_spt_wap3 == ENABLE) {
+			wifi_user_config.rtw_cmd_tsk_spt_wap3 = DISABLE;
+			ret = wps_connect_to_AP_by_certificate(&wifi);
+			wifi_user_config.rtw_cmd_tsk_spt_wap3 = ENABLE;
+		} else
+#endif
+		{
+			ret = wps_connect_to_AP_by_certificate(&wifi);
+		}
+
 		os_free(dev_cred, 0);
 		goto exit1;
 	} else {
@@ -1053,6 +1074,12 @@ exit1:
 	wifi_unreg_event_handler(WIFI_EVENT_WPA_EAPOL_RECVD, wpas_wsc_eapol_recvd_hdl);
 
 	wpas_wps_deinit();
+#if CONFIG_AUTO_RECONNECT
+	//setup reconnection flag
+	wifi_config_autoreconnect(1, AUTO_RECONNECT_COUNT, AUTO_RECONNECT_INTERVAL);
+#endif
+	//Enable fast connect
+	wifi_fast_connect_enable(1);
 	return ret;
 }
 
