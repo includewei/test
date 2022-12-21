@@ -34,6 +34,14 @@ int alphasort(const struct dirent **a, const struct dirent **b)
 	return strcoll((*a)->d_name, (*b)->d_name);
 }
 
+static int is_stdio(FILE *stream)
+{
+	if (stream == stdout || stream == stderr || stream == stdin) {
+		return 1;
+	}
+	return 0;
+}
+
 FILE *__wrap_fopen(const char *filename, const char *mode)
 {
 	int prefix_len = 0;
@@ -73,7 +81,12 @@ FILE *__wrap_fopen(const char *filename, const char *mode)
 int __wrap_fclose(FILE *stream)
 {
 	int ret = 0;
+
 	vfs_file *finfo = (vfs_file *)stream;
+	if (is_stdio(stream)) {
+		return 0;
+	}
+
 	ret = vfs.drv[finfo->vfs_id]->close((vfs_file *)stream);
 	free(finfo);
 	return ret;
@@ -83,14 +96,30 @@ size_t __wrap_fread(void *ptr, size_t size, size_t count, FILE *stream)
 {
 	int ret = 0;
 	vfs_file *finfo = (vfs_file *)stream;
+
+	if (is_stdio(stream)) {
+		return 0;
+	}
+
 	ret = vfs.drv[finfo->vfs_id]->read(ptr, size, count, (vfs_file *)stream);
 	return ret;
 }
 
+extern size_t _write(int file, const void *ptr, size_t len);
 size_t __wrap_fwrite(const void *ptr, size_t size, size_t count, FILE *stream)
 {
 	int ret = 0;
 	vfs_file *finfo = (vfs_file *)stream;
+	if (stream == stdout) {
+		return _write(1, ptr, size * count);
+	}
+	if (stream == stderr) {
+		return _write(2, ptr, size * count);
+	}
+	if (stream == stdin) {
+		return 0;
+	}
+
 	ret = vfs.drv[finfo->vfs_id]->write((void *)ptr, size, count, (vfs_file *)stream);
 	return ret;
 }
@@ -99,6 +128,10 @@ int  __wrap_fseek(FILE *stream, long int offset, int origin)
 {
 	int ret = 0;
 	vfs_file *finfo = (vfs_file *)stream;
+	if (is_stdio(stream)) {
+		return 0;
+	}
+
 	ret = vfs.drv[finfo->vfs_id]->seek(offset, origin, (vfs_file *)stream);
 	return ret;
 }
@@ -107,6 +140,9 @@ void  __wrap_rewind(FILE *stream)
 {
 	int ret = 0;
 	vfs_file *finfo = (vfs_file *)stream;
+	if (is_stdio(stream)) {
+		return;
+	}
 	vfs.drv[finfo->vfs_id]->rewind((vfs_file *)stream);
 }
 
@@ -114,6 +150,9 @@ int __wrap_fgetpos(FILE *stream, fpos_t   *p)
 {
 	int ret = 0;
 	vfs_file *finfo = (vfs_file *)stream;
+	if (is_stdio(stream)) {
+		return 0;
+	}
 #if defined(__ICCARM__)
 	p->_Off = vfs.drv[finfo->vfs_id]->fgetpos((vfs_file *)stream);
 #elif defined(__GNUC__)
@@ -126,6 +165,9 @@ int __wrap_fsetpos(FILE *stream, fpos_t   *p)
 {
 	int ret = 0;
 	vfs_file *finfo = (vfs_file *)stream;
+	if (is_stdio(stream)) {
+		return 0;
+	}
 #if defined(__ICCARM__)
 	ret = vfs.drv[finfo->vfs_id]->fsetpos(p->_Off, (vfs_file *)stream);
 #elif defined(__GNUC__)
@@ -134,10 +176,15 @@ int __wrap_fsetpos(FILE *stream, fpos_t   *p)
 	return ret;
 }
 
+extern int _fflush_r(struct _reent *ptr, FILE *fp);
 int  __wrap_fflush(FILE *stream)
 {
 	int ret = 0;
 	vfs_file *finfo = (vfs_file *)stream;
+	if (is_stdio(stream)) {
+		_fflush_r(_REENT, stream);
+		return 0;
+	}
 	ret = vfs.drv[finfo->vfs_id]->fflush((vfs_file *)stream);
 	return ret;
 }
@@ -203,6 +250,9 @@ int __wrap_feof(FILE *stream)
 {
 	int ret = 0;
 	vfs_file *finfo = (vfs_file *)stream;
+	if (is_stdio(stream)) {
+		return 0;
+	}
 	ret = vfs.drv[finfo->vfs_id]->eof((vfs_file *)stream);
 	return ret;
 }
@@ -211,6 +261,9 @@ int __wrap_ferror(FILE *stream)
 {
 	int ret = 0;
 	vfs_file *finfo = (vfs_file *)stream;
+	if (is_stdio(stream)) {
+		return 0;
+	}
 	ret = vfs.drv[finfo->vfs_id]->error((vfs_file *)stream);
 	return ret;
 }
@@ -219,6 +272,9 @@ long int __wrap_ftell(FILE *stream)
 {
 	int ret = 0;
 	vfs_file *finfo = (vfs_file *)stream;
+	if (is_stdio(stream)) {
+		return -1;
+	}
 	ret = vfs.drv[finfo->vfs_id]->tell((vfs_file *)stream);
 	return ret;
 }
@@ -233,6 +289,9 @@ int __wrap_fputc(int character, FILE *stream)
 		}
 		return character;
 	}
+	if (stream == stdin) {
+		return -1;
+	}
 	int ret = 0;
 	vfs_file *finfo = (vfs_file *)stream;
 	ret = vfs.drv[finfo->vfs_id]->fputc(character, (vfs_file *)stream);
@@ -242,6 +301,19 @@ int __wrap_fputc(int character, FILE *stream)
 int __wrap_fputs(const char *str, FILE *stream)
 {
 	int ret = 0;
+	if (stream == stdout || stream == stderr) {
+		for (int i = 0; i < strlen(str); i++) {
+			stdio_port_putc(str[i]);
+			if (str[i] == '\n') {
+				stdio_port_putc('\r');
+			}
+		}
+		return strlen(str);
+	}
+	if (stream == stdin) {
+		return -1;
+	}
+
 	vfs_file *finfo = (vfs_file *)stream;
 	ret = vfs.drv[finfo->vfs_id]->fputs(str, (vfs_file *)stream);
 	return ret;
@@ -251,6 +323,9 @@ char *__wrap_fgets(char *str, int num, FILE *stream)
 {
 	char *ret = NULL;
 	vfs_file *finfo = (vfs_file *)stream;
+	if (is_stdio(stream)) {
+		return NULL;
+	}
 	ret = vfs.drv[finfo->vfs_id]->fgets(str, num, (vfs_file *)stream);
 	return ret;
 }
