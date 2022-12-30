@@ -6776,6 +6776,9 @@ exit:
 #include <hal_cache.h>
 #include "mbedtls/aes.h"
 
+static uint8_t ssl_resume_in_ctr[8] = {0};
+static uint8_t ssl_resume_out_ctr[8] = {0};
+
 struct retention_ssl {
 	mbedtls_ssl_context ssl;
 	mbedtls_ssl_session session;
@@ -6815,7 +6818,7 @@ int mbedtls_ssl_retain(mbedtls_ssl_context *ssl)
 	return 0;
 }
 
-int mbedtls_ssl_resume(mbedtls_ssl_context *ssl, uint8_t in_ctr[8], uint8_t out_ctr[8])
+int mbedtls_ssl_resume(mbedtls_ssl_context *ssl)
 {
 	// ssl session
 	ssl->session = ssl->session_negotiate;
@@ -6884,33 +6887,40 @@ int mbedtls_ssl_resume(mbedtls_ssl_context *ssl, uint8_t in_ctr[8], uint8_t out_
 	memset(zero_ctr, 0, 8);
 
 	// in_ctr
-	if (memcmp(zero_ctr, in_ctr, 8) == 0) {
-		in_ctr[7] = 1;
+	if (memcmp(zero_ctr, ssl_resume_in_ctr, 8) == 0) {
+		ssl_resume_in_ctr[7] = 1;
 	}
 	uint16_t ctr_carry = 0;
 	for (int i = 8; i > 0; i --) {
 		uint16_t ctr_prev = (uint16_t) retention_ssl.in_ctr[i - 1];
-		uint16_t ctr_inc = (uint16_t) in_ctr[i - 1];
-		in_ctr[i - 1] = (uint8_t) ((ctr_prev + ctr_inc + ctr_carry) & 0x00ff);
+		uint16_t ctr_inc = (uint16_t) ssl_resume_in_ctr[i - 1];
+		ssl_resume_in_ctr[i - 1] = (uint8_t) ((ctr_prev + ctr_inc + ctr_carry) & 0x00ff);
 		ctr_carry = ((ctr_prev + ctr_inc + ctr_carry) & 0xff00) >> 8;
 	}
-	memcpy(ssl->in_ctr, in_ctr, 8);
+	memcpy(ssl->in_ctr, ssl_resume_in_ctr, 8);
 
 	// out_ctr
-	if (memcmp(zero_ctr, out_ctr, 8) == 0) {
+	if (memcmp(zero_ctr, ssl_resume_out_ctr, 8) == 0) {
 		memcpy(ssl->out_ctr, retention_ssl.out_ctr, 8);
 		memcpy(ssl->cur_out_ctr, retention_ssl.out_ctr, 8);
 	}
 	else {
 		for (int i = 8; i > 0; i --) {
-			if (++ out_ctr[i - 1] != 0) {
+			if (++ ssl_resume_out_ctr[i - 1] != 0) {
 				break;
 			}
 		}
-		memcpy(ssl->out_ctr, out_ctr, 8);
-		memcpy(ssl->cur_out_ctr, out_ctr, 8);
+		memcpy(ssl->out_ctr, ssl_resume_out_ctr, 8);
+		memcpy(ssl->cur_out_ctr, ssl_resume_out_ctr, 8);
 	}
 
+	return 0;
+}
+
+int mbedtls_set_ssl_resume(uint8_t in_ctr[8], uint8_t out_ctr[8])
+{
+	memcpy(ssl_resume_in_ctr, in_ctr, 8);
+	memcpy(ssl_resume_out_ctr, out_ctr, 8);
 	return 0;
 }
 #endif /* CONFIG_SSL_RESUME */

@@ -31,15 +31,11 @@ extern void wifi_set_ssl_counter_report(void);
 static uint8_t wowlan_wake_reason = 0;
 static uint8_t wlan_resume = 0;
 static uint8_t tcp_resume = 0;
-static uint32_t tcp_resume_seqno = 0;
-static uint32_t tcp_resume_ackno = 0;
 static uint8_t ssl_resume = 0;
-static uint8_t ssl_resume_in_ctr[8] = {0};
-static uint8_t ssl_resume_out_ctr[8] = {0};
 
 static char server_ip[16] = "192.168.13.163";
 static uint16_t server_port = 5566;
-static uint16_t local_port = 1000;
+__attribute__((section(".retention.data"))) uint16_t retention_local_port = 0;
 static uint32_t interval_ms = 30000;
 static uint32_t resend_ms = 10000;
 
@@ -127,9 +123,7 @@ int set_ssl_offload(mbedtls_ssl_context *ssl, uint8_t *iv, uint8_t *content, siz
 	}
 
 	// counter
-#if (MBEDTLS_VERSION_NUMBER == 0x03000000) && defined(MBEDTLS_AES_ALT)
-	memcpy(ssl_offload_ctr, ssl->cur_out_ctr, 8);
-#elif (MBEDTLS_VERSION_NUMBER == 0x02100600)
+#if (MBEDTLS_VERSION_NUMBER == 0x03000000) || (MBEDTLS_VERSION_NUMBER == 0x02100600) || (MBEDTLS_VERSION_NUMBER == 0x021C0100)
 	memcpy(ssl_offload_ctr, ssl->cur_out_ctr, 8);
 #else
 	memcpy(ssl_offload_ctr, ssl->out_ctr, 8);
@@ -138,9 +132,7 @@ int set_ssl_offload(mbedtls_ssl_context *ssl, uint8_t *iv, uint8_t *content, siz
 	// aes enc key
 	mbedtls_aes_context *enc_ctx = (mbedtls_aes_context *) ssl->transform_out->cipher_ctx_enc.cipher_ctx;
 
-#if (MBEDTLS_VERSION_NUMBER == 0x03000000) && defined(MBEDTLS_AES_ALT)
-	memcpy(ssl_offload_enc_key, enc_ctx->rk, SSL_OFFLOAD_KEY_LEN);
-#elif (MBEDTLS_VERSION_NUMBER == 0x02100600)
+#if ((MBEDTLS_VERSION_NUMBER == 0x03000000) || (MBEDTLS_VERSION_NUMBER == 0x02100600) || (MBEDTLS_VERSION_NUMBER == 0x021C0100)) && defined(MBEDTLS_AES_ALT)
 	memcpy(ssl_offload_enc_key, enc_ctx->rk, SSL_OFFLOAD_KEY_LEN);
 #elif (MBEDTLS_VERSION_NUMBER == 0x02040000)
 	memcpy(ssl_offload_enc_key, enc_ctx->enc_key, SSL_OFFLOAD_KEY_LEN);
@@ -150,9 +142,7 @@ int set_ssl_offload(mbedtls_ssl_context *ssl, uint8_t *iv, uint8_t *content, siz
 
 	// aes dec key
 	mbedtls_aes_context *dec_ctx = (mbedtls_aes_context *) ssl->transform_out->cipher_ctx_dec.cipher_ctx;
-#if (MBEDTLS_VERSION_NUMBER == 0x03000000) && defined(MBEDTLS_AES_ALT)
-	memcpy(ssl_offload_dec_key, dec_ctx->rk, SSL_OFFLOAD_KEY_LEN);
-#elif (MBEDTLS_VERSION_NUMBER == 0x02100600)
+#if ((MBEDTLS_VERSION_NUMBER == 0x03000000) || (MBEDTLS_VERSION_NUMBER == 0x02100600) || (MBEDTLS_VERSION_NUMBER == 0x021C0100)) && defined(MBEDTLS_AES_ALT)
 	memcpy(ssl_offload_dec_key, dec_ctx->rk, SSL_OFFLOAD_KEY_LEN);
 #elif (MBEDTLS_VERSION_NUMBER == 0x02040000)
 	memcpy(ssl_offload_dec_key, dec_ctx->dec_key, SSL_OFFLOAD_KEY_LEN);
@@ -221,19 +211,21 @@ void tcp_app_task(void *param)
 	// socket
 	sock_fd = socket(AF_INET, SOCK_STREAM, 0);
 	printf("\n\r socket(%d) \n\r", sock_fd);
-	int reuse = 1;
-	printf("set reuse %s \n\r", setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof reuse) == 0 ? "OK" : "FAIL");
-	struct sockaddr_in local_addr;
-	local_addr.sin_family = AF_INET;
-	local_addr.sin_addr.s_addr = INADDR_ANY;
-	local_addr.sin_port = htons(local_port);
-	printf("bind port:%d %s \n\r", local_port, bind(sock_fd, (struct sockaddr *) &local_addr, sizeof(local_addr)) == 0 ? "OK" : "FAIL");
 
 	if (tcp_resume) {
+		// resume on the same local port
+		if (retention_local_port != 0) {
+			struct sockaddr_in local_addr;
+			local_addr.sin_family = AF_INET;
+			local_addr.sin_addr.s_addr = INADDR_ANY;
+			local_addr.sin_port = htons(retention_local_port);
+			printf("bind local port:%d %s \n\r", retention_local_port, bind(sock_fd, (struct sockaddr *) &local_addr, sizeof(local_addr)) == 0 ? "OK" : "FAIL");
+		}
+
 #if TCP_RESUME
 		// resume tcp pcb
-		extern int lwip_resumetcp(int s, uint32_t seqno, uint32_t ackno);
-		printf("resume TCP pcb & seqno & ackno %s \n\r", lwip_resumetcp(sock_fd, tcp_resume_seqno, tcp_resume_ackno) == 0 ? "OK" : "FAIL");
+		extern int lwip_resumetcp(int s);
+		printf("resume TCP pcb & seqno & ackno %s \n\r", lwip_resumetcp(sock_fd) == 0 ? "OK" : "FAIL");
 #endif
 	} else {
 		// connect
@@ -243,6 +235,17 @@ void tcp_app_task(void *param)
 		server_addr.sin_port = htons(server_port);
 
 		if (connect(sock_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)) == 0) {
+			// retain local port
+			struct sockaddr_in sin;
+			socklen_t len = sizeof(sin);
+			if (getsockname(sock_fd, (struct sockaddr *)&sin, &len) == -1) {
+				printf("ERROR: getsockname \n\r");
+			} else {
+				retention_local_port = ntohs(sin.sin_port);
+				dcache_clean_invalidate_by_addr((uint32_t *) &retention_local_port, sizeof(retention_local_port));
+				printf("retain local port: %d \n\r", retention_local_port);
+			}
+
 			printf("connect to %s:%d OK \n\r", server_ip, server_port);
 		} else {
 			printf("connect to %s:%d FAIL \n\r", server_ip, server_port);
@@ -278,8 +281,8 @@ void tcp_app_task(void *param)
 	}
 
 	if (ssl_resume) {
-		extern int mbedtls_ssl_resume(mbedtls_ssl_context * ssl, uint8_t in_ctr[8], uint8_t out_ctr[8]);
-		printf("resume SSL %s \n\r", mbedtls_ssl_resume(&ssl, ssl_resume_in_ctr, ssl_resume_out_ctr) == 0 ? "OK" : "FAIL");
+		extern int mbedtls_ssl_resume(mbedtls_ssl_context * ssl);
+		printf("resume SSL %s \n\r", mbedtls_ssl_resume(&ssl) == 0 ? "OK" : "FAIL");
 	} else {
 		// handshake
 		if ((ret = mbedtls_ssl_handshake(&ssl)) != 0) {
@@ -557,8 +560,8 @@ void main(void)
 			uint8_t tcp_header_first4[4];
 			tcp_header_first4[0] = (server_port & 0xff00) >> 8;
 			tcp_header_first4[1] = (server_port & 0x00ff);
-			tcp_header_first4[2] = (local_port & 0xff00) >> 8;
-			tcp_header_first4[3] = (local_port & 0x00ff);
+			tcp_header_first4[2] = (retention_local_port & 0xff00) >> 8;
+			tcp_header_first4[3] = (retention_local_port & 0x00ff);
 
 			for (int i = 0; i < packet_len - 4; i ++) {
 				if ((memcmp(wakeup_packet + i, tcp_header_first4, 4) == 0) && (*(wakeup_packet + i - 20) == 0x45)) {
@@ -582,13 +585,17 @@ void main(void)
 											(((uint32_t) tcp_header[10]) << 8) | ((uint32_t) tcp_header[11]);
 					printf("tcp_payload_len=%d, wakeup_seqno=%u, wakeup_ackno=%u \n\r", tcp_payload_len, wakeup_seqno, wakeup_ackno);
 
-					tcp_resume_seqno = wakeup_ackno;
-					tcp_resume_ackno = wakeup_seqno + tcp_payload_len;
+					uint32_t tcp_resume_seqno = wakeup_ackno;
+					uint32_t tcp_resume_ackno = wakeup_seqno + tcp_payload_len;
 					printf("tcp_resume_seqno=%u, tcp_resume_ackno=%u \n\r", tcp_resume_seqno, tcp_resume_ackno);
+					extern int lwip_settcpresume(uint32_t seqno, uint32_t ackno);
+					lwip_settcpresume(tcp_resume_seqno, tcp_resume_ackno);
 #if SSL_KEEPALIVE
 					ssl_resume = 1;
 
 					uint8_t *ssl_counter = rtl8735b_read_ssl_conuter_report();
+					uint8_t ssl_resume_out_ctr[8];
+					uint8_t ssl_resume_in_ctr[8];
 					memcpy(ssl_resume_out_ctr, ssl_counter, 8);
 					memcpy(ssl_resume_in_ctr, ssl_counter + 8, 8);
 
@@ -600,6 +607,9 @@ void main(void)
 					for (int i = 0; i < 8; i ++) {
 						printf("%02X", ssl_resume_in_ctr[i]);
 					}
+
+					extern int mbedtls_set_ssl_resume(uint8_t in_ctr[8], uint8_t out_ctr[8]);
+					mbedtls_set_ssl_resume(ssl_resume_in_ctr, ssl_resume_out_ctr);
 #endif
 #endif
 				} else if (tcp_header[13] == 0x11) {

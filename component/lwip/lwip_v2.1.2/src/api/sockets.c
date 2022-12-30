@@ -73,6 +73,8 @@
 #include <hal_cache.h>
 
 __attribute__((section (".retention.data"))) struct tcp_pcb retention_tcp_pcb;
+static uint32_t tcp_resume_seqno = 0;
+static uint32_t tcp_resume_ackno = 0;
 #endif
 /* Added by Realtek end */
 
@@ -4355,7 +4357,7 @@ int lwip_retaintcp(int s)
   return 0;
 }
 
-int lwip_resumetcp(int s, uint32_t seqno, uint32_t ackno)
+int lwip_resumetcp(int s)
 {
   struct lwip_sock *sock;
   sock = get_socket(s);
@@ -4385,27 +4387,27 @@ int lwip_resumetcp(int s, uint32_t seqno, uint32_t ackno)
     pcb->pollinterval = pcb_backup->pollinterval;
     // last_timer
     // tmr
-    pcb->rcv_nxt = ackno;
+    pcb->rcv_nxt = tcp_resume_ackno;
     pcb->rcv_wnd = pcb_backup->rcv_wnd;
     pcb->rcv_ann_wnd = pcb_backup->rcv_ann_wnd;
     pcb->rcv_ann_right_edge = pcb_backup->rcv_ann_right_edge;
     // rtime
     pcb->mss = pcb_backup->mss;
     // rttest
-    pcb->rtseq = seqno - 1;
+    pcb->rtseq = tcp_resume_seqno - 1;
     // sa
     // sv
     // rto
     // nrtx
     // dupacks
-    pcb->lastack = seqno;
+    pcb->lastack = tcp_resume_seqno;
     pcb->cwnd = pcb_backup->cwnd;
     // ssthresh
     // rto_end
-    pcb->snd_nxt = seqno;
-    pcb->snd_wl1 = ackno;
-    pcb->snd_wl2 = seqno;
-    pcb->snd_lbb = seqno;
+    pcb->snd_nxt = tcp_resume_seqno;
+    pcb->snd_wl1 = tcp_resume_ackno;
+    pcb->snd_wl2 = tcp_resume_seqno;
+    pcb->snd_lbb = tcp_resume_seqno;
     pcb->snd_wnd = pcb_backup->snd_wnd;
     pcb->snd_wnd_max = pcb_backup->snd_wnd_max;
     // snd_buf
@@ -4442,6 +4444,13 @@ int lwip_resumetcp(int s, uint32_t seqno, uint32_t ackno)
   }
 
   return 0;
+}
+
+int lwip_settcpresume(uint32_t seqno, uint32_t ackno)
+{
+	tcp_resume_seqno = seqno;
+	tcp_resume_ackno = ackno;
+	return 0;
 }
 #endif // defined(CONFIG_LWIP_TCP_RESUME) && (CONFIG_LWIP_TCP_RESUME == 1)
 /**************************************************************
