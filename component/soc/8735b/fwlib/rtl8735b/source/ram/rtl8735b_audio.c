@@ -1728,7 +1728,7 @@ void hal_rtl_audio_output_power(hal_audio_adapter_t *paudio_adapter, audio_outpu
 		hal_rtl_audio_si_write(paudio_adapter, 0x0c, audio_codec_index_0ch);
 
 		//Step4:
-		hal_delay_ms(300);
+		//hal_delay_ms(300);
 
 		//Step5:
 		audio_codec_index_00h = (0x021b | input_index_00h);

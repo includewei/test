@@ -137,6 +137,14 @@ void audio_rx_irq_handler(audio_t *obj, audio_irq_handler rx_handler, u32 *arg)
 	hal_audio_sport_rx_cb_handler(paudio_adapter, (audio_sport_irq_cb_t)rx_handler, arg);
 }
 
+void audio_err_irq_handler(audio_t *obj, audio_irq_handler err_handler, u32 *arg)
+{
+	hal_audio_adapter_t *paudio_adapter = &(obj->audio_adapter);
+	hal_sport_adapter_t *psport_adapter = &(paudio_adapter->sport_adapter);
+
+	hal_rtl_sport_dma_err_cb_handler(psport_adapter, (audio_sport_irq_cb_t)err_handler, arg);
+}
+
 u8 *audio_get_tx_page_adr(audio_t *obj)
 {
 	hal_audio_adapter_t *paudio_adapter = &obj->audio_adapter;

@@ -1,5 +1,6 @@
 #include "audio_tool_command.h"
 #include "log_service.h"
+#include "audio_cjson_generater.h"
 
 mm_context_t	*audio_save_ctx		= NULL;
 mm_context_t 	*null_save_ctx		= NULL;
@@ -2611,30 +2612,20 @@ void fAUMSGS(void *arg)
 	}
 }
 
-/*
-void fAUFTIME(void *arg)
+void fAUINFO(void *arg)
 {
 	int argc = 0;
 	char *argv[MAX_ARGC] = {0};
-	if (!arg) {
-		printf("\n\r[fAUCOPY] download to sd or not: fAUCOPY=[mode],[tftp_ip],[tftp_port]\n");
-
-		printf("  \r     [mode]=NOCOPY, SD, TFTP\n");
-		printf("  \r     NOCOPY: just save in RAM\n");
-		printf("  \r     SD: download data to SD\n");
-		printf("  \r     TFTP: upload data to TFTP server\n");
-		printf("  \r     [tftp_ip],[tftp_port]: set TFTP server IP and port\n");
-		printf("  \r     if not set it will use the defualt value\n");
-		return;
-	}
 
 	argc = parse_param(arg, argv);
-	if (argc) {
-        printf("audio open at %d\r\n", audio_save_time);
-		mm_module_ctrl(audio_save_ctx, CMD_AUDIO_FIRST_FRAME_TIME, 0);
-	}
+	mm_module_ctrl(audio_save_ctx, CMD_AUDIO_GET_PARAMS, (int)&audio_save_params);
+	mm_module_ctrl(audio_save_ctx, CMD_AUDIO_GET_TXASP_PARAM, (int)&tx_asp_params);
+	mm_module_ctrl(audio_save_ctx, CMD_AUDIO_GET_RXASP_PARAM, (int)&rx_asp_params);
+	char *audio_json = Get_Audio_CJSON(audio_save_params, rx_asp_params, tx_asp_params);
+	printf("%s\r\n", audio_json);
+	free(audio_json);
 }
-*/
+
 
 log_item_t at_audio_save_items[ ] = {
 	//For Audio mic
@@ -2671,7 +2662,7 @@ log_item_t at_audio_save_items[ ] = {
 	{"AUREC",	fAUREC, 	{NULL, NULL}}, //record file for the setting time
 	//For Audio Message
 	{"AUMSGS",  fAUMSGS,    {NULL, NULL}}, //set the audio message show level 0: no message, 1: inf, warn and err, 2: warn, err, 3: err
-	//{"AUFTIME", fAUFTIME,   {NULL, NULL}},
+	{"AUINFO",  fAUINFO,    {NULL, NULL}},
 #if P2P_ENABLE
 	{"AURXP2P", fAURXP2P, 	{NULL, NULL}}, //enable rx stream (expect TX is playback mode)
 	{"P2PEN", 	fP2PEN, 	{NULL, NULL}}, //enable P2P

@@ -203,8 +203,9 @@ typedef struct audio_ctx_s {
 
 	uint8_t         fcs_avsync_done;
 
-	RX_cfg_t      rxcfg;
-	TX_cfg_t      txcfg;
+	RX_cfg_t        rxcfg;
+	TX_cfg_t        txcfg;
+	uint8_t         rx_first_frame;
 
 	uint32_t        audio_timestamp_offset;
 } audio_ctx_t;
@@ -309,6 +310,7 @@ typedef struct audio_ctx_s {
 
 	RX_cfg_t        rxcfg;
 	TX_cfg_t        txcfg;
+	uint8_t         rx_first_frame;
 
 	uint32_t        audio_timestamp_offset;
 } audio_ctx_t;

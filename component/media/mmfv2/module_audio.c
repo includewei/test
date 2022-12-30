@@ -176,6 +176,20 @@ static int audio_get_samplerate(audio_sr rate)
 	}
 }
 
+#if defined(CONFIG_PLATFORM_8735B)
+static void audio_err_callback(uint32_t arg, uint8_t *pbuf)
+{
+	audio_ctx_t *ctx = (audio_ctx_t *)arg;
+	audio_t *obj = (audio_t *)ctx->audio;
+
+	//get audio error for debug
+	uint8_t *err_buf = pbuf;
+	uint32_t err_status = err_buf[3] << 24 | err_buf[2] << 16 | err_buf[1] << 8 | err_buf[0];
+
+	printf("The audio Test err call back = 0x%x\r\n", err_status);
+}
+#endif
+
 static void audio_tx_complete(uint32_t arg, uint8_t *pbuf)
 {
 	audio_ctx_t *ctx = (audio_ctx_t *)arg;
@@ -302,6 +316,12 @@ static void audio_rx_complete(uint32_t arg, uint8_t *pbuf)
 	// set timestamp to 1st sample
 	// AUDIO_DBG_INFO("rx timestamp = %d\r\n", audio_rx_ts);
 	audio_rx_ts -= 1000 * (AUDIO_DMA_PAGE_SIZE / ctx->word_length) / ctx->sample_rate;
+
+	// disable the first frame to prevent "pop" sound
+	if (ctx->rx_first_frame) {
+		memset(pbuf, 0, AUDIO_DMA_PAGE_SIZE);
+		ctx->rx_first_frame = 0;
+	}
 
 #if defined(AUDIO_LOOPBACK) && AUDIO_LOOPBACK
 	uint8_t *ptx_addre;
@@ -1120,7 +1140,12 @@ int audio_control(void *p, int cmd, int arg)
 		}
 		audio_adc_digital_vol(ctx->audio, ctx->params.ADC_gain);
 		audio_dac_digital_vol(ctx->audio, ctx->params.DAC_gain);
-
+		//Init RX dma
+		audio_rx_irq_handler(ctx->audio, audio_rx_complete, (uint32_t *)ctx);
+		//Init TX dma
+		audio_tx_irq_handler(ctx->audio, audio_tx_complete, (uint32_t *)ctx);
+		//Init Err callback
+		audio_err_irq_handler(ctx->audio, audio_err_callback, (uint32_t *)ctx);
 
 		//audio_headphone_analog_mute(ctx->audio, 1);
 		audio_set_dma_buffer(ctx->audio, dma_txdata, dma_rxdata, AUDIO_DMA_PAGE_SIZE, AUDIO_DMA_PAGE_NUM);
@@ -1226,6 +1251,7 @@ int audio_control(void *p, int cmd, int arg)
 		audio_mic_analog_gain(ctx->audio, 1, ctx->params.mic_gain); // default 0DB
 #endif
 		audio_trx_start(ctx->audio);
+		ctx->rx_first_frame = 1;
 		for (int i = 0; i < logic_input_num; i++) {
 			xQueueReset(pcm_tx_cache[i].queue);
 		}
@@ -1279,6 +1305,8 @@ int audio_control(void *p, int cmd, int arg)
 		audio_rx_irq_handler(ctx->audio, audio_rx_complete, (uint32_t *)ctx);
 		//Init TX dma
 		audio_tx_irq_handler(ctx->audio, audio_tx_complete, (uint32_t *)ctx);
+		//Init Err callback
+		audio_err_irq_handler(ctx->audio, audio_err_callback, (uint32_t *)ctx);
 
 		ctx->sample_rate = audio_get_samplerate(ctx->params.sample_rate);
 
@@ -1372,6 +1400,7 @@ int audio_control(void *p, int cmd, int arg)
 		}
 
 		audio_trx_start(ctx->audio);
+		ctx->rx_first_frame = 1;
 #else
 		audio_init(ctx->audio, OUTPUT_SINGLE_EDNED, MIC_SINGLE_EDNED, AUDIO_CODEC_2p8V);
 		//audio_mic_analog_gain(ctx->audio, 1, AUDIO_MIC_40DB);
@@ -1414,6 +1443,7 @@ int audio_control(void *p, int cmd, int arg)
 		audio_mic_analog_gain(ctx->audio, 1, ctx->params.mic_gain); // default 0DB
 
 		audio_trx_start(ctx->audio);
+		ctx->rx_first_frame = 1;
 #endif
 		// mix mode --> LOGIC_INPUT_NUM input, non-mix mode 1 input
 		if (ctx->params.mix_mode) {

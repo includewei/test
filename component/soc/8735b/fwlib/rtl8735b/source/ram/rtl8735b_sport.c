@@ -260,7 +260,7 @@ void hal_rtl_sport_irqhandler_ram(void)
 
 		if (psport_adapter->dma_err_sta != 0x00) {
 			if (psport_adapter->sport_dma_err_irq_user_cb != NULL) {
-				psport_adapter->sport_dma_err_irq_user_cb(psport_adapter->sport_dma_err_user_arg, NULL);
+				psport_adapter->sport_dma_err_irq_user_cb(psport_adapter->sport_dma_err_user_arg, &psport_adapter->dma_err_sta);
 			}
 		}
 
