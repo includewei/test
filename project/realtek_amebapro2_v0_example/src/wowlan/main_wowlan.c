@@ -160,9 +160,7 @@ int set_ssl_offload(mbedtls_ssl_context *ssl, uint8_t *iv, uint8_t *content, siz
 	}
 
 	// counter
-#if (MBEDTLS_VERSION_NUMBER == 0x03000000) && defined(MBEDTLS_AES_ALT)
-	memcpy(ssl_offload_ctr, ssl->cur_out_ctr, 8);
-#elif (MBEDTLS_VERSION_NUMBER == 0x02100600)
+#if (MBEDTLS_VERSION_NUMBER == 0x03000000) || (MBEDTLS_VERSION_NUMBER == 0x02100600) || (MBEDTLS_VERSION_NUMBER == 0x021C0100)
 	memcpy(ssl_offload_ctr, ssl->cur_out_ctr, 8);
 #else
 	memcpy(ssl_offload_ctr, ssl->out_ctr, 8);
@@ -171,9 +169,7 @@ int set_ssl_offload(mbedtls_ssl_context *ssl, uint8_t *iv, uint8_t *content, siz
 	// aes enc key
 	mbedtls_aes_context *enc_ctx = (mbedtls_aes_context *) ssl->transform_out->cipher_ctx_enc.cipher_ctx;
 
-#if (MBEDTLS_VERSION_NUMBER == 0x03000000) && defined(MBEDTLS_AES_ALT)
-	memcpy(ssl_offload_enc_key, enc_ctx->rk, SSL_OFFLOAD_KEY_LEN);
-#elif (MBEDTLS_VERSION_NUMBER == 0x02100600)
+#if ((MBEDTLS_VERSION_NUMBER == 0x03000000) || (MBEDTLS_VERSION_NUMBER == 0x02100600) || (MBEDTLS_VERSION_NUMBER == 0x021C0100)) && defined(MBEDTLS_AES_ALT)
 	memcpy(ssl_offload_enc_key, enc_ctx->rk, SSL_OFFLOAD_KEY_LEN);
 #elif (MBEDTLS_VERSION_NUMBER == 0x02040000)
 	memcpy(ssl_offload_enc_key, enc_ctx->enc_key, SSL_OFFLOAD_KEY_LEN);
@@ -183,9 +179,7 @@ int set_ssl_offload(mbedtls_ssl_context *ssl, uint8_t *iv, uint8_t *content, siz
 
 	// aes dec key
 	mbedtls_aes_context *dec_ctx = (mbedtls_aes_context *) ssl->transform_out->cipher_ctx_dec.cipher_ctx;
-#if (MBEDTLS_VERSION_NUMBER == 0x03000000) && defined(MBEDTLS_AES_ALT)
-	memcpy(ssl_offload_dec_key, dec_ctx->rk, SSL_OFFLOAD_KEY_LEN);
-#elif (MBEDTLS_VERSION_NUMBER == 0x02100600)
+#if ((MBEDTLS_VERSION_NUMBER == 0x03000000) || (MBEDTLS_VERSION_NUMBER == 0x02100600) || (MBEDTLS_VERSION_NUMBER == 0x021C0100)) && defined(MBEDTLS_AES_ALT)
 	memcpy(ssl_offload_dec_key, dec_ctx->rk, SSL_OFFLOAD_KEY_LEN);
 #elif (MBEDTLS_VERSION_NUMBER == 0x02040000)
 	memcpy(ssl_offload_dec_key, dec_ctx->dec_key, SSL_OFFLOAD_KEY_LEN);

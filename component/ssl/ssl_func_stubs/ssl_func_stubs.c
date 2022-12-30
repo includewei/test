@@ -67,7 +67,7 @@ int platform_set_malloc_free(
 	/* Variables */
 	rom_ssl_ram_map.use_hw_crypto_func = 1;
 
-#if defined(CONFIG_PLATFORM_8735B) && (MBEDTLS_VERSION_NUMBER==0x03000000 || MBEDTLS_VERSION_NUMBER==0x02100600)
+#if defined(CONFIG_PLATFORM_8735B) && (MBEDTLS_VERSION_NUMBER==0x03000000 || MBEDTLS_VERSION_NUMBER==0x02100600 || MBEDTLS_VERSION_NUMBER==0x021C0100)
 	rtl_cryptoEngine_init();
 #endif
 	init_rom_ssl_ram_map(ssl_calloc, ssl_free, NULL, rom_ssl_ram_map.use_hw_crypto_func);
@@ -291,7 +291,7 @@ int mbedtls_mpi_gen_prime(mbedtls_mpi *X, size_t nbits, int dh_flag, int (*f_rng
 	return __rom_stubs_ssl.mbedtls_mpi_gen_prime(X, nbits, dh_flag, f_rng, p_rng);
 }
 
-#if !(defined(CONFIG_PLATFORM_8735B) && (MBEDTLS_VERSION_NUMBER==0x03000000 || MBEDTLS_VERSION_NUMBER==0x02100600))
+#if !(defined(CONFIG_PLATFORM_8735B) && (MBEDTLS_VERSION_NUMBER==0x03000000 || MBEDTLS_VERSION_NUMBER==0x02100600 || MBEDTLS_VERSION_NUMBER==0x021C0100))
 
 #if !(defined(CONFIG_PLATFORM_8710C) && defined(CONFIG_BUILD_SECURE) && (CONFIG_BUILD_SECURE == 1))
 /* ecp */
@@ -1750,4 +1750,4 @@ int mbedtls_pk_write_key_pem(mbedtls_pk_context *key, unsigned char *buf, size_t
 }
 #endif /* !((defined(CONFIG_PLATFORM_8710C) || defined(CONFIG_PLATFORM_8735B)) && defined(CONFIG_BUILD_SECURE) && (CONFIG_BUILD_SECURE == 1)) */
 
-#endif /* !(defined(CONFIG_PLATFORM_8735B) && (MBEDTLS_VERSION_NUMBER==0x03000000)) */
+#endif /* !(defined(CONFIG_PLATFORM_8735B) && (MBEDTLS_VERSION_NUMBER==0x03000000 || MBEDTLS_VERSION_NUMBER==0x02100600 || MBEDTLS_VERSION_NUMBER==0x021C0100)) */

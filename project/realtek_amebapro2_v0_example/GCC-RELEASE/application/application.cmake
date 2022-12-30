@@ -524,6 +524,15 @@ list(
 	${sdk_root}/component/ssl/ssl_ram_map/rom/rom_ssl_ram_map.c
 	${sdk_root}/component/ssl/ssl_func_stubs/ssl_func_stubs.c
 )
+elseif(${mbedtls} STREQUAL "mbedtls-2.28.1")
+file(GLOB MBEDTLS_SRC CONFIGURE_DEPENDS ${sdk_root}/component/ssl/mbedtls-2.28.1/library/*.c)
+list(
+	APPEND out_sources
+	${MBEDTLS_SRC}
+	#ssl_ram_map
+	${sdk_root}/component/ssl/ssl_ram_map/rom/rom_ssl_ram_map.c
+	${sdk_root}/component/ssl/ssl_func_stubs/ssl_func_stubs.c
+)
 endif()
 
 #FATFS

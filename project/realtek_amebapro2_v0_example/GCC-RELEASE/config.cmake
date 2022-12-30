@@ -28,7 +28,7 @@ if(NOT DEFINED CONFIG_DONE)
 	
 	set(freertos "freertos_v202012.00")
 	set(lwip "lwip_v2.1.2")
-	set(mbedtls "mbedtls-3.0.0")
+	set(mbedtls "mbedtls-2.28.1")
 	set(viplite "VIPLiteDrv_1.8.0")
 	
 	message(STATUS "FreeRTOS = ${freertos}")
