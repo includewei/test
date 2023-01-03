@@ -93,6 +93,9 @@ static int wsa_init_done = 0;
 #define net_htons(n) htons(n)
 #define net_htonl(n) htonl(n)
 
+// ESSENTIAL2: EINTR is also defined in lwip/errno.h
+#define IS_EINTR( ret ) ( ( ret ) == EINTR )
+
 #else /* ( _WIN32 || _WIN32_WCE ) && !EFIX64 && !EFI32 */
 
 #include <sys/types.h>
