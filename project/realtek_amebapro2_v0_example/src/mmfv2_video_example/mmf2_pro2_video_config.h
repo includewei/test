@@ -27,7 +27,8 @@ enum encode_type {
 #define	VIDEO_3M    7
 #define	VIDEO_5M    8
 #define	VIDEO_2K    9
-
+#define	VIDEO_1536P    10
+#define	VIDEO_1936P    11
 /*
 
 static const int video_res_w[10] = {

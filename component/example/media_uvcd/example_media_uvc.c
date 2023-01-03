@@ -33,9 +33,12 @@ static int wdr_mode = 2;
 
 //#define UVC_MD
 #define V1_CHANNEL 0
-#define V1_RESOLUTION VIDEO_FHD//VIDEO_HD//VIDEO_FHD 
-#define V1_FPS 20
-#define V1_GOP 80
+-#define V1_RESOLUTION VIDEO_FHD//VIDEO_HD//VIDEO_FHD 
+-#define V1_FPS 20
+-#define V1_GOP 80
+#define V1_RESOLUTION VIDEO_1936P	//VIDEO_HD//VIDEO_FHD 
+#define V1_FPS 10
+#define V1_GOP 40
 #define V1_BPS 1024*1024
 #define V1_RCMODE 1 // 1: CBR, 2: VBR
 
@@ -61,9 +64,12 @@ static int wdr_mode = 2;
 #elif V1_RESOLUTION == VIDEO_HD
 #define V1_WIDTH	1280
 #define V1_HEIGHT	720
+#elif V1_RESOLUTION == VIDEO_1936P
+#define V1_WIDTH	1936
+#define V1_HEIGHT	1936
 #elif V1_RESOLUTION == VIDEO_FHD
 
-#if USE_SENSOR == SENSOR_GC4653
+#if USE_SENSOR == SENSOR_GC4653 || USE_SENSOR == SENSOR_GC4023
 #define V1_WIDTH	2560
 #define V1_HEIGHT	1440
 #else

@@ -37,8 +37,10 @@ extern "C" {
 #define SENSOR_GC2053       0x02
 #define SENSOR_GC4653 		0x03
 #define SENSOR_MIS2008      0x04
-#define SENSOR_PS5258       0x05 //It don't support the multi sensor for PS5258 now.If you want to use the sensor,please remove it.
-#define SENSOR_JXF51		0x06
+//#define SENSOR_PS5258       0x05 //It don't support the multi sensor for PS5258 now.If you want to use the sensor,please remove it.
+#define SENSOR_GC4023		0x05
+//#define SENSOR_JXF51		0x06
+#define SENSOR_PS5420		0x06
 #define SENSOR_SC301		0x07
 #define SENSOR_IMX307		0x08
 #define SENSOR_JXF37		0x09
@@ -47,7 +49,9 @@ extern "C" {
 #define MULTI_ENABLE        0x01
 
 #define MULTI_SENSOR  		MULTI_DISABLE
-#define USE_SENSOR      	SENSOR_GC2053
+
+#define USE_SENSOR      	SENSOR_PS5420
+
 #define NONE_FCS_MODE       0
 #define FW1_IQ_ADDR        0xF20000
 #define FW2_IQ_ADDR        0xF60000

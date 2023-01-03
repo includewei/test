@@ -22,11 +22,11 @@
 #define V1_FPS 15
 #define V1_GOP 15
 #else
-#define V1_RESOLUTION VIDEO_FHD
-#define V1_FPS 30
-#define V1_GOP 30
+#define V1_RESOLUTION VIDEO_1936P
+#define V1_FPS 10
+#define V1_GOP 20
 #endif
-#define V1_BPS 2*1024*1024
+#define V1_BPS 1024*1024
 #define V1_RCMODE 2 // 1: CBR, 2: VBR
 
 #define USE_H265 0
@@ -53,6 +53,9 @@
 #elif V1_RESOLUTION == VIDEO_2K
 #define V1_WIDTH	2560
 #define V1_HEIGHT	1440
+#elif V1_RESOLUTION == VIDEO_1936P
+#define V1_WIDTH	1936
+#define V1_HEIGHT	1936
 #endif
 
 static void atcmd_userctrl_init(void);
@@ -98,7 +101,7 @@ void mmf2_video_example_v1_init(void)
 	video_v1_ctx = mm_module_open(&video_module);
 	if (video_v1_ctx) {
 		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v1_params);
-		mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, V1_FPS * 3);
+		mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, V1_FPS*3);
 		mm_module_ctrl(video_v1_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
 	} else {
 		rt_printf("video open fail\n\r");
@@ -137,7 +140,7 @@ mmf2_video_exmaple_v1_fail:
 	return;
 }
 
-static const char *example = "mmf2_video_example_v1";
+static char *example = "mmf2_video_example_v1";
 static void example_deinit(void)
 {
 	//Pause Linker
