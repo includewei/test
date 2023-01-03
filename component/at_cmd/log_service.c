@@ -47,8 +47,7 @@ extern int wext_private_command(const char *ifname, char *cmd, int show_msg);
 extern void at_ftl_init(void);
 
 void at_log_init(void);
-extern void at_kv_init(void);
-extern void at_myfs_init(void);
+extern void at_arlo_init(void);
 
 char log_buf[LOG_SERVICE_BUFLEN];
 xSemaphoreHandle log_rx_interrupt_sema = NULL;
@@ -111,8 +110,7 @@ log_init_t log_init_table[] = {
 #endif
 
 // ESSENTIAL2
-	at_kv_init,
-	at_myfs_init,
+	at_arlo_init,
 #endif
 };
 #else
