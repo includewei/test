@@ -25,7 +25,7 @@
 #define DMIC_CLK_PIN    PE_2 //PE_0
 #define DMIC_DATA_PIN   PE_4
 #else
-#define DMIC_CLK_PIN    PD_16 //PD_14
+#define DMIC_CLK_PIN    PD_14
 #define DMIC_DATA_PIN   PD_18
 #endif
 #define AUDIO_DMA_PAGE_NUM 4
@@ -105,7 +105,7 @@ static xQueueHandle pcm_rx_cache = NULL;
 static pcm_rx_t rx_irq_buf;
 static pcm_rx_t proc_rx_buf;
 
-#define M 8
+#define M 1		//8		Ivan  
 #define FRAMESIZE (AUDIO_AEC_PAGE_SIZE/2)
 #define TAIL_LENGTH_IN_MILISECONDS (20*M)
 #define TAIL(tail_ms, rate) (tail_ms * (rate / 1000) )
@@ -136,6 +136,10 @@ int module_audio_vad = 1;
 int module_audio_agc = 3;
 int module_audio_ns = 3;
 
+int audio_onoff = 0;	//audio output for audio recording 
+int print_aec = 0;
+int print_ns = 0;
+int print_agc = 0;
 
 #define ATAF_AEC_CTRL module_audio_aec
 #define ATAF_AGC_CTRL module_audio_agc
@@ -491,7 +495,6 @@ static void audio_rx_complete(uint32_t arg, uint8_t *pbuf)
 				//count the audio send/drop frame
 				ctx->audio_frame++;
 				ctx->audio_frame_total++;
-
 				xQueueSendFromISR(mctx->output_ready, (void *)&output_item, &xHigherPriorityTaskWoken);
 			} else {
 				//count the audio send/drop frame
@@ -843,6 +846,7 @@ int audio_control(void *p, int cmd, int arg)
 		break;
 #if defined(CONFIG_PLATFORM_8195BHP) || defined(CONFIG_PLATFORM_8735B)
 #if ENABLE_ASP==1
+/*
 	case CMD_AUDIO_SET_NS_ENABLE:
 		if (arg > 3 || arg < 0)	{
 			arg = 0;
@@ -864,6 +868,41 @@ int audio_control(void *p, int cmd, int arg)
 		ctx->rxcfg.agc_cfg.AGC_EN = arg | 0x02;
 		ctx->txcfg.agc_cfg.AGC_EN = arg | 0x01;
 		break;
+*/
+	case CMD_AUDIO_SET_NS_ENABLE:
+		if (arg > 3 || arg < 0)	{
+			arg = 0;
+		}
+		if (arg & 0x02)
+			ctx->rxcfg.ns_cfg.NS_EN = 1;
+		else
+			ctx->rxcfg.ns_cfg.NS_EN = 0;
+		if (arg & 0x01)
+			ctx->txcfg.ns_cfg.NS_EN = 1;
+		else
+			ctx->txcfg.ns_cfg.NS_EN = 0;
+		break;
+	case CMD_AUDIO_SET_AEC_ENABLE:
+		if (arg > 1 || arg < 0)	{
+			arg = 0;
+		}
+		AUDIO_DBG_INFO("AEC Enable: %d.\r\n", arg);
+		ctx->rxcfg.aec_cfg.AEC_EN = arg;
+		break;
+	case CMD_AUDIO_SET_AGC_ENABLE:
+		if (arg > 3 || arg < 0)	{
+			arg = 0;
+		}
+		if (arg & 0x02)
+			ctx->rxcfg.agc_cfg.AGC_EN = 1;
+		else
+			ctx->rxcfg.agc_cfg.AGC_EN = 0;
+		if (arg & 0x01)
+			ctx->txcfg.agc_cfg.AGC_EN = 1;
+		else
+			ctx->txcfg.agc_cfg.AGC_EN = 0;
+		break;
+
 #if !(defined(CONFIG_NEWAEC) && CONFIG_NEWAEC)
 	case CMD_AUDIO_SET_VAD_ENABLE:
 		if (arg > 1 || arg < 0)	{
@@ -944,6 +983,14 @@ int audio_control(void *p, int cmd, int arg)
 #endif
 	case CMD_AUDIO_SET_SAMPLERATE:
 		ctx->params.sample_rate = (audio_sr)arg;
+		break;
+	case CMD_AUDIO_SET_MICGAIN:
+		if (arg > 3 || arg < 0)	{
+			printf("[CMD_AUDIO_SET_MICGAIN] Invalid value %d\r\n",arg);
+			break;
+		}
+		ctx->params.dmic_l_gain=arg;
+		audio_l_dmic_gain(ctx->audio, arg);
 		break;
 	case CMD_AUDIO_SET_TRX:
 		if (arg == TRUE) {
@@ -1124,6 +1171,7 @@ int audio_control(void *p, int cmd, int arg)
 			ctx->dmic_pin_set = 1;
 			audio_init(ctx->audio, OUTPUT_SINGLE_EDNED, AUDIO_LEFT_DMIC, AUDIO_CODEC_2p8V);
 			AUDIO_DBG_INFO("Init Left DMIC \r\n");
+			printf("Init LEFT DMIC \r\n");
 		} else if (ctx->params.use_mic_type == USE_AUDIO_RIGHT_DMIC) {
 			audio_dmic_pinmux(ctx->audio, DMIC_CLK_PIN, DMIC_DATA_PIN);
 			ctx->dmic_pin_set = 1;
@@ -1620,6 +1668,7 @@ int audio_handle(void *p, void *input, void *output)
 	return 0;
 }
 
+
 void *audio_destroy(void *p)
 {
 	audio_ctx_t *ctx = (audio_ctx_t *)p;
@@ -1791,15 +1840,15 @@ audio_params_t default_audio_params = {
 	.sample_rate        = ASR_8KHZ, //when modify please also check the EQ setting
 	.word_length        = WL_16BIT,
 	.mic_gain           = MIC_0DB,
-	.dmic_l_gain        = DMIC_BOOST_0DB,
-	.dmic_r_gain        = DMIC_BOOST_0DB,
-	.use_mic_type       = USE_AUDIO_AMIC,
+	.dmic_l_gain        = DMIC_BOOST_24DB,
+	.dmic_r_gain        = DMIC_BOOST_24DB,
+	.use_mic_type       = USE_AUDIO_LEFT_DMIC,
 	.channel            = 1,
 	.mix_mode           = 0,
 	.mic_bias           = 0,
 	.hpf_set            = 0,
-	.ADC_gain           = 0x66,	//ADC path Dgain about 20dB
-	.DAC_gain           = 0xAF,
+	.ADC_gain           = 30,	  //ADC path Dgain about 20dB
+	.DAC_gain           = 163,
 	.enable_record      = 0,
 	.mic_l_eq[0]        = {1, 0x1ca2925, 0x1c000000, 0x2000000, 0x38ea551, 0x1e6600bf}, //USE EQ for HPF 200Hz @ sample rate 8kHz
 	.mic_r_eq[0]        = {1, 0x1ca2925, 0x1c000000, 0x2000000, 0x38ea551, 0x1e6600bf}, //USE EQ for HPF 200Hz @ sample rate 8kHz
@@ -1814,7 +1863,7 @@ audio_params_t default_audio_params = {
 #if defined(CONFIG_PLATFORM_8735B) && defined(CONFIG_NEWAEC) && CONFIG_NEWAEC
 RX_cfg_t default_rx_asp_params = {
 	.aec_cfg = {
-		.AEC_EN = 0,
+		.AEC_EN = 1,
 		.EchoTailLen = 64,
 		.CNGEnable = 1,
 		.PPLevel = 6,
@@ -1831,33 +1880,33 @@ RX_cfg_t default_rx_asp_params = {
 		.KneeWidth = 0,
 	},
 	.ns_cfg = {
-		.NS_EN = 0,
-		.NSLevel = 5,
+		.NS_EN = 1,
+		.NSLevel = 9,
 	}
 };
 
 TX_cfg_t default_tx_asp_params = {
 	.agc_cfg = {
-		.AGC_EN = 0,
+		.AGC_EN = 1,
 		.AGCMode = CT_ALC,
-		.ReferenceLvl = 6,
-		.RefThreshold = 6,
+		.ReferenceLvl = 7,
+		.RefThreshold = 7,
 		.AttackTime = 20,
 		.ReleaseTime = 20,
-		.Ratio = {50, 50, 50},
-		.Threshold = {20, 30, 40},
+		.Ratio = {50, 1, 1},
+		.Threshold = {19, 30, 100},
 		.KneeWidth = 0,
 	},
 	.ns_cfg = {
 		.NS_EN = 0,
-		.NSLevel = 5,
+		.NSLevel = 9,
 	},
 };
 #else
 RX_cfg_t default_rx_asp_params = {
 	.aec_cfg = {
 		.AEC_EN = 0,
-		.aec_core = WEBRTC_AECM,
+		.aec_core = WEBRTC_AEC,
 		.FilterLength = 30,
 		.CNGEnable = 1,
 		.AECLevel = 3,
