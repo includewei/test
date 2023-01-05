@@ -222,6 +222,24 @@ void *log_action(char *cmd)
 	return act;
 }
 
+#define DELETE      127
+#define BACKSPACE   8
+static void log_remove_backspace(char *cmd)
+{
+    char *p = cmd;
+    char *pnext = cmd;
+    while (*pnext != '\0') {
+        if (*pnext == BACKSPACE || *pnext == DELETE) {
+            if(p != cmd)
+                p--;
+        }
+        else
+            *p++ = *pnext;
+        pnext++;
+    }
+    *p = '\0';
+}
+
 void *log_handler(char *cmd)
 {
 	log_act_t action = NULL;
@@ -233,6 +251,7 @@ void *log_handler(char *cmd)
 	char tok[33] = {0};//'\0'
 	strncpy(copy, cmd, LOG_SERVICE_BUFLEN - 1);
 
+    log_remove_backspace(copy);
 #if defined(USE_STRSEP)
 	token = _strsep(&copy, "=");
 	param = copy;
@@ -370,6 +389,7 @@ int mp_commnad_handler(char *cmd)
 	return -1;
 }
 #endif
+extern void print_arlo_help_msg(void);
 void print_help_msg(void)
 {
 #if CONFIG_WLAN
@@ -383,6 +403,10 @@ int print_help_handler(char *cmd)
 {
 	if (strcmp(cmd, "help") == 0) {
 		print_help_msg();
+		return 0;
+	}
+	else if (strcmp(cmd, "arlo") == 0) {
+        print_arlo_help_msg();
 		return 0;
 	}
 	return -1;
