@@ -894,7 +894,7 @@
  *       library may modify the way the ECDH context layout is configured
  *       and may modify the layout of the new context type.
  */
-#define MBEDTLS_ECDH_LEGACY_CONTEXT
+//#define MBEDTLS_ECDH_LEGACY_CONTEXT
 
 /**
  * \def MBEDTLS_ECDSA_DETERMINISTIC
