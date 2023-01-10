@@ -17,12 +17,20 @@
 *****************************************************************************/
 
 #define V1_CHANNEL 0
-#if USE_SENSOR == SENSOR_GC4653
+#if USE_SENSOR == SENSOR_GC4023
 #define V1_RESOLUTION VIDEO_2K
 #define V1_FPS 15
 #define V1_GOP 15
-#else
+#elif USE_SENSOR == SENSOR_PS5270
+#define V1_RESOLUTION VIDEO_1536P
+#define V1_FPS 10
+#define V1_GOP 20
+#elif USE_SENSOR == SENSOR_PS5420
 #define V1_RESOLUTION VIDEO_1936P
+#define V1_FPS 10
+#define V1_GOP 20
+#else
+#define V1_RESOLUTION VIDEO_FHD
 #define V1_FPS 10
 #define V1_GOP 20
 #endif
@@ -53,6 +61,9 @@
 #elif V1_RESOLUTION == VIDEO_2K
 #define V1_WIDTH	2560
 #define V1_HEIGHT	1440
+#elif V1_RESOLUTION == VIDEO_1536P
+#define V1_WIDTH	1536
+#define V1_HEIGHT	1536
 #elif V1_RESOLUTION == VIDEO_1936P
 #define V1_WIDTH	1936
 #define V1_HEIGHT	1936
@@ -140,7 +151,7 @@ mmf2_video_exmaple_v1_fail:
 	return;
 }
 
-static char *example = "mmf2_video_example_v1";
+static const char *example = "mmf2_video_example_v1";
 static void example_deinit(void)
 {
 	//Pause Linker

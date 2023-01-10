@@ -34,15 +34,90 @@ extern unsigned(*console_stdio_write_buffer)(unsigned fd, const void *buf, unsig
 extern unsigned(*remote_stdio_write_buffer)(unsigned fd, const void *buf, unsigned len);
 struct _reent;
 
-#define CRLF_CONVERT 1
-static void __write_to_interface_buffer(int file, const void *ptr, size_t len)
+int check_in_critical(void)
 {
+	uint32_t basepri;
+	uint32_t primask;
+	uint32_t ipsr;
+
+	int critial = 0;
+
+	basepri = __get_BASEPRI();
+	primask = __get_PRIMASK();
+	ipsr = __get_IPSR();
+
+	critial = (basepri == 0) && (primask == 0) && (ipsr == 0) ? 0 : 1;
+
+	return critial;
+
+}
+
+#define CRLF_CONVERT 1
+#define STDOUT_TASK 1
+
+#if defined(STDOUT_TASK) && (STDOUT_TASK==1)
+#include <FreeRTOS.h>
+#include <task.h>
+#include <stream_buffer.h>
+#include <stdlib.h>
+static StreamBufferHandle_t stdout_stream = NULL;
+void stdout_task(void *dummy)
+{
+	(void)dummy;
+	void *buf = malloc(1024);
+	if (!buf) {
+		vTaskDelete(NULL);
+	}
+	while (1) {
+		// 20 ms return all
+		int rd_size = xStreamBufferReceive(stdout_stream, buf, 1024, 20);
+		if (rd_size != 0) {
+			if (console_stdio_write_buffer) {
+				console_stdio_write_buffer(1, (void *)buf, rd_size);
+			}
+			if (remote_stdio_write_buffer) {
+				remote_stdio_write_buffer(1, (void *)buf, rd_size);
+			}
+		}
+	}
+}
+
+__attribute__((constructor))
+static void init_stdout_task(void)
+{
+	// trigger level 32, higher priority let critical section output order as normal
+	stdout_stream = xStreamBufferCreate(4096, 32);
+	xTaskCreate(stdout_task, "stdout",  512, NULL, configMAX_PRIORITIES - 2, NULL);
+}
+
+#endif
+
+void __write_to_interface_buffer(int file, const void *ptr, size_t len)
+{
+#if defined(STDOUT_TASK) && (STDOUT_TASK==1)
+	if (check_in_critical()) {
+		xStreamBufferSendFromISR(stdout_stream, ptr, len, NULL);
+	} else {
+		//xStreamBufferSend(stdout_stream, ptr, len, 2);
+		if (console_stdio_write_buffer) {
+			console_stdio_write_buffer(0, (void *)ptr, len);
+		}
+		if (remote_stdio_write_buffer) {
+			remote_stdio_write_buffer(0, (void *)ptr, len);
+		}
+	}
+#else
+	if (check_in_critical()) {
+		return;
+	}
+
 	if (console_stdio_write_buffer) {
 		console_stdio_write_buffer(0, (void *)ptr, len);
 	}
 	if (remote_stdio_write_buffer) {
 		remote_stdio_write_buffer(0, (void *)ptr, len);
 	}
+#endif
 }
 
 

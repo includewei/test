@@ -125,6 +125,10 @@ struct uvc_format_framebased uvc_format_h265 = {
 	.bVariableSize          = 1,
 };
 
+#define FRAME_INTV_0 416666
+#define FRAME_INTV_1 666666
+#define FRAME_INTV_2 1000000
+
 struct UVC_FRAME_UNCOMPRESSED(3) uvc_frame_yuv_480p = {
 	.bLength		= UVC_DT_FRAME_UNCOMPRESSED_SIZE(3),
 	.bDescriptorType	= USB_DT_CS_INTERFACE,
@@ -136,11 +140,11 @@ struct UVC_FRAME_UNCOMPRESSED(3) uvc_frame_yuv_480p = {
 	.dwMinBitRate		= cpu_to_le32(7372800),
 	.dwMaxBitRate		= cpu_to_le32(55296000),
 	.dwMaxVideoFrameBufferSize	= cpu_to_le32(460800),
-	.dwDefaultFrameInterval	= cpu_to_le32(666666),
+	.dwDefaultFrameInterval	= cpu_to_le32(FRAME_INTV_0),
 	.bFrameIntervalType	= 3,
-	.dwFrameInterval[0]	= cpu_to_le32(666666),
-	.dwFrameInterval[1]	= cpu_to_le32(1000000),
-	.dwFrameInterval[2]	= cpu_to_le32(5000000),
+	.dwFrameInterval[0]	= cpu_to_le32(FRAME_INTV_0),
+	.dwFrameInterval[1]	= cpu_to_le32(FRAME_INTV_1),
+	.dwFrameInterval[2]	= cpu_to_le32(FRAME_INTV_2),
 };
 
 struct UVC_FRAME_UNCOMPRESSED(3) uvc_frame_yuv_720p = {
@@ -154,11 +158,11 @@ struct UVC_FRAME_UNCOMPRESSED(3) uvc_frame_yuv_720p = {
 	.dwMinBitRate		= cpu_to_le32(3686400),
 	.dwMaxBitRate		= cpu_to_le32(27648000),
 	.dwMaxVideoFrameBufferSize	= cpu_to_le32(1843200),
-	.dwDefaultFrameInterval	= cpu_to_le32(666666),
+	.dwDefaultFrameInterval	= cpu_to_le32(FRAME_INTV_0),
 	.bFrameIntervalType	= 3,
-	.dwFrameInterval[0]	= cpu_to_le32(666666),
-	.dwFrameInterval[1]	= cpu_to_le32(1000000),
-	.dwFrameInterval[2]	= cpu_to_le32(5000000),
+	.dwFrameInterval[0]	= cpu_to_le32(FRAME_INTV_0),
+	.dwFrameInterval[1]	= cpu_to_le32(FRAME_INTV_1),
+	.dwFrameInterval[2]	= cpu_to_le32(FRAME_INTV_2),
 };
 
 struct UVC_FRAME_UNCOMPRESSED(3) uvc_frame_yuy2_1080p = {
@@ -173,11 +177,11 @@ struct UVC_FRAME_UNCOMPRESSED(3) uvc_frame_yuy2_1080p = {
 	.dwMinBitRate		= cpu_to_le32(MAX_W *MAX_H * 16 * 2),
 	.dwMaxBitRate		= cpu_to_le32(MAX_W *MAX_H * 16 * 15),
 	.dwMaxVideoFrameBufferSize	= cpu_to_le32(MAX_W *MAX_H * 2),
-	.dwDefaultFrameInterval	= cpu_to_le32(666666),
+	.dwDefaultFrameInterval	= cpu_to_le32(FRAME_INTV_0),
 	.bFrameIntervalType	= 3,
-	.dwFrameInterval[0]	= cpu_to_le32(666666),
-	.dwFrameInterval[1]	= cpu_to_le32(1000000),
-	.dwFrameInterval[2]	= cpu_to_le32(5000000),
+	.dwFrameInterval[0]	= cpu_to_le32(FRAME_INTV_0),
+	.dwFrameInterval[1]	= cpu_to_le32(FRAME_INTV_1),
+	.dwFrameInterval[2]	= cpu_to_le32(FRAME_INTV_2),
 #else
 	.bLength		= UVC_DT_FRAME_UNCOMPRESSED_SIZE(3),
 	.bDescriptorType	= USB_DT_CS_INTERFACE,
@@ -189,11 +193,11 @@ struct UVC_FRAME_UNCOMPRESSED(3) uvc_frame_yuy2_1080p = {
 	.dwMinBitRate		= cpu_to_le32(1920 * 1080 * 16 * 2),
 	.dwMaxBitRate		= cpu_to_le32(1920 * 1080 * 16 * 15),
 	.dwMaxVideoFrameBufferSize	= cpu_to_le32(1920 * 1080 * 2),
-	.dwDefaultFrameInterval	= cpu_to_le32(666666),
+	.dwDefaultFrameInterval	= cpu_to_le32(FRAME_INTV_0),
 	.bFrameIntervalType	= 3,
-	.dwFrameInterval[0]	= cpu_to_le32(666666),
-	.dwFrameInterval[1]	= cpu_to_le32(1000000),
-	.dwFrameInterval[2]	= cpu_to_le32(5000000),
+	.dwFrameInterval[0]	= cpu_to_le32(FRAME_INTV_0),
+	.dwFrameInterval[1]	= cpu_to_le32(FRAME_INTV_1),
+	.dwFrameInterval[2]	= cpu_to_le32(FRAME_INTV_2),
 #endif
 };
 
@@ -209,11 +213,11 @@ struct UVC_FRAME_UNCOMPRESSED(3) uvc_frame_nv12_1080p = {
 	.dwMinBitRate		= cpu_to_le32(MAX_W *MAX_H * 3),
 	.dwMaxBitRate		= cpu_to_le32(MAX_W *MAX_H * 45 / 2),
 	.dwMaxVideoFrameBufferSize	= cpu_to_le32(MAX_W *MAX_H * 3 / 2),
-	.dwDefaultFrameInterval	= cpu_to_le32(666666),
+	.dwDefaultFrameInterval	= cpu_to_le32(FRAME_INTV_0),
 	.bFrameIntervalType	= 3,
-	.dwFrameInterval[0]	= cpu_to_le32(666666),
-	.dwFrameInterval[1]	= cpu_to_le32(1000000),
-	.dwFrameInterval[2]	= cpu_to_le32(5000000),
+	.dwFrameInterval[0]	= cpu_to_le32(FRAME_INTV_0),
+	.dwFrameInterval[1]	= cpu_to_le32(FRAME_INTV_1),
+	.dwFrameInterval[2]	= cpu_to_le32(FRAME_INTV_2),
 #else
 	.bLength		= UVC_DT_FRAME_UNCOMPRESSED_SIZE(3),
 	.bDescriptorType	= USB_DT_CS_INTERFACE,
@@ -225,11 +229,11 @@ struct UVC_FRAME_UNCOMPRESSED(3) uvc_frame_nv12_1080p = {
 	.dwMinBitRate		= cpu_to_le32(6220800),
 	.dwMaxBitRate		= cpu_to_le32(46656000),
 	.dwMaxVideoFrameBufferSize	= cpu_to_le32(3110400),
-	.dwDefaultFrameInterval	= cpu_to_le32(666666),
+	.dwDefaultFrameInterval	= cpu_to_le32(FRAME_INTV_0),
 	.bFrameIntervalType	= 3,
-	.dwFrameInterval[0]	= cpu_to_le32(666666),
-	.dwFrameInterval[1]	= cpu_to_le32(1000000),
-	.dwFrameInterval[2]	= cpu_to_le32(5000000),
+	.dwFrameInterval[0]	= cpu_to_le32(FRAME_INTV_0),
+	.dwFrameInterval[1]	= cpu_to_le32(FRAME_INTV_1),
+	.dwFrameInterval[2]	= cpu_to_le32(FRAME_INTV_2),
 #endif
 };
 
@@ -244,11 +248,11 @@ struct UVC_FRAME_UNCOMPRESSED(3) uvc_frame_nv12_480p = {
 	.dwMinBitRate		= cpu_to_le32(640 * 480 * 12 * 2), //cpu_to_le32(7372800),
 	.dwMaxBitRate		= cpu_to_le32(640 * 480 * 12 * 15),
 	.dwMaxVideoFrameBufferSize	= cpu_to_le32(460800),
-	.dwDefaultFrameInterval	= cpu_to_le32(666666),
+	.dwDefaultFrameInterval	= cpu_to_le32(FRAME_INTV_0),
 	.bFrameIntervalType	= 3,
-	.dwFrameInterval[0]	= cpu_to_le32(666666),
-	.dwFrameInterval[1]	= cpu_to_le32(1000000),
-	.dwFrameInterval[2]	= cpu_to_le32(5000000),
+	.dwFrameInterval[0]	= cpu_to_le32(FRAME_INTV_0),
+	.dwFrameInterval[1]	= cpu_to_le32(FRAME_INTV_1),
+	.dwFrameInterval[2]	= cpu_to_le32(FRAME_INTV_2),
 };
 
 struct UVC_FRAME_UNCOMPRESSED(3) uvc_frame_nv12_720p = {
@@ -262,11 +266,11 @@ struct UVC_FRAME_UNCOMPRESSED(3) uvc_frame_nv12_720p = {
 	.dwMinBitRate		= cpu_to_le32(1280 * 720 * 12 * 2),
 	.dwMaxBitRate		= cpu_to_le32(1280 * 720 * 12 * 15),
 	.dwMaxVideoFrameBufferSize	= cpu_to_le32(1280 * 720 * 1.5),
-	.dwDefaultFrameInterval	= cpu_to_le32(666666),
+	.dwDefaultFrameInterval	= cpu_to_le32(FRAME_INTV_0),
 	.bFrameIntervalType	= 3,
-	.dwFrameInterval[0]	= cpu_to_le32(666666),
-	.dwFrameInterval[1]	= cpu_to_le32(1000000),
-	.dwFrameInterval[2]	= cpu_to_le32(5000000),
+	.dwFrameInterval[0]	= cpu_to_le32(FRAME_INTV_0),
+	.dwFrameInterval[1]	= cpu_to_le32(FRAME_INTV_1),
+	.dwFrameInterval[2]	= cpu_to_le32(FRAME_INTV_2),
 };
 
 struct UVC_FRAME_FRAMEBASED(3) uvc_frame_h264_1080p = {
@@ -280,12 +284,12 @@ struct UVC_FRAME_FRAMEBASED(3) uvc_frame_h264_1080p = {
 	.wHeight		= cpu_to_le16(MAX_H),
 	.dwMinBitRate		= cpu_to_le32(MAX_W *MAX_H * 9),
 	.dwMaxBitRate		= cpu_to_le32(MAX_W *MAX_H * 27),
-	.dwDefaultFrameInterval	= cpu_to_le32(400000),
+	.dwDefaultFrameInterval	= cpu_to_le32(FRAME_INTV_0),
 	.bFrameIntervalType	= 3,
 	.dwBytesPerLine 	= cpu_to_le32(0),
-	.dwFrameInterval[0]	= cpu_to_le32(400000),
-	.dwFrameInterval[1]	= cpu_to_le32(1000000),
-	.dwFrameInterval[2]	= cpu_to_le32(5000000),
+	.dwFrameInterval[0]	= cpu_to_le32(FRAME_INTV_0),
+	.dwFrameInterval[1]	= cpu_to_le32(FRAME_INTV_1),
+	.dwFrameInterval[2]	= cpu_to_le32(FRAME_INTV_2),
 #else
 	.bLength		= UVC_DT_FRAME_FRAMEBASED_SIZE(3),
 	.bDescriptorType	= USB_DT_CS_INTERFACE,
@@ -296,12 +300,12 @@ struct UVC_FRAME_FRAMEBASED(3) uvc_frame_h264_1080p = {
 	.wHeight		= cpu_to_le16(1080),
 	.dwMinBitRate		= cpu_to_le32(18432000),
 	.dwMaxBitRate		= cpu_to_le32(55296000),
-	.dwDefaultFrameInterval	= cpu_to_le32(400000),
+	.dwDefaultFrameInterval	= cpu_to_le32(FRAME_INTV_0),
 	.bFrameIntervalType	= 3,
 	.dwBytesPerLine 	= cpu_to_le32(0),
-	.dwFrameInterval[0]	= cpu_to_le32(400000),
-	.dwFrameInterval[1]	= cpu_to_le32(1000000),
-	.dwFrameInterval[2]	= cpu_to_le32(5000000),
+	.dwFrameInterval[0]	= cpu_to_le32(FRAME_INTV_0),
+	.dwFrameInterval[1]	= cpu_to_le32(FRAME_INTV_1),
+	.dwFrameInterval[2]	= cpu_to_le32(FRAME_INTV_2),
 #endif
 };
 
@@ -316,12 +320,12 @@ struct UVC_FRAME_FRAMEBASED(3) uvc_frame_h265_720p = {
 	.wHeight		= cpu_to_le16(MAX_H),
 	.dwMinBitRate		= cpu_to_le32(MAX_H *MAX_W * 9),
 	.dwMaxBitRate		= cpu_to_le32(MAX_H *MAX_W * 27),
-	.dwDefaultFrameInterval	= cpu_to_le32(400000),
+	.dwDefaultFrameInterval	= cpu_to_le32(FRAME_INTV_0),
 	.bFrameIntervalType	= 3,
 	.dwBytesPerLine 	= cpu_to_le32(0),
-	.dwFrameInterval[0]	= cpu_to_le32(400000),
-	.dwFrameInterval[1]	= cpu_to_le32(1000000),
-	.dwFrameInterval[2]	= cpu_to_le32(5000000),
+	.dwFrameInterval[0]	= cpu_to_le32(FRAME_INTV_0),
+	.dwFrameInterval[1]	= cpu_to_le32(FRAME_INTV_1),
+	.dwFrameInterval[2]	= cpu_to_le32(FRAME_INTV_2),
 #else
 	.bLength		= UVC_DT_FRAME_FRAMEBASED_SIZE(3),
 	.bDescriptorType	= USB_DT_CS_INTERFACE,
@@ -332,12 +336,12 @@ struct UVC_FRAME_FRAMEBASED(3) uvc_frame_h265_720p = {
 	.wHeight		= cpu_to_le16(1080),
 	.dwMinBitRate		= cpu_to_le32(18432000),
 	.dwMaxBitRate		= cpu_to_le32(55296000),
-	.dwDefaultFrameInterval	= cpu_to_le32(400000),
+	.dwDefaultFrameInterval	= cpu_to_le32(FRAME_INTV_0),
 	.bFrameIntervalType	= 3,
 	.dwBytesPerLine 	= cpu_to_le32(0),
-	.dwFrameInterval[0]	= cpu_to_le32(400000),
-	.dwFrameInterval[1]	= cpu_to_le32(1000000),
-	.dwFrameInterval[2]	= cpu_to_le32(5000000),
+	.dwFrameInterval[0]	= cpu_to_le32(FRAME_INTV_0),
+	.dwFrameInterval[1]	= cpu_to_le32(FRAME_INTV_1),
+	.dwFrameInterval[2]	= cpu_to_le32(FRAME_INTV_2),
 #endif
 };
 
@@ -353,11 +357,11 @@ struct UVC_FRAME_MJPEG(3) uvc_frame_mjpg_1080p = {
 	.dwMinBitRate		= cpu_to_le32(MAX_W *MAX_H * 9),
 	.dwMaxBitRate		= cpu_to_le32(MAX_W *MAX_H * 27),
 	.dwMaxVideoFrameBufferSize	= cpu_to_le32(460800),
-	.dwDefaultFrameInterval	= cpu_to_le32(666666),
+	.dwDefaultFrameInterval	= cpu_to_le32(FRAME_INTV_0),
 	.bFrameIntervalType	= 3,
-	.dwFrameInterval[0]	= cpu_to_le32(666666),
-	.dwFrameInterval[1]	= cpu_to_le32(1000000),
-	.dwFrameInterval[2]	= cpu_to_le32(5000000),
+	.dwFrameInterval[0]	= cpu_to_le32(FRAME_INTV_0),
+	.dwFrameInterval[1]	= cpu_to_le32(FRAME_INTV_1),
+	.dwFrameInterval[2]	= cpu_to_le32(FRAME_INTV_2),
 #else
 	.bLength		= UVC_DT_FRAME_MJPEG_SIZE(3),
 	.bDescriptorType	= USB_DT_CS_INTERFACE,
@@ -369,11 +373,11 @@ struct UVC_FRAME_MJPEG(3) uvc_frame_mjpg_1080p = {
 	.dwMinBitRate		= cpu_to_le32(18432000),
 	.dwMaxBitRate		= cpu_to_le32(55296000),
 	.dwMaxVideoFrameBufferSize	= cpu_to_le32(460800),
-	.dwDefaultFrameInterval	= cpu_to_le32(666666),
+	.dwDefaultFrameInterval	= cpu_to_le32(FRAME_INTV_0),
 	.bFrameIntervalType	= 3,
-	.dwFrameInterval[0]	= cpu_to_le32(666666),
-	.dwFrameInterval[1]	= cpu_to_le32(1000000),
-	.dwFrameInterval[2]	= cpu_to_le32(5000000),
+	.dwFrameInterval[0]	= cpu_to_le32(FRAME_INTV_0),
+	.dwFrameInterval[1]	= cpu_to_le32(FRAME_INTV_1),
+	.dwFrameInterval[2]	= cpu_to_le32(FRAME_INTV_2),
 #endif
 };
 
@@ -517,27 +521,27 @@ struct usb_descriptor_header *usbd_uvc_descriptors_HS[] = {
 };
 
 struct uvc_frame_info uvc_frames_mjpeg[] = {
-	{  MAX_W, MAX_H, { VALUE_FPS(15), VALUE_FPS(10), VALUE_FPS(2), 0 }, },
+	{  MAX_W, MAX_H, { FRAME_INTV_0, FRAME_INTV_1, FRAME_INTV_2, 0 }, },
 	{ 0, 0, { 0, }, },
 };
 
 struct uvc_frame_info uvc_frames_h264[] = {//25,
-	{  MAX_W, MAX_H, { VALUE_FPS(15), VALUE_FPS(10), VALUE_FPS(2), 0 }, },//400000, 1000000, 5000000,
+	{  MAX_W, MAX_H, { FRAME_INTV_0, FRAME_INTV_1, FRAME_INTV_2, 0 }, },//400000, 1000000, 5000000,
 	{ 0, 0, { 0, }, },
 };
 
 struct uvc_frame_info uvc_frames_h265[] = {//25,
-	{  MAX_W, MAX_H, { VALUE_FPS(15), VALUE_FPS(10), VALUE_FPS(2), 0 }, },//400000, 1000000, 5000000,
+	{  MAX_W, MAX_H, { FRAME_INTV_0, FRAME_INTV_1, FRAME_INTV_2, 0 }, },//400000, 1000000, 5000000,
 	{ 0, 0, { 0, }, },
 };
 
 struct uvc_frame_info uvc_frames_yuy2[] = {
-	{  MAX_W, MAX_H, { VALUE_FPS(15), VALUE_FPS(10), VALUE_FPS(2), 0 }, },//666666, 10000000, 50000000,
+	{  MAX_W, MAX_H, { FRAME_INTV_0, FRAME_INTV_1, FRAME_INTV_2, 0 }, },//666666, 10000000, 50000000,
 	{ 0, 0, { 0, }, },
 };
 
 struct uvc_frame_info uvc_frames_nv12[] = {
-	{  MAX_W, MAX_H, { VALUE_FPS(15), VALUE_FPS(10), VALUE_FPS(2), 0 }, },//666666, 10000000, 50000000,
+	{  MAX_W, MAX_H, { FRAME_INTV_0, FRAME_INTV_1, FRAME_INTV_2, 0 }, },//666666, 10000000, 50000000,
 	//{  1280, 720, { VALUE_FPS(15), VALUE_FPS(10), VALUE_FPS(2), 0 }, },//666666, 10000000, 50000000,
 	//{  640, 480, { VALUE_FPS(15), VALUE_FPS(10), VALUE_FPS(2), 0 }, },//666666, 10000000, 50000000,
 	{ 0, 0, { 0, }, },

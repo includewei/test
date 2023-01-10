@@ -33,12 +33,9 @@ static int wdr_mode = 2;
 
 //#define UVC_MD
 #define V1_CHANNEL 0
--#define V1_RESOLUTION VIDEO_FHD//VIDEO_HD//VIDEO_FHD 
--#define V1_FPS 20
--#define V1_GOP 80
-#define V1_RESOLUTION VIDEO_1936P	//VIDEO_HD//VIDEO_FHD 
-#define V1_FPS 10
-#define V1_GOP 40
+#define V1_RESOLUTION VIDEO_FHD//VIDEO_HD//VIDEO_FHD 
+#define V1_FPS 20
+#define V1_GOP 80
 #define V1_BPS 1024*1024
 #define V1_RCMODE 1 // 1: CBR, 2: VBR
 
@@ -64,16 +61,13 @@ static int wdr_mode = 2;
 #elif V1_RESOLUTION == VIDEO_HD
 #define V1_WIDTH	1280
 #define V1_HEIGHT	720
-#elif V1_RESOLUTION == VIDEO_1936P
-#define V1_WIDTH	1936
-#define V1_HEIGHT	1936
 #elif V1_RESOLUTION == VIDEO_FHD
 
-#if USE_SENSOR == SENSOR_GC4653 || USE_SENSOR == SENSOR_GC4023
+#if USE_SENSOR == SENSOR_GC4653
 #define V1_WIDTH	2560
 #define V1_HEIGHT	1440
 #else
-#if USE_SENSOR == SENSOR_JXF51
+#if USE_SENSOR == SENSOR_PS5270
 #define V1_WIDTH	1536
 #define V1_HEIGHT	1536
 #else
@@ -559,8 +553,9 @@ void example_media_uvcd_init(void)
 	uvc_format_local->format = FORMAT_TYPE_H264;
 	uvc_format_local->height = MAX_H;//video_v1_params.height;
 	uvc_format_local->width = MAX_W;//video_v1_params.width;
+	uvc_format_local->fps = V1_FPS;//video_v1_params.width;
 
-	printf("foramr %d height %d width %d\r\n", uvc_format_local->format, uvc_format_local->height, uvc_format_local->width);
+	printf("foramr %d height %d width %d fps %d\r\n", uvc_format_local->format, uvc_format_local->height, uvc_format_local->width, uvc_format_local->fps);
 
 	video_v1_ctx = mm_module_open(&video_module);
 	if (video_v1_ctx) {
@@ -618,9 +613,11 @@ void example_media_uvcd_init(void)
 		printf("f:%d h:%d s:%d w:%d\r\n", uvc_format_ptr->format, uvc_format_ptr->height, uvc_format_ptr->state, uvc_format_ptr->width);
 
 		if ((uvc_format_local->format != uvc_format_ptr->format) || (uvc_format_local->width != uvc_format_ptr->width) ||
-			(uvc_format_local->height != uvc_format_ptr->height)) {
-			printf("change f:%d h:%d s:%d w:%d\r\n", uvc_format_ptr->format, uvc_format_ptr->height, uvc_format_ptr->state, uvc_format_ptr->width);
+			(uvc_format_local->height != uvc_format_ptr->height) || (uvc_format_local->fps != uvc_format_ptr->fps)) {
+			printf("change fps:%d f:%d h:%d s:%d w:%d\r\n", uvc_format_ptr->fps, uvc_format_ptr->format, uvc_format_ptr->height, uvc_format_ptr->state, uvc_format_ptr->width);
 
+			video_v1_params.fps = uvc_format_ptr->fps;
+			video_v1_params.gop = video_v1_params.fps*3;
 			if (uvc_format_ptr->format == FORMAT_TYPE_YUY2) {
 #ifdef UVC_MD
 				mm_module_ctrl(video_v1_ctx, CMD_VIDEO_MD_STOP, 0);
@@ -720,6 +717,7 @@ void example_media_uvcd_init(void)
 			uvc_format_local->format = uvc_format_ptr->format;
 			uvc_format_local->width = uvc_format_ptr->width;
 			uvc_format_local->height = uvc_format_ptr->height;
+			uvc_format_local->fps = uvc_format_ptr->fps;
 		}
 
 	}

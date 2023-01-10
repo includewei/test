@@ -26,7 +26,7 @@ typedef enum {
 //Setting for ASP
 typedef struct CTNS_cfg_s {
 	int16_t NS_EN;
-	int NSLevel;
+	int16_t NSLevel;
 
 	int16_t Reserve1;
 	int16_t Reserve2;

@@ -16,7 +16,7 @@
 #include "wifi_conf.h"
 #include "lwip_netconf.h"
 
-static void wifi_common_init()
+static void wifi_common_init(void)
 {
 	uint32_t wifi_wait_count = 0;
 
@@ -34,7 +34,7 @@ static void wifi_common_init()
 //------------------------------------------------------------------------------
 // video support examples
 //------------------------------------------------------------------------------
-static void example_mmf2_video_surport()
+static void example_mmf2_video_surport(void)
 {
 
 	// CH1 Video -> H264/HEVC -> RTSP
@@ -105,15 +105,6 @@ static void example_mmf2_video_surport()
 	// V1 parameter change
 	//mmf2_video_example_v1_param_change_init();
 
-	// V1 rate control example
-	//mmf2_video_example_v1_rate_control_init();
-
-	//HTTP File Server
-	//mmf2_video_example_av_mp4_httpfs_init();
-
-	// H264 -> RTSP (V1)
-	// RGB  -> NN object detect (V4)
-
 	//mmf2_video_example_vipnn_rtsp_init();
 
 	//mmf2_video_example_demuxer_rtsp_init();
@@ -150,23 +141,9 @@ void video_example_main(void *param)
 	}
 
 	example_mmf2_video_surport();
-
-	// Disable video log
-	vTaskDelay(1000);
-	video_ctrl(0, VIDEO_DEBUG, 0);
-
 	// TODO: exit condition or signal
 	while (1) {
 		vTaskDelay(10000);
-		// extern mm_context_t *video_v1_ctx;
-		// mm_module_ctrl(video_v1_ctx, CMD_VIDEO_PRINT_INFO, 0);
-		// check video frame here
-		if (hal_video_get_no_video_time() > 1000 * 30) {
-			printf("no video frame time > %d ms", hal_video_get_no_video_time());
-			//reopen video or system reset
-
-			sys_reset();
-		}
 
 
 	}
