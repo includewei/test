@@ -33,9 +33,9 @@ static int wdr_mode = 2;
 
 //#define UVC_MD
 #define V1_CHANNEL 0
-#define V1_RESOLUTION VIDEO_1536P	//VIDEO_HD//VIDEO_FHD 
-#define V1_FPS 10
-#define V1_GOP 40
+#define V1_RESOLUTION VIDEO_FHD//VIDEO_HD//VIDEO_FHD 
+#define V1_FPS 20
+#define V1_GOP 80
 #define V1_BPS 1024*1024
 #define V1_RCMODE 1 // 1: CBR, 2: VBR
 
@@ -61,18 +61,21 @@ static int wdr_mode = 2;
 #elif V1_RESOLUTION == VIDEO_HD
 #define V1_WIDTH	1280
 #define V1_HEIGHT	720
-#elif V1_RESOLUTION == VIDEO_1936P
-#define V1_WIDTH	1936
-#define V1_HEIGHT	1936
-#elif V1_RESOLUTION == VIDEO_1536P
-#define V1_WIDTH	1536
-#define V1_HEIGHT	1536
-#elif V1_RESOLUTION == VIDEO_2K
+#elif V1_RESOLUTION == VIDEO_FHD
+
+#if USE_SENSOR == SENSOR_GC4653
 #define V1_WIDTH	2560
 #define V1_HEIGHT	1440
 #else
+#if USE_SENSOR == SENSOR_PS5270
+#define V1_WIDTH	1536
+#define V1_HEIGHT	1536
+#else
 #define V1_WIDTH	1920
 #define V1_HEIGHT	1080
+#endif
+#endif
+
 #endif
 
 static mm_context_t *video_v1_ctx			= NULL;
@@ -108,6 +111,170 @@ mm_context_t *array_h264_ctx   = NULL;
 extern struct uvc_format *uvc_format_ptr;
 
 struct uvc_format *uvc_format_local = NULL;;
+
+
+
+#if CONFIG_TUNING
+
+enum {
+	GPIO_PIN_NAME = 0, 
+	GPIO_DIR,
+	GPIO_MODE, 
+	GPIO_SET_VALUE,
+	GPIO_GET_VALUE,
+	PWM_PIN_NAME, 
+	PWM_PERIOD_US, 
+	PWM_SET_VALUE, 
+	PWM_GET_VALUE, 
+	SET_TYPE, //TYPE is GPIO or PWM
+};
+
+enum {
+	_GPIO         = 1,
+	_PWM          = 2,
+};
+
+#include "../hal/pwmout_api.h"   // mbed
+#include "gpio_api.h"
+#define MAX_DEVICES 10
+static gpio_t device_gpio[MAX_DEVICES] = {0};
+static pwmout_t device_pwm[MAX_DEVICES] = {0};
+static unsigned char device_type[MAX_DEVICES] = {0};
+void tuning_customized_get_size_cmd(void *cmd, unsigned char *reg_buf)
+{
+	unsigned short* pwbuf = (unsigned short*)reg_buf;
+	printf("[%s] ID:%d CMD:%d VALUE:%d.\r\n", __FUNCTION__, pwbuf[0], pwbuf[1], pwbuf[2]);
+	if(pwbuf[0]<0 || pwbuf[0]>=MAX_DEVICES) {
+		printf("[%s] id range is 0~%d.\r\n", __FUNCTION__, MAX_DEVICES-1);
+	}
+	int id = pwbuf[0];
+	int cmmd = pwbuf[1];
+	int val = pwbuf[2];
+	
+	switch (cmmd) {
+	case GPIO_GET_VALUE:
+		printf("GPIO_GET_VALUE(Size).\r\n");
+		if(device_type[id] == _GPIO) {
+			uint32_t *ireg_buf = (uint32_t *)reg_buf;
+			*ireg_buf = 4;
+		}
+		break;
+	case PWM_GET_VALUE:
+		printf("PWM_GET_VALUE(Size).\r\n");
+		if(device_type[id] == _PWM) {
+			uint32_t *ireg_buf = (uint32_t *)reg_buf;
+			*ireg_buf = 4;
+		}
+		break;
+
+	default:
+		break;
+	}
+}
+
+void tuning_customized_get_cmd(void *cmd, unsigned char *reg_buf)
+{
+	unsigned short* pwbuf = (unsigned short*)reg_buf;
+	printf("[%s] ID:%d CMD:%d VALUE:%d.\r\n", __FUNCTION__, pwbuf[0], pwbuf[1], pwbuf[2]);
+	if(pwbuf[0]<0 || pwbuf[0]>=MAX_DEVICES) {
+		printf("[%s] id range is 0~%d.\r\n", __FUNCTION__, MAX_DEVICES-1);
+	}
+	int id = pwbuf[0];
+	int cmmd = pwbuf[1];
+	int val = pwbuf[2];
+	
+	switch (cmmd) {
+	case GPIO_GET_VALUE:
+		printf("GPIO_GET_VALUE.\r\n");
+		if(device_type[id] == _GPIO) {
+			uint32_t *ireg_buf = (uint32_t *)reg_buf;
+			int dVal = gpio_read(&device_gpio[id]);
+			*ireg_buf = dVal;
+		}
+		break;
+	case PWM_GET_VALUE:
+		printf("PWM_GET_VALUE.\r\n");
+		if(device_type[id] == _PWM) {
+			uint32_t *ireg_buf = (uint32_t *)reg_buf;
+			float fbrightness = pwmout_read(&device_pwm[id])*100.0f;
+			*ireg_buf = (uint32_t)fbrightness;
+		}
+		break;
+
+	default:
+		break;
+	}
+}
+void tuning_customized_set_cmd(void *cmd, unsigned char *reg_buf)
+{
+	unsigned short* pwbuf = (unsigned short*)reg_buf;
+	printf("[%s] ID:%d CMD:%d VALUE:%d.\r\n", __FUNCTION__, pwbuf[0], pwbuf[1], pwbuf[2]);
+	if(pwbuf[0]<0 || pwbuf[0]>=MAX_DEVICES) {
+		printf("[%s] id range is 0~%d.\r\n", MAX_DEVICES-1);
+	}
+	int id = pwbuf[0];
+	int cmmd = pwbuf[1];
+	int val = pwbuf[2];
+	
+	switch (cmmd) {
+	case GPIO_PIN_NAME:
+		printf("GPIO_PORT.\r\n");
+		if(device_type[id] == _GPIO) {
+			gpio_init(&device_gpio[id], val);
+		}
+		break;
+	case GPIO_DIR:
+		printf("GPIO_DIR.\r\n");
+		if(device_type[id] == _GPIO) {
+			gpio_dir(&device_gpio[id], val);
+		}
+		break;
+	case GPIO_MODE:
+		printf("GPIO_MODE.\r\n");
+		if(device_type[id] == _GPIO) {
+			gpio_mode(&device_gpio[id], val);
+		}
+		break;
+	case GPIO_SET_VALUE:
+		printf("GPIO_SET_VALUE.\r\n");
+		if(device_type[id] == _GPIO) {
+			gpio_write(&device_gpio[id], val);
+		}
+		break;
+	case PWM_PIN_NAME:
+		printf("PWM_PORT.\r\n");
+		if(device_type[id] == _PWM) {
+			pwmout_init(&device_pwm[id], val);
+		}
+		break;
+	case PWM_PERIOD_US:
+		printf("PWM_PERIOD_US.\r\n");
+		if(device_type[id] == _PWM) {
+			pwmout_period_us(&device_pwm[id], val);
+		}
+		break;
+	case PWM_SET_VALUE:
+		printf("PWM_SET_VALUE.\r\n");
+		if(device_type[id] == _PWM) {
+			float fbrightness = (float)val / 100.0f;
+			pwmout_write(&device_pwm[id], fbrightness);
+		}
+		break;
+	case SET_TYPE:
+		printf("SET_TYPE.\r\n");
+		if(val==_GPIO || val==_PWM) {
+			printf("original type: %d   set type: %d.\r\n", device_type[id], val);
+			device_type[id] = val;
+		}
+		break;
+
+	default:
+		break;
+	}
+}
+
+#else
+
 
 typedef void (*shell_function_t)(void);
 typedef struct uvc_shell_cmd_s {
@@ -169,6 +336,7 @@ void uvcd_get_extention_cb(void *buf, unsigned int len) //Host get the data from
 	memcpy(buf, (void *)msg_buf, sizeof(msg_buf));
 }
 
+#endif
 
 #define AVMEDIA_TYPE_VIDEO 0
 #define AV_CODEC_ID_H264  1
@@ -203,7 +371,7 @@ static array_params_t h264usb_array_params = {
 #define V2_RCMODE 2 // 1: CBR, 2: VBR
 
 #include "sample_h264.h"
-#define VIDEO_TYPE VIDEO_H264
+#define VIDEO_TYPE VIDEO_H264_JPEG
 #define VIDEO_CODEC AV_CODEC_ID_H264
 
 #if V2_RESOLUTION == VIDEO_VGA
@@ -246,14 +414,51 @@ static rtsp2_params_t rtsp2_v2_params = {
 	}
 };
 
+TaskHandle_t snapshot_thread = NULL;
 
+int v1_snapshot_cb(uint32_t jpeg_addr, uint32_t jpeg_len)
+{
+	//printf("snapshot size=%d\n\r", jpeg_len);
+	return 0;
+}
+isp_statis_meta_t jpg_meta;
+static void video_meta_cb(void *parm)
+{
+	video_meta_t *m_parm = (video_meta_t *)parm;
+	unsigned char *ptr = (unsigned char *)m_parm->video_addr;
+	if (m_parm->type == AV_CODEC_ID_MJPEG) {
+		memcpy(ptr + m_parm->meta_offset + VIDEO_JPEG_META_OFFSET, m_parm->isp_meta_data, sizeof(isp_meta_t));
+		memcpy(ptr + m_parm->meta_offset + VIDEO_JPEG_META_OFFSET + sizeof(isp_meta_t), m_parm->isp_statis_meta, sizeof(isp_statis_meta_t));
+		memcpy(&jpg_meta, m_parm->isp_statis_meta, sizeof(isp_statis_meta_t));
+	} else if (m_parm->type == AV_CODEC_ID_H264) {
+		memcpy(ptr + m_parm->meta_offset + VIDEO_H264_META_OFFSET, m_parm->isp_meta_data, sizeof(isp_meta_t));
+		memcpy(ptr + m_parm->meta_offset + VIDEO_H264_META_OFFSET + sizeof(isp_meta_t), m_parm->isp_statis_meta, sizeof(isp_statis_meta_t));
+	} else if (m_parm->type == AV_CODEC_ID_H265) {
+		//printf("The type is %d\r\n",m_parm->type);
+	} else {
+		//printf("It don't support %d\r\n",m_parm->type);
+	}
+}
+
+void snapshot_control_thread(void *param)
+{
+#if defined(configENABLE_TRUSTZONE) && (configENABLE_TRUSTZONE == 1)
+	rtw_create_secure_context(2048);
+#endif
+	while (1) {
+		vTaskDelay(500);
+		mm_module_ctrl(video_v2_ctx, CMD_VIDEO_SNAPSHOT, 1);
+	}
+}
 void example_tuning_rtsp_video_v2_init(void)
 {
+	video_v2_params.meta_size = sizeof(isp_meta_t) + sizeof(isp_statis_meta_t) + VIDEO_META_USER_SIZE; //It add the size of user info to video frame
 	video_v2_ctx = mm_module_open(&video_module);
 	if (video_v2_ctx) {
 		mm_module_ctrl(video_v2_ctx, CMD_VIDEO_SET_PARAMS, (int)&video_v2_params);
 		mm_module_ctrl(video_v2_ctx, MM_CMD_SET_QUEUE_LEN, V2_FPS * 3);
 		mm_module_ctrl(video_v2_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
+		mm_module_ctrl(video_v2_ctx, CMD_VIDEO_SNAPSHOT, 0);
 	} else {
 		rt_printf("video open fail\n\r");
 		goto mmf2_video_exmaple_v2_fail;
@@ -285,6 +490,12 @@ void example_tuning_rtsp_video_v2_init(void)
 
 	mm_module_ctrl(video_v2_ctx, CMD_VIDEO_APPLY, V2_CHANNEL);
 
+	mm_module_ctrl(video_v2_ctx, CMD_VIDEO_SNAPSHOT_CB, (int)v1_snapshot_cb);
+	mm_module_ctrl(video_v2_ctx, CMD_VIDEO_META_CB, (int)video_meta_cb);
+
+	if (xTaskCreate(snapshot_control_thread, ((const char *)"snapshot_store"), 512, NULL, tskIDLE_PRIORITY + 1, &snapshot_thread) != pdPASS) {
+		printf("\n\r%s xTaskCreate failed", __FUNCTION__);
+	}
 	return;
 mmf2_video_exmaple_v2_fail:
 
@@ -314,6 +525,7 @@ void detect_iq_fw(int *iq_bin_start)
 #endif
 void example_media_uvcd_init(void)
 {
+	video_v1_params.meta_size = sizeof(isp_meta_t) + sizeof(isp_statis_meta_t) + VIDEO_META_USER_SIZE; //It add the size of user info to video frame
 #ifdef UVC_MD
 	int md_roi[6] = {0, 0, 320, 180, 6, 6};
 #endif
@@ -364,8 +576,12 @@ void example_media_uvcd_init(void)
 	//  struct uvc_dev *uvc_ctx = (struct uvc_dev *)uvcd_ctx->priv;
 
 	if (uvcd_ctx) {
-		mm_module_ctrl(uvcd_ctx, CMD_UVCD_CALLBACK_SET, (int)uvcd_set_extention_cb);
-		mm_module_ctrl(uvcd_ctx, CMD_UVCD_CALLBACK_GET, (int)uvcd_get_extention_cb);
+#if CONFIG_TUNING
+		tuning_set_custom_cmd_cb((int)tuning_customized_set_cmd, (int)tuning_customized_get_cmd, (int)tuning_customized_get_size_cmd);
+#else
+		//mm_module_ctrl(uvcd_ctx, CMD_UVCD_CALLBACK_SET, (int)uvcd_set_extention_cb);
+		//mm_module_ctrl(uvcd_ctx, CMD_UVCD_CALLBACK_GET, (int)uvcd_get_extention_cb);
+#endif
 	} else {
 		rt_printf("uvcd open fail\n\r");
 		goto mmf2_example_uvcd_fail;
@@ -381,8 +597,9 @@ void example_media_uvcd_init(void)
 	uvc_format_local->format = FORMAT_TYPE_H264;
 	uvc_format_local->height = MAX_H;//video_v1_params.height;
 	uvc_format_local->width = MAX_W;//video_v1_params.width;
+	uvc_format_local->fps = V1_FPS;//video_v1_params.width;
 
-	printf("foramr %d height %d width %d\r\n", uvc_format_local->format, uvc_format_local->height, uvc_format_local->width);
+	printf("foramr %d height %d width %d fps %d\r\n", uvc_format_local->format, uvc_format_local->height, uvc_format_local->width, uvc_format_local->fps);
 
 	video_v1_ctx = mm_module_open(&video_module);
 	if (video_v1_ctx) {
@@ -440,9 +657,11 @@ void example_media_uvcd_init(void)
 		printf("f:%d h:%d s:%d w:%d\r\n", uvc_format_ptr->format, uvc_format_ptr->height, uvc_format_ptr->state, uvc_format_ptr->width);
 
 		if ((uvc_format_local->format != uvc_format_ptr->format) || (uvc_format_local->width != uvc_format_ptr->width) ||
-			(uvc_format_local->height != uvc_format_ptr->height)) {
-			printf("change f:%d h:%d s:%d w:%d\r\n", uvc_format_ptr->format, uvc_format_ptr->height, uvc_format_ptr->state, uvc_format_ptr->width);
+			(uvc_format_local->height != uvc_format_ptr->height) || (uvc_format_local->fps != uvc_format_ptr->fps)) {
+			printf("change fps:%d f:%d h:%d s:%d w:%d\r\n", uvc_format_ptr->fps, uvc_format_ptr->format, uvc_format_ptr->height, uvc_format_ptr->state, uvc_format_ptr->width);
 
+			video_v1_params.fps = uvc_format_ptr->fps;
+			video_v1_params.gop = video_v1_params.fps*3;
 			if (uvc_format_ptr->format == FORMAT_TYPE_YUY2) {
 #ifdef UVC_MD
 				mm_module_ctrl(video_v1_ctx, CMD_VIDEO_MD_STOP, 0);
@@ -542,6 +761,7 @@ void example_media_uvcd_init(void)
 			uvc_format_local->format = uvc_format_ptr->format;
 			uvc_format_local->width = uvc_format_ptr->width;
 			uvc_format_local->height = uvc_format_ptr->height;
+			uvc_format_local->fps = uvc_format_ptr->fps;
 		}
 
 	}
@@ -573,7 +793,10 @@ void example_media_uvcd(void)
 		printf("\r\n example_media_two_source_main: Create Task Error\n");
 	}
 
+
+#if !CONFIG_TUNING
 	if (xTaskCreate(example_shell_cmd_thread, ((const char *)"example_shell_cmd_thread"), 2048, NULL, tskIDLE_PRIORITY + 1, NULL) != pdPASS) {
 		printf("\n\r%s xTaskCreate(example_shell_cmd_thread) failed", __FUNCTION__);
 	}
+#endif
 }

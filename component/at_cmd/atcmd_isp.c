@@ -517,7 +517,7 @@ void fATII(void *arg)
 				if (iq_tmp) {
 					memset(iq_tmp, 0, CMD_DATA_SIZE);
 					printf("[ATII] erase 64K.\r\n");
-					ftl_common_write(TUNING_IQ_FW, (u8 *)iq_tmp, CMD_DATA_SIZE);
+					ftl_common_write(TUNING_IQ_FW, (u8*)iq_tmp, CMD_DATA_SIZE);
 					free(iq_tmp);
 				}
 			}
@@ -542,7 +542,22 @@ void fATII(void *arg)
 			ret = hal_video_i2c_read(&reg);
 			printf("ret: %d, read addr:0x%04X, data:0x%04X.\r\n", ret, reg.addr, reg.data);
 		}
-	} else {
+	} else if (strcmp(argv[1], "meta") == 0) {
+extern isp_statis_meta_t jpg_meta;
+		isp_statis_meta_t jmeta = jpg_meta;
+		printf("[%s]exposure_h:%d exposure_l:%d\r\n", __FUNCTION__, jmeta.exposure_h, jmeta.exposure_l);
+		printf("[%s]gain_h:%d gain_l:%d\r\n", __FUNCTION__, jmeta.gain_h, jmeta.gain_l);
+		printf("[%s]wb_r_gain:%d wb_b_gain:%d wb_g_gain:%d\r\n", __FUNCTION__, jmeta.wb_r_gain, jmeta.wb_b_gain, jmeta.wb_g_gain);
+		printf("[%s]colot_temperature:%d\r\n", __FUNCTION__, jmeta.colot_temperature);
+		printf("[%s]y_average:%d\r\n", __FUNCTION__, jmeta.y_average);
+		printf("[%s]white_num:%d\r\n", __FUNCTION__, jmeta.white_num);
+		printf("[%s]rg_sum:%d bg_sum:%d\r\n", __FUNCTION__, jmeta.rg_sum, jmeta.bg_sum);
+		printf("[%s]hdr_mode:%d\r\n", __FUNCTION__, jmeta.hdr_mode);
+		printf("[%s]sensor_fps:%d max_fps:%d\r\n", __FUNCTION__, jmeta.sensor_fps, jmeta.max_fps);
+		printf("[%s]frame_count:%d\r\n", __FUNCTION__, jmeta.frame_count);
+		printf("[%s]time_stamp:%d\r\n", __FUNCTION__, jmeta.time_stamp);
+		printf("[%s]rmean:%d gmean:%d bmean:%d\r\n", __FUNCTION__, jmeta.rmean, jmeta.gmean, jmeta.bmean);
+
 
 	}
 
