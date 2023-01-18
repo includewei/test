@@ -542,6 +542,9 @@ void fATII(void *arg)
 			ret = hal_video_i2c_read(&reg);
 			printf("ret: %d, read addr:0x%04X, data:0x%04X.\r\n", ret, reg.addr, reg.data);
 		}
+#if 0
+//ESSENTIAL2: v9.5c_patch_support_tuning_tool_(v02)(96431) introduced the jpg_meta testing in example_media_uvcd.c
+// but the v9.5c_AcuraSensor_BringUp_1361_(V02)(96523) removed jpg_meta testing in  example_media_uvcd.c
 	} else if (strcmp(argv[1], "meta") == 0) {
 extern isp_statis_meta_t jpg_meta;
 		isp_statis_meta_t jmeta = jpg_meta;
@@ -557,7 +560,7 @@ extern isp_statis_meta_t jpg_meta;
 		printf("[%s]frame_count:%d\r\n", __FUNCTION__, jmeta.frame_count);
 		printf("[%s]time_stamp:%d\r\n", __FUNCTION__, jmeta.time_stamp);
 		printf("[%s]rmean:%d gmean:%d bmean:%d\r\n", __FUNCTION__, jmeta.rmean, jmeta.gmean, jmeta.bmean);
-
+#endif
 
 	}
 
