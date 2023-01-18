@@ -279,6 +279,17 @@ long int __wrap_ftell(FILE *stream)
 	return ret;
 }
 
+long int __wrap_ftruncate(FILE *stream, off_t length)
+{
+	int ret = 0;
+	vfs_file *finfo = (vfs_file *)stream;
+	if (is_stdio(stream)) {
+		return -1;
+	}
+	ret = vfs.drv[finfo->vfs_id]->ftruncate((vfs_file *)stream, length);
+	return ret;
+}
+
 #include "stdio_port_func.h"
 int __wrap_fputc(int character, FILE *stream)
 {

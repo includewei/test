@@ -172,6 +172,21 @@ int fatfs_ftell(vfs_file *finfo)
 	return f_tell(fil);
 }
 
+int fatfs_ftruncate(vfs_file *finfo, off_t length)
+{
+	FIL *fil = (FIL *)finfo->file;
+	FRESULT res = FR_INT_ERR;
+	res = f_lseek(fil, length);
+	if (res > 0) {
+		return -1;
+	}
+	res = f_truncate(fil);
+	if (res > 0) {
+		return -1;
+	}
+	return 0;
+}
+
 int fatfs_opendir(const char *name, vfs_file *finfo)
 {
 	DIR *pdir = malloc(sizeof(DIR));
@@ -558,6 +573,7 @@ vfs_opt fatfs_drv = {
 	.eof   = fatfs_feof,
 	.error = fatfs_ferror, //ferror
 	.tell  = fatfs_ftell,
+	.ftruncate = fatfs_ftruncate,
 	.opendir = fatfs_opendir,
 	.readdir = fatfs_readdir,
 	.closedir = fatfs_closedir,

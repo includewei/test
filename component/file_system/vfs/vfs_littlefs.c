@@ -262,7 +262,7 @@ int littlefs_seek(long int offset, int origin, vfs_file *finfo)
 		ret = lfs_file_seek(&lfs, file, offset, LFS_SEEK_END);
 		break;
 	}
-	return ret;
+	return ret < 0 ? ret : 0;
 }
 
 void littlefs_rewind(vfs_file *finfo)
@@ -337,6 +337,17 @@ int littlefs_ftell(vfs_file *finfo)
 	lfs_file_t *file = (lfs_file_t *)finfo->file;
 	location = lfs_file_tell(&lfs, file);
 	return location;
+}
+
+int littlefs_ftruncate(vfs_file *finfo, off_t length)
+{
+	int ret = 0;
+	lfs_file_t *file = (lfs_file_t *)finfo->file;
+	ret = lfs_file_truncate(&lfs, file, length);
+	if (ret < 0) {
+		return -1;
+	}
+	return 0;
 }
 
 int littlefs_opendir(const char *name, vfs_file *finfo)
@@ -593,6 +604,7 @@ vfs_opt littlefs_drv = {
 	.eof   = littlefs_feof,
 	.error = littlefs_ferror, //ferror
 	.tell  = littlefs_ftell,
+	.ftruncate = littlefs_ftruncate,
 	.opendir = littlefs_opendir,
 	.readdir = littlefs_readdir,
 	.closedir = littlefs_closedir,
