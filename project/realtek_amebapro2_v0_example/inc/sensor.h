@@ -36,9 +36,10 @@ extern "C" {
 #define SENSOR_GC4023		0x01
 #define SENSOR_PS5420		0x02
 #define SENSOR_PS5270		0x03
-#define SENSOR_GC4653		0x04
-#define SENSOR_SC301		0x05
-#define SENSOR_JXF51		0x06
+#define SENSOR_GC2333		0x04
+#define SENSOR_GC4653		0x05
+#define SENSOR_SC301		0x06
+#define SENSOR_JXF51		0x07
 
 #define MULTI_DISABLE       0x00
 #define MULTI_ENABLE        0x01
