@@ -570,4 +570,7 @@ Certain platform allows computing and verifying the IP, UDP, TCP and ICMP checks
 #define LWIP_SOCKET_SET_ERRNO           1
 #endif
 
+// ESSENTIAL2: enable loopback
+#define LWIP_NETIF_LOOPBACK             1
+
 #endif /* LWIP_HDR_LWIPOPTS_H */
