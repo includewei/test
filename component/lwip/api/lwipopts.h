@@ -14,6 +14,8 @@
 #include "platform_opts.h"
 #define WIFI_LOGO_CERTIFICATION_CONFIG 0    //for ping 10k test buffer setting
 
+#define CONFIG_VIDEO_APPLICATION 1
+
 /**
  * SYS_LIGHTWEIGHT_PROT==1: if you want inter-task protection for certain
  * critical regions during buffer allocation, deallocation and memory
@@ -572,5 +574,7 @@ Certain platform allows computing and verifying the IP, UDP, TCP and ICMP checks
 
 // ESSENTIAL2: enable loopback
 #define LWIP_NETIF_LOOPBACK             1
+#define LWIP_HAVE_LOOPIF                1
+#define LWIP_LOOPBACK_MAX_PBUFS         12
 
 #endif /* LWIP_HDR_LWIPOPTS_H */
