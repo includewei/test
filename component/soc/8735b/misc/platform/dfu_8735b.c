@@ -195,7 +195,12 @@ static int ota_upgrade_from_usb(unsigned char *buf, unsigned int size, int index
 	int ret = 0;
 	int wr_status = 0;
 	dfu->read_bytes = size;
-	memcpy(dfu->fw_buf + dfu->update_size, buf, size);
+	if(dfu->boot_type){
+		memcpy(dfu->fw_buf + dfu->update_size, buf, size);
+	}else{
+		//int nor_flash_update(unsigned char *fw_buf, int fw_size, int index)
+		nor_flash_update(buf,size,index);
+	}
 	dfu->update_size += dfu->read_bytes;
 	return 0;
 }
@@ -210,23 +215,10 @@ static int ota_checksum_from_usb(void *parm)
 	dfu_usb_operate_t *dfu = &usb_fw_dfu;
 	if (dfu->boot_type == 0) { //For NOR FLASH UPGRADE
 		printf("Update nor flash %x\r\n", dfu->update_size);
-		for (i = 0 ; i < dfu->update_size / NOR_BLOCK_SIZE; i++) {
-			ret = nor_flash_update(dfu->fw_buf + i * NOR_BLOCK_SIZE, NOR_BLOCK_SIZE, i);
-			if (ret < 0) {
-				goto exit;
-			}
-		}
-		if (dfu->update_size % NOR_BLOCK_SIZE) {
-			ret = nor_flash_update(dfu->fw_buf + i * NOR_BLOCK_SIZE, dfu->update_size % NOR_BLOCK_SIZE, i);
-			if (ret < 0) {
-				goto exit;
-			}
-		}
 	} else {
 		printf("Update nand flash\r\n");
 		ret = nand_flash_update(dfu->fw_buf, dfu->update_size);
 	}
-exit:
 	return ret;
 }
 
