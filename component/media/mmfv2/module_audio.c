@@ -25,7 +25,7 @@
 #define DMIC_CLK_PIN    PE_2 //PE_0
 #define DMIC_DATA_PIN   PE_4
 #else
-#define DMIC_CLK_PIN    PD_14 //PD_14
+#define DMIC_CLK_PIN    PD_16 //PD_14
 #define DMIC_DATA_PIN   PD_18
 #endif
 #define AUDIO_DMA_PAGE_NUM 4
@@ -105,7 +105,7 @@ static xQueueHandle pcm_rx_cache = NULL;
 static pcm_rx_t rx_irq_buf;
 static pcm_rx_t proc_rx_buf;
 
-#define M 1
+#define M 8
 #define FRAMESIZE (AUDIO_AEC_PAGE_SIZE/2)
 #define TAIL_LENGTH_IN_MILISECONDS (20*M)
 #define TAIL(tail_ms, rate) (tail_ms * (rate / 1000) )
@@ -136,10 +136,6 @@ int module_audio_vad = 1;
 int module_audio_agc = 3;
 int module_audio_ns = 3;
 
-int audio_onoff = 0;   //audio output for audio recording
-int print_aec = 0;
-int print_ns = 0;
-int print_agc = 0;
 
 #define ATAF_AEC_CTRL module_audio_aec
 #define ATAF_AGC_CTRL module_audio_agc
@@ -661,6 +657,15 @@ static void audio_rx_handle_thread(void *param)
 
 		uint8_t *dma_rxdata_buf_l = (uint8_t *)proc_rx_buf.pcm_data;
 		uint8_t *dma_rxdata_buf_r = (uint8_t *)(proc_rx_buf.pcm_data + AUDIO_DMA_PAGE_SIZE);
+		uint8_t *dma_rxdata_proc_buf;
+		// use left mic data to do process in stereo mic signal, will modify after stereo signal process is ready
+		if (ctx->params.use_mic_type == USE_AUDIO_STEREO_DMIC) {
+			dma_rxdata_proc_buf = dma_rxdata_buf_l;
+		} else if (ctx->params.use_mic_type == USE_AUDIO_LEFT_DMIC) {
+			dma_rxdata_proc_buf = dma_rxdata_buf_l;
+		} else if (ctx->params.use_mic_type == USE_AUDIO_RIGHT_DMIC) {
+			dma_rxdata_proc_buf = dma_rxdata_buf_r;
+		}
 		uint32_t audio_rx_ts = proc_rx_buf.timestamp;
 		//uint32_t audio_rx_ts = xTaskGetTickCount();
 		memcpy(proc_tx_buf, last_tx_buf, AUDIO_DMA_PAGE_SIZE);
@@ -702,18 +707,18 @@ static void audio_rx_handle_thread(void *param)
 #if defined(CONFIG_PLATFORM_8735B) && defined(CONFIG_NEWAEC) && CONFIG_NEWAEC
 				if (ctx->inited_aec && ctx->run_aec && ATAF_AEC_CTRL) {
 					for (i = 0; i < AUDIO_DMA_PAGE_SIZE; i += AUDIO_AEC_PAGE_SIZE) {
-						AEC_process((int16_t *)(proc_tx_buf + i), (int16_t *)(dma_rxdata_buf_l + i), (int16_t *)(output_item->data_addr + i));
+						AEC_process((int16_t *)(proc_tx_buf + i), (int16_t *)(dma_rxdata_proc_buf + i), (int16_t *)(output_item->data_addr + i));
 					}
 				} else {
-					memcpy((int16_t *)output_item->data_addr, (int16_t *)(dma_rxdata_buf_l), AUDIO_DMA_PAGE_SIZE);
+					memcpy((int16_t *)output_item->data_addr, (int16_t *)(dma_rxdata_proc_buf), AUDIO_DMA_PAGE_SIZE);
 				}
 #else
 				if (ctx->inited_aec && ctx->run_aec && ATAF_AEC_CTRL) {
 					for (i = 0; i < AUDIO_DMA_PAGE_SIZE; i += AUDIO_AEC_PAGE_SIZE) {
-						AEC_process((int16_t *)(proc_tx_buf + i), (int16_t *)(dma_rxdata_buf_l + i), (int16_t *)(output_item->data_addr + i));
+						AEC_process((int16_t *)(proc_tx_buf + i), (int16_t *)(dma_rxdata_proc_buf + i), (int16_t *)(output_item->data_addr + i));
 					}
 				} else {
-					memcpy((int16_t *)output_item->data_addr, (int16_t *)(dma_rxdata_buf_l), AUDIO_DMA_PAGE_SIZE);
+					memcpy((int16_t *)output_item->data_addr, (int16_t *)(dma_rxdata_proc_buf), AUDIO_DMA_PAGE_SIZE);
 				}
 				if ((ctx->inited_ns & 0x2) && (ctx->run_ns & 0x2) && (ATAF_NS_CTRL & 0x2)) {
 					NS2_process(AUDIO_DMA_PAGE_SIZE / sizeof(int16_t), (int16_t *)output_item->data_addr);
@@ -749,11 +754,11 @@ static void audio_rx_handle_thread(void *param)
 				}
 #endif
 			} else {
-				memcpy((int16_t *)output_item->data_addr, (int16_t *)(dma_rxdata_buf_l), AUDIO_DMA_PAGE_SIZE);
+				memcpy((int16_t *)output_item->data_addr, (int16_t *)(dma_rxdata_proc_buf), AUDIO_DMA_PAGE_SIZE);
 			}
 #if defined(CONFIG_PLATFORM_8735B)
 			if (ctx->mic_record_file) {
-				ctx->mic_record_file((int16_t *)(proc_pretx_buf), (int16_t *)(proc_tx_buf), (int16_t *)(dma_rxdata_buf_l),
+				ctx->mic_record_file((int16_t *)(proc_pretx_buf), (int16_t *)(proc_tx_buf), (int16_t *)(dma_rxdata_proc_buf),
 									 (int16_t *)(output_item->data_addr)); //record left channel data
 			}
 #endif
@@ -951,14 +956,6 @@ int audio_control(void *p, int cmd, int arg)
 	case CMD_AUDIO_SET_SAMPLERATE:
 		ctx->params.sample_rate = (audio_sr)arg;
 		break;
-	case CMD_AUDIO_SET_MICGAIN:
-		if (arg > 3 || arg < 0) {
-			printf("[CMD_AUDIO_SET_MICGAIN] Invalid value %d\r\n",arg);
-			break;
-		}
-		ctx->params.dmic_l_gain=arg;
-		audio_l_dmic_gain(ctx->audio, arg);
-		break;
 	case CMD_AUDIO_SET_TRX:
 		if (arg == TRUE) {
 			audio_trx_start(ctx->audio);
@@ -1016,7 +1013,6 @@ int audio_control(void *p, int cmd, int arg)
 				NS_destory();
 			}
 			ctx->inited_ns = 0;
-			ctx->run_ns = 0;
 
 			if (ctx->txcfg.ns_cfg.NS_EN) {
 				NS_init(sample_rate, &(ctx->txcfg.ns_cfg));
@@ -1030,7 +1026,6 @@ int audio_control(void *p, int cmd, int arg)
 				AGC_destory();
 			}
 			ctx->inited_agc = 0;
-			ctx->run_agc = 0;
 			if (ctx->txcfg.agc_cfg.AGC_EN) {
 				AGC_init(sample_rate, &(ctx->txcfg.agc_cfg));
 				AUDIO_DBG_INFO("speaker AGC %d,%d,%d,%d\r\n", ctx->txcfg.agc_cfg.ReferenceLvl, ctx->txcfg.agc_cfg.RefThreshold, ctx->txcfg.agc_cfg.AttackTime,
@@ -1043,7 +1038,7 @@ int audio_control(void *p, int cmd, int arg)
 				AEC_destory();
 			}
 			ctx->inited_aec = 0;
-			ctx->run_aec = 0;
+
 
 			if ((ctx->rxcfg.aec_cfg.AEC_EN) || (ctx->rxcfg.agc_cfg.AGC_EN) || (ctx->rxcfg.ns_cfg.NS_EN)) {
 				AUDIO_DBG_INFO("Inintial RX ASP\r\n");
@@ -1063,7 +1058,6 @@ int audio_control(void *p, int cmd, int arg)
 				NS2_destory();
 			}
 			ctx->inited_ns = 0;
-			ctx->run_ns = 0;
 			if (ctx->txcfg.ns_cfg.NS_EN) {
 				NS_init(sample_rate, &(ctx->txcfg.ns_cfg));
 				AUDIO_DBG_INFO("Inintial NS \r\n");
@@ -1084,7 +1078,7 @@ int audio_control(void *p, int cmd, int arg)
 				AGC2_destory();
 			}
 			ctx->inited_agc = 0;
-			ctx->run_agc = 0;
+
 			if (ctx->txcfg.agc_cfg.AGC_EN) {
 				AGC_init(sample_rate, &(ctx->txcfg.agc_cfg));
 				AUDIO_DBG_INFO("speaker AGC %d,%d,%d,%d\r\n", ctx->txcfg.agc_cfg.AGCMode, ctx->txcfg.agc_cfg.TargetLevelDbfs, ctx->txcfg.agc_cfg.CompressionGaindB,
@@ -1103,7 +1097,6 @@ int audio_control(void *p, int cmd, int arg)
 				AEC_destory();
 			}
 			ctx->inited_aec = 0;
-			ctx->run_aec = 0;
 			if (ctx->rxcfg.aec_cfg.AEC_EN) {
 				AEC_init(FRAMESIZE, sample_rate, &(ctx->rxcfg.aec_cfg), 1.0f);
 				AUDIO_DBG_INFO("set AEC level = %d, sdelay = %d\r\n", ctx->rxcfg.aec_cfg.AECLevel, ctx->rxcfg.aec_cfg.FilterLength);
@@ -1717,9 +1710,6 @@ void *audio_destroy(void *p)
 #endif
 		}
 #endif
-		audio_tx_stop(ctx->audio);
-		audio_rx_stop(ctx->audio);
-		audio_deinit(ctx->audio);
 
 		free(ctx);
 		ctx = NULL;
@@ -1752,6 +1742,9 @@ void *audio_create(void *parent)
 
 
 #if ENABLE_ASP==1
+#if (defined(CONFIG_NEWAEC) && CONFIG_NEWAEC)
+	AEC_set_print(AEC_LOG_EN);
+#endif
 	memset(last_tx_buf, 0, AUDIO_DMA_PAGE_SIZE);	//MIC_SINGLE_EDNED
 	//ctx->run_aec = 0;
 	ctx->run_ns = 0;
@@ -1813,15 +1806,15 @@ audio_params_t default_audio_params = {
 	.sample_rate        = ASR_8KHZ, //when modify please also check the EQ setting
 	.word_length        = WL_16BIT,
 	.mic_gain           = MIC_0DB,
-	.dmic_l_gain        = DMIC_BOOST_24DB,
-	.dmic_r_gain        = DMIC_BOOST_24DB,
-	.use_mic_type       = USE_AUDIO_LEFT_DMIC,
+	.dmic_l_gain        = DMIC_BOOST_0DB,
+	.dmic_r_gain        = DMIC_BOOST_0DB,
+	.use_mic_type       = USE_AUDIO_AMIC,
 	.channel            = 1,
 	.mix_mode           = 0,
 	.mic_bias           = 0,
 	.hpf_set            = 0,
-	.ADC_gain           = 30,	//ADC path Dgain about 20dB
-	.DAC_gain           = 163,
+	.ADC_gain           = 0x66,	//ADC path Dgain about 20dB
+	.DAC_gain           = 0xAF,
 	.enable_record      = 0,
 	.mic_l_eq[0]        = {1, 0x1ca2925, 0x1c000000, 0x2000000, 0x38ea551, 0x1e6600bf}, //USE EQ for HPF 200Hz @ sample rate 8kHz
 	.mic_r_eq[0]        = {1, 0x1ca2925, 0x1c000000, 0x2000000, 0x38ea551, 0x1e6600bf}, //USE EQ for HPF 200Hz @ sample rate 8kHz
@@ -1836,7 +1829,7 @@ audio_params_t default_audio_params = {
 #if defined(CONFIG_PLATFORM_8735B) && defined(CONFIG_NEWAEC) && CONFIG_NEWAEC
 RX_cfg_t default_rx_asp_params = {
 	.aec_cfg = {
-		.AEC_EN = 1,
+		.AEC_EN = 0,
 		.EchoTailLen = 64,
 		.CNGEnable = 1,
 		.PPLevel = 6,
@@ -1853,33 +1846,35 @@ RX_cfg_t default_rx_asp_params = {
 		.KneeWidth = 0,
 	},
 	.ns_cfg = {
-		.NS_EN = 1,
-		.NSLevel = 9,
+		.NS_EN = 0,
+		.NSLevel = 5,
+		.HPFEnable = 0,
 	}
 };
 
 TX_cfg_t default_tx_asp_params = {
 	.agc_cfg = {
-		.AGC_EN = 1,
+		.AGC_EN = 0,
 		.AGCMode = CT_ALC,
-		.ReferenceLvl = 7,
-		.RefThreshold = 7,
+		.ReferenceLvl = 6,
+		.RefThreshold = 6,
 		.AttackTime = 20,
 		.ReleaseTime = 20,
-		.Ratio = {50, 1, 1},
-		.Threshold = {19, 30, 100},
+		.Ratio = {50, 50, 50},
+		.Threshold = {20, 30, 40},
 		.KneeWidth = 0,
 	},
 	.ns_cfg = {
 		.NS_EN = 0,
-		.NSLevel = 9,
+		.NSLevel = 5,
+		.HPFEnable = 0,
 	},
 };
 #else
 RX_cfg_t default_rx_asp_params = {
 	.aec_cfg = {
 		.AEC_EN = 0,
-		.aec_core = WEBRTC_AEC,
+		.aec_core = WEBRTC_AECM,
 		.FilterLength = 30,
 		.CNGEnable = 1,
 		.AECLevel = 3,

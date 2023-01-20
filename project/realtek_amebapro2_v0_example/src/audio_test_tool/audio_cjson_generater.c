@@ -356,6 +356,9 @@ static cJSON *CreateNSJSObject(WebrtcNS_cfg_t ns_cfg)
 	if (NSJSObject) {
 		Update_ItemInObject(NSJSObject, "NS_EN", cJSON_CreateNumber(ns_cfg.NS_EN));
 		Update_ItemInObject(NSJSObject, "NSLevel", cJSON_CreateNumber(ns_cfg.NSLevel));
+#if defined(CONFIG_PLATFORM_8735B) && defined(CONFIG_NEWAEC) && CONFIG_NEWAEC
+		Update_ItemInObject(NSJSObject, "HPFEnable", cJSON_CreateNumber(ns_cfg.HPFEnable));
+#endif
 	}
 	return NSJSObject;
 }

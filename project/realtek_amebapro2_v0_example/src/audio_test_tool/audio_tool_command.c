@@ -50,6 +50,7 @@ RX_cfg_t rx_asp_params = {
 	.ns_cfg = {
 		.NS_EN = 0,
 		.NSLevel = 5,
+		.HPFEnable = 0,
 	}
 };
 
@@ -68,6 +69,7 @@ TX_cfg_t tx_asp_params = {
 	.ns_cfg = {
 		.NS_EN = 0,
 		.NSLevel = 5,
+		.HPFEnable = 0,
 	}
 };
 #else
@@ -977,9 +979,12 @@ void fAUNS(void *arg)
 			if (argc >= 3) {
 				rx_asp_params.ns_cfg.NSLevel = atoi(argv[2]);
 			}
+			if (argc >= 4) {
+				rx_asp_params.ns_cfg.HPFEnable = atoi(argv[3]);
+			}
 			if (rx_asp_params.ns_cfg.NSLevel < 3 || rx_asp_params.ns_cfg.NSLevel > 15) {
 				rx_asp_params.ns_cfg.NSLevel = 3;
-				printf("Invalid NS level (not in 3~15), set the NS level to defualt value %d\r\n", rx_asp_params.ns_cfg.NSLevel);
+				printf("Invalid NS level (not in 3~15), set the NS level to defualt value %d, HPFEnable %d\r\n", rx_asp_params.ns_cfg.NSLevel, rx_asp_params.ns_cfg.HPFEnable);
 			}
 			rx_asp_params.ns_cfg.NS_EN = 1;
 			mm_module_ctrl(audio_save_ctx, CMD_AUDIO_SET_RXASP_PARAM, (int)&rx_asp_params);
@@ -1463,10 +1468,12 @@ void fAUSPNS(void *arg)
 					printf("Invalid NS level (not in 3~15), set the NS level to defualt value %d\r\n", tx_asp_params.ns_cfg.NSLevel);
 				}
 			}
-
+			if (argc >= 4) {
+				tx_asp_params.ns_cfg.HPFEnable = atoi(argv[3]);
+			}
 			tx_asp_params.ns_cfg.NS_EN = 1;
 			mm_module_ctrl(audio_save_ctx, CMD_AUDIO_SET_TXASP_PARAM, (int)&tx_asp_params);
-			printf("Enable speaker path NS = %x, %d\r\n", tx_asp_params.ns_cfg.NS_EN, tx_asp_params.ns_cfg.NSLevel);
+			printf("Enable speaker path NS = %x, %d, %d\r\n", tx_asp_params.ns_cfg.NS_EN, tx_asp_params.ns_cfg.NSLevel, tx_asp_params.ns_cfg.HPFEnable);
 		} else {
 			tx_asp_params.ns_cfg.NS_EN = 0;
 			mm_module_ctrl(audio_save_ctx, CMD_AUDIO_SET_TXASP_PARAM, (int)&tx_asp_params);
