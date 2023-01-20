@@ -33,9 +33,9 @@ static int wdr_mode = 2;
 
 //#define UVC_MD
 #define V1_CHANNEL 0
-#define V1_RESOLUTION VIDEO_1536P	//VIDEO_HD//VIDEO_FHD 
-#define V1_FPS 10
-#define V1_GOP 40
+#define V1_RESOLUTION VIDEO_FHD//VIDEO_HD//VIDEO_FHD 
+#define V1_FPS 24
+#define V1_GOP 72
 #define V1_BPS 1024*1024
 #define V1_RCMODE 1 // 1: CBR, 2: VBR
 
@@ -61,15 +61,15 @@ static int wdr_mode = 2;
 #elif V1_RESOLUTION == VIDEO_HD
 #define V1_WIDTH	1280
 #define V1_HEIGHT	720
-#elif V1_RESOLUTION == VIDEO_1936P
-#define V1_WIDTH	1936
-#define V1_HEIGHT	1936
-#elif V1_RESOLUTION == VIDEO_1536P
-#define V1_WIDTH	1536
-#define V1_HEIGHT	1536
-#elif V1_RESOLUTION == VIDEO_2K
+#elif V1_RESOLUTION == VIDEO_FHD
+
+#if USE_SENSOR == SENSOR_GC4653
 #define V1_WIDTH	2560
 #define V1_HEIGHT	1440
+#else
+#if USE_SENSOR == SENSOR_PS5420
+#define V1_WIDTH	1936
+#define V1_HEIGHT	1936
 #else
 #define V1_WIDTH	1920
 #define V1_HEIGHT	1080
@@ -246,6 +246,24 @@ static rtsp2_params_t rtsp2_v2_params = {
 	}
 };
 
+isp_statis_meta_t jpg_meta;
+static void video_meta_cb(void *parm)
+{
+	video_meta_t *m_parm = (video_meta_t *)parm;
+	unsigned char *ptr = (unsigned char *)m_parm->video_addr;
+	if (m_parm->type == AV_CODEC_ID_MJPEG) {
+		memcpy(ptr + m_parm->meta_offset + VIDEO_JPEG_META_OFFSET, m_parm->isp_meta_data, sizeof(isp_meta_t));
+		memcpy(ptr + m_parm->meta_offset + VIDEO_JPEG_META_OFFSET + sizeof(isp_meta_t), m_parm->isp_statis_meta, sizeof(isp_statis_meta_t));
+		memcpy(&jpg_meta, m_parm->isp_statis_meta, sizeof(isp_statis_meta_t));
+	} else if (m_parm->type == AV_CODEC_ID_H264) {
+		memcpy(ptr + m_parm->meta_offset + VIDEO_H264_META_OFFSET, m_parm->isp_meta_data, sizeof(isp_meta_t));
+		memcpy(ptr + m_parm->meta_offset + VIDEO_H264_META_OFFSET + sizeof(isp_meta_t), m_parm->isp_statis_meta, sizeof(isp_statis_meta_t));
+	} else if (m_parm->type == AV_CODEC_ID_H265) {
+		//printf("The type is %d\r\n",m_parm->type);
+	} else {
+		//printf("It don't support %d\r\n",m_parm->type);
+	}
+}
 
 void example_tuning_rtsp_video_v2_init(void)
 {
@@ -314,6 +332,7 @@ void detect_iq_fw(int *iq_bin_start)
 #endif
 void example_media_uvcd_init(void)
 {
+	video_v1_params.meta_size = sizeof(isp_meta_t) + sizeof(isp_statis_meta_t) + VIDEO_META_USER_SIZE; //It add the size of user info to video frame
 #ifdef UVC_MD
 	int md_roi[6] = {0, 0, 320, 180, 6, 6};
 #endif
@@ -364,8 +383,12 @@ void example_media_uvcd_init(void)
 	//  struct uvc_dev *uvc_ctx = (struct uvc_dev *)uvcd_ctx->priv;
 
 	if (uvcd_ctx) {
+#if CONFIG_TUNING
+		tuning_set_custom_cmd_cb((int)tuning_customized_set_cmd, (int)tuning_customized_get_cmd, (int)tuning_customized_get_size_cmd);
+#else
 		mm_module_ctrl(uvcd_ctx, CMD_UVCD_CALLBACK_SET, (int)uvcd_set_extention_cb);
 		mm_module_ctrl(uvcd_ctx, CMD_UVCD_CALLBACK_GET, (int)uvcd_get_extention_cb);
+#endif
 	} else {
 		rt_printf("uvcd open fail\n\r");
 		goto mmf2_example_uvcd_fail;
@@ -391,6 +414,10 @@ void example_media_uvcd_init(void)
 		mm_module_ctrl(video_v1_ctx, MM_CMD_SET_QUEUE_LEN, 1);//Default 30
 		mm_module_ctrl(video_v1_ctx, MM_CMD_INIT_QUEUE_ITEMS, MMQI_FLAG_DYNAMIC);
 		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_APPLY, V1_CHANNEL);	// start channel 0
+#if CONFIG_TUNING
+		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_META_CB, (int)video_meta_cb);
+#endif
+
 #ifdef UVC_MD
 		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_MD_SET_ROI, md_roi);
 		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_MD_SET_SENSITIVITY, 7);
@@ -443,6 +470,13 @@ void example_media_uvcd_init(void)
 			(uvc_format_local->height != uvc_format_ptr->height)) {
 			printf("change f:%d h:%d s:%d w:%d\r\n", uvc_format_ptr->format, uvc_format_ptr->height, uvc_format_ptr->state, uvc_format_ptr->width);
 
+			isp_info_t info;
+			info.sensor_width  = uvc_format_ptr->width;
+			info.sensor_height = uvc_format_ptr->height;
+			info.sensor_fps = uvc_format_ptr->fps;
+			video_set_isp_info(&info);
+			video_v1_params.fps = uvc_format_ptr->fps;
+			video_v1_params.gop = video_v1_params.fps*3;
 			if (uvc_format_ptr->format == FORMAT_TYPE_YUY2) {
 #ifdef UVC_MD
 				mm_module_ctrl(video_v1_ctx, CMD_VIDEO_MD_STOP, 0);
