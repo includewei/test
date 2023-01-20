@@ -1085,6 +1085,7 @@ target_link_options(
 	"LINKER:SHELL:-T ${ld_script}"
 	"LINKER:SHELL:-Map=${CMAKE_CURRENT_BINARY_DIR}/${app}.map"
 	"LINKER:-wrap,realloc"
+	"LINKER:-wrap,_realloc_r"
 	#"SHELL:${CMAKE_CURRENT_SOURCE_DIR}/build/import.lib"
 )
 
