@@ -69,7 +69,10 @@
 #include "freertos/inic_intf.h"
 #endif
 
+#ifndef netifMTU
 #define netifMTU                                (1500)
+#endif
+
 #define netifINTERFACE_TASK_STACK_SIZE        ( 350 )
 #define netifINTERFACE_TASK_PRIORITY        ( configMAX_PRIORITIES - 1 )
 #define netifGUARD_BLOCK_TIME            ( 250 )
@@ -106,7 +109,7 @@ static void low_level_init(struct netif *netif)
     netif->hwaddr_len = ETHARP_HWADDR_LEN;
 
     /* set netif maximum transfer unit */
-    netif->mtu = 1500;
+    netif->mtu = netifMTU;
 
     /* Accept broadcast address and ARP traffic */
     netif->flags = NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP;

@@ -126,10 +126,11 @@ a lot of data that needs to be copied, this should be set high. */
 
 /* TCP Maximum segment size. */
 #ifdef CONFIG_MAX_MTU
-#define TCP_MSS                 (CONFIG_MAX_MTU - 40)	  /* TCP_MSS = (Ethernet MTU - IP header size - TCP header size) */
+#define netifMTU                CONFIG_MAX_MTU
 #else
-#define TCP_MSS                 (1500 - 40)	  /* TCP_MSS = (Ethernet MTU - IP header size - TCP header size) */
+#define netifMTU                1500
 #endif
+#define TCP_MSS                 (netifMTU - 40)	  /* TCP_MSS = (Ethernet MTU - IP header size - TCP header size) */
 
 /* TCP sender buffer space (bytes). */
 #define TCP_SND_BUF             (5*TCP_MSS)
