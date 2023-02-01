@@ -47,7 +47,6 @@ extern int wext_private_command(const char *ifname, char *cmd, int show_msg);
 extern void at_ftl_init(void);
 
 void at_log_init(void);
-extern void at_arlo_init(void);
 
 char log_buf[LOG_SERVICE_BUFLEN];
 xSemaphoreHandle log_rx_interrupt_sema = NULL;
@@ -109,8 +108,6 @@ log_init_t log_init_table[] = {
 	at_isp_init,
 #endif
 
-// ESSENTIAL2
-	at_arlo_init,
 #endif
 };
 #else
@@ -389,7 +386,6 @@ int mp_commnad_handler(char *cmd)
 	return -1;
 }
 #endif
-extern void print_arlo_help_msg(void);
 void print_help_msg(void)
 {
 #if CONFIG_WLAN
@@ -403,10 +399,6 @@ int print_help_handler(char *cmd)
 {
 	if (strcmp(cmd, "help") == 0) {
 		print_help_msg();
-		return 0;
-	}
-	else if (strcmp(cmd, "arlo") == 0) {
-        print_arlo_help_msg();
 		return 0;
 	}
 	return -1;
