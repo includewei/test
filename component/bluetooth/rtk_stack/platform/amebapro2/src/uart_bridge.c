@@ -10,6 +10,7 @@
 #include "hci_uart.h"
 
 #define KEY_ENTER		0xd		//'\r'
+#define MULTI_PATH_IO	1	// support USB CDC
 
 extern char log_buf[LOG_SERVICE_BUFLEN];
 extern hal_uart_adapter_t log_uart;
@@ -24,8 +25,13 @@ extern uint32_t btc_set_single_tone_tx(uint8_t bStart);
 
 void bt_uart_bridge_putc(uint8_t tx_data)
 {
+#if MULTI_PATH_IO
+	extern void __write_to_interface_buffer(int file, const void *ptr, size_t len);
+	__write_to_interface_buffer(0, (void *)&tx_data, 1);
+#else
 	while (!hal_uart_writeable(&log_uart));
 	hal_uart_putc(&log_uart, tx_data);
+#endif
 }
 
 uint8_t bt_uart_bridge_getc(void)
@@ -231,6 +237,9 @@ void bt_uart_bridge_close(void)
 
 void bt_uart_bridge_open(void)
 {
+#if MULTI_PATH_IO
+	key_bridge_register();
+#else
 	hal_uart_reset_rx_fifo(&log_uart);
 
 	if (uart_baudrate != 0)
@@ -242,7 +251,7 @@ void bt_uart_bridge_open(void)
 		hal_uart_set_format(&log_uart, 8, ParityEven, 1);
 
 	hal_uart_rxind_hook(&log_uart, bt_uart_bridge_irq, 0, 0);
-
+#endif
 	hci_uart_bridge_open(true);
 }
 

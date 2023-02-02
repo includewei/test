@@ -23,6 +23,7 @@
 #include <stdio.h>
 //#include "memory.h"
 #include "stdio_port_func.h"
+#include "hci_uart.h"	// BT HCI
 
 extern hal_uart_adapter_t log_uart;
 
@@ -40,6 +41,7 @@ extern char log_buf[LOG_SERVICE_BUFLEN];
 extern xSemaphoreHandle log_rx_interrupt_sema;
 char cmd_history[CMD_HISTORY_LEN][LOG_SERVICE_BUFLEN];
 static unsigned int cmd_history_count = 0;
+static char g_bt_uart_bridge = 0;
 
 static void _put_char(char c)
 {
@@ -92,6 +94,11 @@ void default_key_handling(char rc)
 
 	if (key_enter && rc == KEY_NL) {
 		//serial_putc(sobj, rc);
+		return;
+	}
+
+	// ignore NULL terminate
+	if (rc == 0) {
 		return;
 	}
 
@@ -351,8 +358,13 @@ void console_stdin_handler(void *dummy)
 		if (console_stdio_read_buffer && (rd_len = console_stdio_read_buffer(0, recv_buf, UART_BUF_SIZE)) != 0) {
 
 			for (int i = 0; i < rd_len; i++) {
-				default_key_handling((char)recv_buf[i]);
-				uesrdef_key_handling((char)recv_buf[i]);
+				if (g_bt_uart_bridge) {
+					uesrdef_key_handling((char)recv_buf[i]);
+					hci_uart_bridge_to_hci((char)recv_buf[i]);
+				} else {
+					default_key_handling((char)recv_buf[i]);
+					uesrdef_key_handling((char)recv_buf[i]);
+				}
 			}
 		} else if (remote_stdio_read_buffer && (rd_len = remote_stdio_read_buffer(0, recv_buf, UART_BUF_SIZE)) != 0) {
 			for (int i = 0; i < rd_len; i++) {
@@ -360,7 +372,11 @@ void console_stdin_handler(void *dummy)
 				uesrdef_key_handling((char)recv_buf[i]);
 			}
 		} else {
-			vTaskDelay(50);
+			if (g_bt_uart_bridge) {
+				vTaskDelay(1);
+			} else {
+				vTaskDelay(50);
+			}
 		}
 	}
 }
@@ -442,3 +458,22 @@ void key_R_arrow(void)
 }
 
 #endif
+
+static char key_seq_bridge_close_arrow[] = "ge,close"; // ATM2=bridge,close
+void key_bridge_close(void)
+{
+	hci_uart_bridge_open(false);
+	user_key_mapping_cnt--;
+	g_bt_uart_bridge = 0;
+}
+
+void key_bridge_register(void)
+{
+	key_event_register(key_seq_bridge_close_arrow, 8, key_bridge_close);
+	g_bt_uart_bridge = 1;
+}
+
+
+
+
+
