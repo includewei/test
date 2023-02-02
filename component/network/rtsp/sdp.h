@@ -4,7 +4,9 @@
 #include "avcodec.h"
 
 #define CRLF "\r\n"
-#define MAX_SDP_SIZE (512+256)
+/*ESSENTIAL2 START*/
+#define MAX_SDP_SIZE 1024 //(512+256)
+/*ESSENTIAL2 END*/
 #define SDP_LINE_LEN (128+256)
 
 #define SDP_BWTYPE_CT 0
