@@ -35,6 +35,15 @@ list(
 	${sdk_root}/component/soc/8735b/misc/platform/user_boot.c
 )
 
+list(
+	APPEND boot_flags
+	CONFIG_BUILD_BOOT=1
+	CONFIG_BUILD_RAM=1 
+	CONFIG_BUILD_LIB=1 
+	CONFIG_PLATFORM_8735B
+	CONFIG_RTL8735B_PLATFORM=1
+)
+
 add_library(bootfcs ${fcs_sources})
 target_compile_definitions(bootfcs PRIVATE ${boot_flags} )
 target_compile_options(bootfcs PRIVATE ${WARN_ERR_FLAGS})
@@ -43,15 +52,6 @@ add_executable(
 	${bootloader}
 	${bootloader_sources}
 	$<TARGET_OBJECTS:bootfcs>
-)
-
-list(
-	APPEND boot_flags
-	CONFIG_BUILD_BOOT=1
-	CONFIG_BUILD_RAM=1 
-	CONFIG_BUILD_LIB=1 
-	CONFIG_PLATFORM_8735B
-	CONFIG_RTL8735B_PLATFORM=1
 )
 
 target_compile_definitions(${bootloader} PRIVATE ${boot_flags} )

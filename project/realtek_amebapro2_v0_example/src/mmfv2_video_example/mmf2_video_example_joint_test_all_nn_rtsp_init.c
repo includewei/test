@@ -115,6 +115,16 @@ static nn_data_param_t aud_info = {
 #define NN_HEIGHT	320     //480
 
 #define NN_MODEL3_OBJ   yolov4_tiny
+
+define_model(yolov4_tiny_320p)
+define_model(scrfd320p)
+define_model(mobilefacenet_i8)
+define_model(yamnet_s_hybrid)
+#define USE_OBJDET_MODEL use_model(yolov4_tiny_320p)
+#define USE_FACEDET_MODEL use_model(scrfd320p)
+#define USE_FACENET_MODEL use_model(mobilefacenet_i8)
+#define USE_AUDCLS_MODEL use_model(yamnet_s_hybrid)
+
 static float nn_confidence_thresh = 0.5;
 static float nn_nms_thresh = 0.3;
 static int desired_class_list[] = {0, 2, 5, 7};
@@ -180,7 +190,7 @@ static void face_cleanup_callback(TimerHandle_t xTimer)
 {
 	(void)xTimer;
 	canvas_clean_all(RTSP_CHANNEL, 1);
-	canvas_update(RTSP_CHANNEL, 1);
+	canvas_update(RTSP_CHANNEL, 1, 1);
 }
 
 static void face_draw_object(void *p, void *img_param)
@@ -233,7 +243,7 @@ static void face_draw_object(void *p, void *img_param)
 			xTimerReset(osd_cleanup_timer, 10);
 		}
 	}
-	canvas_update(RTSP_CHANNEL, 1);
+	canvas_update(RTSP_CHANNEL, 1, 1);
 }
 
 static int check_in_list(int class_indx)
@@ -309,12 +319,16 @@ static void objdet_draw_object(void *p, void *img_param)
 			simo_pause(simo_video_yolo_facedet, MM_OUTPUT0);
 		}
 	}
-	canvas_update(RTSP_CHANNEL, 0);
+	canvas_update(RTSP_CHANNEL, 0, 1);
 }
 
 
 void mmf2_video_example_joint_test_all_nn_rtsp_init(void)
 {
+	USE_OBJDET_MODEL;
+	USE_AUDCLS_MODEL;
+	USE_FACEDET_MODEL;
+	USE_FACENET_MODEL;
 
 	int voe_heap_size = video_voe_presetting(V1_ENA, RTSP_WIDTH, RTSP_HEIGHT, RTSP_BPS, 0,
 						0, 0, 0, 0, 0,
@@ -530,6 +544,8 @@ void mmf2_video_example_joint_test_all_nn_rtsp_init(void)
 	osd_render_dev_init(ch_enable, char_resize_w, char_resize_h);
 	osd_render_task_start(ch_enable, ch_width, ch_height);
 	osd_cleanup_timer = xTimerCreate("OSD clean timer", 1000 / portTICK_PERIOD_MS, pdTRUE, NULL, face_cleanup_callback);
+	canvas_create_bitmap_all(RTSP_CHANNEL, 0, 0, 0, RTSP_WIDTH, RTSP_HEIGHT, RTS_OSD2_BLK_FMT_1BPP);
+	canvas_create_bitmap_all(RTSP_CHANNEL, 1, 0, 0, RTSP_WIDTH, RTSP_HEIGHT, RTS_OSD2_BLK_FMT_1BPP);
 #endif
 
 #if AUD_ENA

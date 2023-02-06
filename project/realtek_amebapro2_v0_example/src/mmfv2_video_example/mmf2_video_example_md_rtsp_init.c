@@ -184,15 +184,21 @@ static void md_process(void *md_result)
 	printf("\r\n\r\n");
 #if MD_DRAW
 	//draw md region
-	canvas_clean_all(RTSP_CHANNEL, 0);
+
 	if (motion) {
 		int xmin = (int)(kmin * RTSP_WIDTH / MD_COL) + 1;
 		int ymin = (int)(jmin * RTSP_HEIGHT / MD_ROW) + 1;
 		int xmax = (int)((kmax + 1) * RTSP_WIDTH / MD_COL) - 1;
 		int ymax = (int)((jmax + 1) * RTSP_HEIGHT / MD_ROW) - 1;
-		canvas_set_rect(RTSP_CHANNEL, 0, xmin, ymin, xmax, ymax, 3, COLOR_GREEN);
+		//create bitmap everytime
+		canvas_create_bitmap(RTSP_CHANNEL, 0, xmin, ymin, xmax, ymax, RTS_OSD2_BLK_FMT_1BPP);
+		canvas_clean_all(RTSP_CHANNEL, 0);
+		canvas_set_rect(RTSP_CHANNEL, 0, 0, 0, xmax - xmin, ymax - ymin, 3, COLOR_GREEN);
+	} else {
+		canvas_create_bitmap(RTSP_CHANNEL, 0, 0, 0, 8, 8, RTS_OSD2_BLK_FMT_1BPP);
+		canvas_clean_all(RTSP_CHANNEL, 0);
 	}
-	canvas_update(RTSP_CHANNEL, 0);
+	canvas_update(RTSP_CHANNEL, 0, 1);
 #endif
 }
 

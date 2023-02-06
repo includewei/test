@@ -91,6 +91,11 @@ static rtsp2_params_t rtsp2_v1_params = {
 #define NN_WIDTH	576
 #define NN_HEIGHT	320
 
+define_model(scrfd320p)
+define_model(mobilefacenet_i8)
+
+#define USE_FACEDET_MODEL use_model(scrfd320p)
+#define USE_FACENET_MODEL use_model(mobilefacenet_i8)
 
 static video_params_t video_v4_params = {
 	.stream_id 		= NN_CHANNEL,
@@ -146,7 +151,7 @@ void osd_cleanup_callback(TimerHandle_t xTimer)
 {
 	(void)xTimer;
 	canvas_clean_all(RTSP_CHANNEL, 0);
-	canvas_update(RTSP_CHANNEL, 0);
+	canvas_update(RTSP_CHANNEL, 0, 1);
 }
 
 #define LIMIT(x, lower, upper) if(x<lower) x=lower; else if(x>upper) x=upper;
@@ -200,12 +205,14 @@ static void face_draw_object(void *p, void *img_param)
 			xTimerReset(osd_cleanup_timer, 10);
 		}
 	}
-	canvas_update(RTSP_CHANNEL, 0);
+	canvas_update(RTSP_CHANNEL, 0, 1);
 
 }
 
 void mmf2_video_example_face_rtsp_init(void)
 {
+	USE_FACEDET_MODEL;
+	USE_FACENET_MODEL;
 
 	int voe_heap_size = video_voe_presetting(V1_ENA, RTSP_WIDTH, RTSP_HEIGHT, RTSP_BPS, 0,
 						0, 0, 0, 0, 0,
@@ -369,6 +376,7 @@ void mmf2_video_example_face_rtsp_init(void)
 	osd_render_dev_init(ch_enable, char_resize_w, char_resize_h);
 	osd_render_task_start(ch_enable, ch_width, ch_height);
 	osd_cleanup_timer = xTimerCreate("OSD clean timer", 500 / portTICK_PERIOD_MS, pdTRUE, NULL, osd_cleanup_callback);
+	canvas_create_bitmap_all(RTSP_CHANNEL, 0, 0, 0, RTSP_WIDTH, RTSP_HEIGHT, RTS_OSD2_BLK_FMT_1BPP);
 #endif
 
 	return;

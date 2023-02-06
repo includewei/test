@@ -612,6 +612,7 @@ void audio_tool_flow_init(void *param)
 		siso_ctrl(siso_audio_afft, MMIC_CMD_ADD_INPUT, (uint32_t)audio_save_ctx, 0);
 		siso_ctrl(siso_audio_afft, MMIC_CMD_ADD_OUTPUT, (uint32_t)afft_test_ctx, 0);
 		siso_ctrl(siso_audio_afft, MMIC_CMD_SET_TASKPRIORITY, 2, 0);
+		//siso_start(siso_audio_afft);
 		printf("siso_start siso_audio_afft\n\r");
 	} else {
 		printf("siso2 open fail\n\r");
@@ -637,6 +638,7 @@ void audio_tool_flow_init(void *param)
 		printf("siso2 open fail\n\r");
 		goto audio_save_init_fail;
 	}
+	// start MIC data streaming loopback to Speaker to prevent the first sound after initialing audio test tool
 	siso_start(siso_audio_afft);
 	printf("audio_set_done~~~~~\r\n");
 

@@ -73,6 +73,7 @@
 #include <hal_cache.h>
 
 __attribute__((section (".retention.data"))) struct tcp_pcb retention_tcp_pcb;
+__attribute__((section (".retention.data"))) uint8_t retention_have_new_tcp_pcb = 0;
 static uint32_t tcp_resume_seqno = 0;
 static uint32_t tcp_resume_ackno = 0;
 #endif
@@ -4335,7 +4336,7 @@ int lwip_gettcpstatus(int s, uint32_t *seqno, uint32_t *ackno, uint16_t *wnd)
 }
 
 #if defined(CONFIG_LWIP_TCP_RESUME) && (CONFIG_LWIP_TCP_RESUME == 1)
-int lwip_retaintcp(int s)
+int lwip_retain_tcp(int s)
 {
   struct lwip_sock *sock;
   sock = get_socket(s);
@@ -4349,6 +4350,8 @@ int lwip_retaintcp(int s)
 
     memcpy((uint8_t *) &retention_tcp_pcb, pcb, sizeof(struct tcp_pcb));
     dcache_clean_invalidate_by_addr((uint32_t *) &retention_tcp_pcb, sizeof(struct tcp_pcb));
+    retention_have_new_tcp_pcb = 1;
+    dcache_clean_invalidate_by_addr((uint32_t *) &retention_have_new_tcp_pcb, sizeof(retention_have_new_tcp_pcb));
   }
   else {
     return -1;
@@ -4357,7 +4360,7 @@ int lwip_retaintcp(int s)
   return 0;
 }
 
-int lwip_resumetcp(int s)
+int lwip_resume_tcp(int s)
 {
   struct lwip_sock *sock;
   sock = get_socket(s);
@@ -4438,6 +4441,13 @@ int lwip_resumetcp(int s)
 
     extern void tcp_reg_active(struct tcp_pcb *pcb);
     tcp_reg_active(pcb);
+
+    // clear tcp resume port to allow packet incoming after tcp resume done
+    extern void tcp_set_resume_port(uint16_t port);
+    tcp_set_resume_port(0);
+
+    retention_have_new_tcp_pcb = 0;
+    dcache_clean_invalidate_by_addr((uint32_t *) &retention_have_new_tcp_pcb, sizeof(retention_have_new_tcp_pcb));
   }
   else {
     return -1;
@@ -4446,11 +4456,16 @@ int lwip_resumetcp(int s)
   return 0;
 }
 
-int lwip_settcpresume(uint32_t seqno, uint32_t ackno)
+int lwip_set_tcp_resume(uint32_t seqno, uint32_t ackno)
 {
-	tcp_resume_seqno = seqno;
-	tcp_resume_ackno = ackno;
-	return 0;
+  tcp_resume_seqno = seqno;
+  tcp_resume_ackno = ackno;
+  return 0;
+}
+
+uint8_t lwip_check_tcp_resume(void)
+{
+  return retention_have_new_tcp_pcb;
 }
 #endif // defined(CONFIG_LWIP_TCP_RESUME) && (CONFIG_LWIP_TCP_RESUME == 1)
 /**************************************************************

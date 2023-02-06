@@ -146,6 +146,7 @@ list(
 		"-Wl,-wrap,feof"
 		"-Wl,-wrap,ferror"
 		"-Wl,-wrap,ftell"
+		"-Wl,-wrap,ftruncate"
 		"-Wl,-wrap,fputc"
 		"-Wl,-wrap,fputs"
 		"-Wl,-wrap,fgets"

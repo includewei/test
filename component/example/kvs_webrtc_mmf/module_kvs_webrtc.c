@@ -287,7 +287,8 @@ void *kvs_webrtc_create(void *parent)
 		goto cleanup;
 	}
 
-	ctx->pkvsWebrtcAppMediaSendFun = app_media_sendMediaFrame; //register a function to send data to peer in handle; or set NULL to send data to media queue buffer
+	// register a function(app_media_sendMediaFrame) to send data to peer in handle; or set NULL to send data to media queue buffer
+	ctx->pkvsWebrtcAppMediaSendFun = NULL;
 
 	printf("[KVS WebRTC module]: module created.\r\n");
 
