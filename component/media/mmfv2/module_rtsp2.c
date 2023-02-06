@@ -135,7 +135,7 @@ int rtsp2_control(void *p, int cmd, int arg)
 				} else {
 					stream_ctx->tsin_by_fs = 120 * (params->u.a.frame_size * 2 / 5); //divide by 2.5
 				}
-				printf("stream_ctx->tsin_by_fs = %d\r\n", stream_ctx->tsin_by_fs);
+				printf("stream_ctx->tsin_by_fs = %ld\r\n", stream_ctx->tsin_by_fs);
 				codec_id = params->u.a.codec_id;
 			} else {
 				if (params->u.a.codec_id == AV_CODEC_ID_PCMU || params->u.a.codec_id == AV_CODEC_ID_PCMA) {
@@ -291,6 +291,17 @@ void *rtsp2_destroy(void *p)
 	rtsp2_ctx_t *ctx = (rtsp2_ctx_t *)p;
 
 	if (ctx && ctx->rtsp) {
+		if (stream_flow_id_bitmap_lock) {
+			struct rtsp_context *rtsp = ctx->rtsp;
+			for (int i = 0; i < 2; i++) {
+				struct stream_context *stream_ctx = &rtsp->stream_ctx[i];
+				if (stream_ctx && stream_ctx->stream_id >= 0) {
+					rtsp_put_number(stream_ctx->stream_id, STREAM_FLOW_ID_BASE, &stream_flow_id_bitmap, &stream_flow_id_bitmap_lock);
+					stream_ctx->stream_id = -1;
+				}
+			}
+
+		}
 		for (int i = 0; i < ctx->rtsp->nb_streams; i++) {
 			if (ctx->rtsp->stream_ctx[i].codec) {
 				free(ctx->rtsp->stream_ctx[i].codec);

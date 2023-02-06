@@ -97,6 +97,11 @@ if(NOT DEFINED CONFIG_DONE)
 		set(BUILD_NEWAEC ON)
 	endif()
 	
+	if(NOT DEFINED UNITEST)
+		set(UNITEST OFF)
+	endif()
+	message(STATUS "UNITEST ${UNITEST}")
+	
 	#elf2bin
 	if(NOT DEFINED ELF2BIN)
 	if(MPCHIP)
@@ -125,11 +130,23 @@ if(NOT DEFINED CONFIG_DONE)
 	endif()
 	endif()		
 	
+	if(NOT DEFINED NNMDLCFG)
+	if(MPCHIP)
+		if (LINUX)
+		set(NNMDLCFG ${prj_root}/GCC-RELEASE/mp/nn_model_cfg.linux)
+		else()		
+		set(NNMDLCFG ${prj_root}/GCC-RELEASE/mp/nn_model_cfg.exe)
+		endif()
+	endif()
+	endif()		
+	
 	#platform console command, for wildcard
 	if (LINUX OR WIN_MSYS)
 		set(PLAT_COPY cp)
+		set(PLAT_FINDSTR grep)
 	else()		
 		set(PLAT_COPY copy)
+		set(PLAT_FINDSTR findstr)
 	endif()
 	
 	#default postbuild script

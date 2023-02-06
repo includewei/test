@@ -356,6 +356,41 @@ int wifi_set_tcp_keep_alive_offload(int socket_fd, uint8_t *content, size_t len,
 	return 0;
 }
 
+extern void rtw_set_tcp_protocol_keepalive(uint32_t idle_ms, uint32_t interval_ms, uint8_t count);
+int wifi_set_tcp_protocol_keepalive(int socket_fd)
+{
+	int keepalive = 0, keepalive_idle = 0, keepalive_interval = 0, keepalive_count = 0;
+	socklen_t optlen = sizeof(int);
+
+	if (getsockopt(socket_fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, &optlen) != 0) {
+		printf("ERROR: getsockopt SO_KEEPALIVE\n\r");
+		return -1;
+	}
+	if (getsockopt(socket_fd, IPPROTO_TCP, TCP_KEEPIDLE, &keepalive_idle, &optlen) != 0) {
+		printf("ERROR: getsockopt TCP_KEEPIDLE\n\r");
+		return -1;
+	}
+	if (getsockopt(socket_fd, IPPROTO_TCP, TCP_KEEPINTVL, &keepalive_interval, &optlen) != 0) {
+		printf("ERROR: getsockopt TCP_KEEPINTVL\n\r");
+		return -1;
+	}
+	if (getsockopt(socket_fd, IPPROTO_TCP, TCP_KEEPCNT, &keepalive_count, &optlen) != 0) {
+		printf("ERROR: getsockopt TCP_KEEPCNT\n\r");
+		return -1;
+	}
+
+	if (keepalive) {
+		int opt = 0;
+		if (setsockopt(socket_fd, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt)) != 0) {
+			printf("ERROR: setsockopt SO_KEEPALIVE\n");
+		}
+
+		rtw_set_tcp_protocol_keepalive(keepalive_idle * 1000, keepalive_interval * 1000, keepalive_count);
+	}
+
+	return 0;
+}
+
 #endif
 
 #ifdef CONFIG_WOWLAN_PARAM
@@ -388,13 +423,16 @@ extern int wifi_get_ap_dtim(u8 *dtim_period);
 
 #ifdef CONFIG_WOWLAN_DTIMTO
 extern void rtw_set_dtimto(uint8_t dtimto_enable, uint8_t retry_inc, uint8_t ack_timeout);
+extern void rtl8735b_set_lps_dtim(uint8_t dtim);
 int wifi_wowlan_set_dtimto(uint8_t dtimto_enable, uint8_t retry_inc, uint8_t ack_timeout, uint8_t dtim)
 {
 	int ret = 0;
 
 	if (dtim > 0) {
 		printf("dtim: %d\r\n", dtim);
-		rtw_set_lps_dtim(dtim);
+		//rtw_set_lps_dtim(dtim);
+		rtl8735b_set_lps_dtim(dtim);
+
 	}
 
 	rtw_set_dtimto(dtimto_enable, retry_inc, ack_timeout);
@@ -421,8 +459,8 @@ int wifi_wowlan_set_smartdtim(uint8_t check_period, uint8_t threshold, uint8_t c
 		}
 
 		printf("smartdtim: %d\r\n", smartdtim);
-
-		rtw_set_lps_dtim(dtim);
+		rtl8735b_set_lps_dtim(dtim);
+		//rtw_set_lps_dtim(dtim);
 	}
 
 	//check check_period& threshold

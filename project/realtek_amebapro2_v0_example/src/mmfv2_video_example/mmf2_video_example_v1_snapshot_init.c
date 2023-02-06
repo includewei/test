@@ -10,7 +10,7 @@
 #include "mmf2_pro2_video_config.h"
 #include "video_example_media_framework.h"
 #include "log_service.h"
-
+#include "video_snapshot.h"
 /*****************************************************************************
 * ISP channel : 0
 * Video type  : H264/HEVC + SNAPSHOT
@@ -57,6 +57,8 @@
 #define V1_HEIGHT	1440
 #endif
 
+//#define ENABLE_META_INFO  //Enable the marco to wirte the META data to frame
+//#define ENABLE_SD_SNAPSHOT //Enable the snapshot to sd card
 static void atcmd_userctrl_init(void);
 static mm_context_t *video_v1_ctx			= NULL;
 static mm_context_t *rtsp2_v1_ctx			= NULL;
@@ -72,7 +74,7 @@ static video_params_t video_v1_params = {
 	.fps = V1_FPS,
 	.gop = V1_GOP,
 	.rc_mode = V1_RCMODE,
-	.use_static_addr = 1
+	.use_static_addr = 1,
 };
 
 
@@ -94,6 +96,24 @@ int v1_snapshot_cb(uint32_t jpeg_addr, uint32_t jpeg_len)
 	printf("snapshot size=%d\n\r", jpeg_len);
 	return 0;
 }
+#if defined(ENABLE_META_INFO)
+static void video_meta_cb(void *parm)
+{
+	video_meta_t *m_parm = (video_meta_t *)parm;
+	unsigned char *ptr = (unsigned char *)m_parm->video_addr;
+	if (m_parm->type == AV_CODEC_ID_MJPEG) {
+		memcpy(ptr + m_parm->meta_offset + VIDEO_JPEG_META_OFFSET, m_parm->isp_meta_data, sizeof(isp_meta_t));
+		memcpy(ptr + m_parm->meta_offset + VIDEO_JPEG_META_OFFSET + sizeof(isp_meta_t), m_parm->isp_statis_meta, sizeof(isp_statis_meta_t));
+	} else if (m_parm->type == AV_CODEC_ID_H264) {
+		memcpy(ptr + m_parm->meta_offset + VIDEO_H264_META_OFFSET, m_parm->isp_meta_data, sizeof(isp_meta_t));
+		memcpy(ptr + m_parm->meta_offset + VIDEO_H264_META_OFFSET + sizeof(isp_meta_t), m_parm->isp_statis_meta, sizeof(isp_statis_meta_t));
+	} else if (m_parm->type == AV_CODEC_ID_H265) {
+		//printf("The type is %d\r\n",m_parm->type);
+	} else {
+		//printf("It don't support %d\r\n",m_parm->type);
+	}
+}
+#endif
 
 void snapshot_control_thread(void *param)
 {
@@ -110,6 +130,9 @@ void snapshot_control_thread(void *param)
 void mmf2_video_example_v1_shapshot_init(void)
 {
 	atcmd_userctrl_init();
+#if defined(ENABLE_META_INFO)
+	video_v1_params.meta_size = sizeof(isp_meta_t) + sizeof(isp_statis_meta_t) + VIDEO_META_USER_SIZE; //It add the size of user info to video frame
+#endif
 
 	int voe_heap_size = video_voe_presetting(1, V1_WIDTH, V1_HEIGHT, V1_BPS, 1,
 						0, 0, 0, 0, 0,
@@ -156,11 +179,24 @@ void mmf2_video_example_v1_shapshot_init(void)
 	mm_module_ctrl(video_v1_ctx, CMD_VIDEO_APPLY, V1_CHANNEL);
 
 	//--------------snapshot setting---------------------------
+#if defined(ENABLE_SD_SNAPSHOT)
+	extern snapshot_user_config_t snap_config;
+	memset(&snap_config, 0x00, sizeof(snap_config));
+	snapshot_vfs_init();
+	snap_config.video_snapshot_ctx = video_v1_ctx;
+	snap_config.snapshot_write = snapshot_write_picture;
+	video_snapshot_init_with_streaming(&snap_config);
+	atcmd_snapshot_init();//ATCMD => SNAP=SNAPS (Take picture to sdcard)
+#else
 	mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SNAPSHOT_CB, (int)v1_snapshot_cb);
 
 	if (xTaskCreate(snapshot_control_thread, ((const char *)"snapshot_store"), 512, NULL, tskIDLE_PRIORITY + 1, &snapshot_thread) != pdPASS) {
 		printf("\n\r%s xTaskCreate failed", __FUNCTION__);
 	}
+#endif
+#if defined(ENABLE_META_INFO)
+	mm_module_ctrl(video_v1_ctx, CMD_VIDEO_META_CB, (int)video_meta_cb);
+#endif
 
 	return;
 mmf2_video_exmaple_v1_shapshot_fail:

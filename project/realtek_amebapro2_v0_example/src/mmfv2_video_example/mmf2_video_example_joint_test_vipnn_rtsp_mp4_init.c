@@ -217,6 +217,31 @@ static mp4_params_t mp4_v1_params = {
 #define NN_BPS 1024*1024 //don't care for NN
 #define NN_TYPE VIDEO_RGB
 
+#if ENABLE_NN_YOLO==1
+define_model(yolov4_tiny_320p)
+#define USE_OBJDET_MODEL use_model(yolov4_tiny_320p)
+#else
+#define USE_OBJDET_MODEL
+#endif
+
+#if ENABLE_NN_FACERECOG==1
+define_model(scrfd320p)
+#define USE_FACEDET_MODEL use_model(scrfd320p)
+define_model(mobilefacenet_i8)
+#define USE_FACENET_MODEL use_model(mobilefacenet_i8)
+#else
+#define USE_FACEDET_MODEL
+#define USE_FACENET_MODEL
+#endif
+
+#if ENABLE_NN_YAMNET==1
+define_model(yamnet_s_hybrid)
+#define USE_AUDCLS_MODEL use_model(yamnet_s_hybrid)
+#else
+#define USE_AUDCLS_MODEL
+#endif
+
+
 static float nn_confidence_thresh = 0.5;
 static float nn_nms_thresh = 0.3;
 static int desired_class_list[] = {0, 2, 5, 7};
@@ -404,7 +429,7 @@ static void nn_set_object(void *p, void *img_param)
 			canvas_set_text(RTSP_CHANNEL, 0, xmin, ymin - 32, text_str, COLOR_CYAN);
 		}
 	}
-	canvas_update(RTSP_CHANNEL, 0);
+	canvas_update(RTSP_CHANNEL, 0, 1);
 
 }
 #if ENABLE_MD_TRIGGER_YOLO
@@ -437,7 +462,7 @@ static void md_process(void *md_result)
 	//clear nn result when no motion
 	if (no_motion_count > 2) {
 		canvas_clean_all(RTSP_CHANNEL, 0);
-		canvas_update(RTSP_CHANNEL, 0);
+		canvas_update(RTSP_CHANNEL, 0, 1);
 	}
 
 }
@@ -445,6 +470,11 @@ static void md_process(void *md_result)
 
 void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 {
+	USE_OBJDET_MODEL;
+	USE_AUDCLS_MODEL;
+	USE_FACEDET_MODEL;
+	USE_FACENET_MODEL;
+
 	atcmd_userctrl_init();
 
 	int voe_heap_size = video_voe_presetting(1, V1_WIDTH, V1_HEIGHT, V1_BPS, 0,
@@ -849,6 +879,7 @@ void mmf2_video_example_joint_test_vipnn_rtsp_mp4_init(void)
 		int ch_width[3] = {0, RTSP_WIDTH, 0}, ch_height[3] = {0, RTSP_HEIGHT, 0};
 		osd_render_dev_init(ch_enable, char_resize_w, char_resize_h);
 		osd_render_task_start(ch_enable, ch_width, ch_height);
+		canvas_create_bitmap_all(RTSP_CHANNEL, 0, 0, 0, RTSP_WIDTH, RTSP_HEIGHT, RTS_OSD2_BLK_FMT_1BPP);
 	}
 
 	return;

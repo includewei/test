@@ -106,6 +106,7 @@ typedef struct video_param_s {
 		uint32_t ymax;
 	} roi;
 	uint32_t meta_size;
+	uint32_t dn_init_mode;
 } video_params_t;
 
 typedef struct voe_info_s {

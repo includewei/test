@@ -7746,6 +7746,7 @@ exit:
 
 static uint8_t ssl_resume_in_ctr[8] = {0};
 static uint8_t ssl_resume_out_ctr[8] = {0};
+static uint8_t ssl_resume_by_wlan = 0;
 
 struct retention_ssl {
 	mbedtls_ssl_context ssl;
@@ -7855,7 +7856,7 @@ int mbedtls_ssl_resume(mbedtls_ssl_context *ssl)
 	memset(zero_ctr, 0, 8);
 
 	// in_ctr
-	if (memcmp(zero_ctr, ssl_resume_in_ctr, 8) == 0) {
+	if ((memcmp(zero_ctr, ssl_resume_in_ctr, 8) == 0) && ssl_resume_by_wlan) {
 		ssl_resume_in_ctr[7] = 1;
 	}
 	uint16_t ctr_carry = 0;
@@ -7885,10 +7886,11 @@ int mbedtls_ssl_resume(mbedtls_ssl_context *ssl)
 	return 0;
 }
 
-int mbedtls_set_ssl_resume(uint8_t in_ctr[8], uint8_t out_ctr[8])
+int mbedtls_set_ssl_resume(uint8_t in_ctr[8], uint8_t out_ctr[8], uint8_t by_wlan)
 {
 	memcpy(ssl_resume_in_ctr, in_ctr, 8);
 	memcpy(ssl_resume_out_ctr, out_ctr, 8);
+	ssl_resume_by_wlan = by_wlan;
 	return 0;
 }
 #endif /* CONFIG_SSL_RESUME */

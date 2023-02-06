@@ -34,12 +34,10 @@
 
 #include "hal.h"
 #include "hal_video.h"
-#include "md/md2_api.h"
 
 #include "ftl_common_api.h"
 
 #define OSD_ENABLE 1
-#define MD_ENABLE  0
 #define HDR_ENABLE 0
 
 int framecnt = 0;
@@ -75,19 +73,62 @@ void video_show_fps(int enable)
 }
 #endif
 
-void md_output_cb(void *param1, void  *param2, uint32_t arg)
+void video_rate_control_process(video_ctx_t *ctx)
 {
-#if MD_ENABLE
-	md2_result_t *md_result = (md2_result_t *)param1;
-	static int md_counter = 0;
-	if (md_get_enable()) {
-		VIDEO_DBG_INFO("md_result: %d\n\r", md_result->motion_cnt);
+	int fps = 0;
+	static int switch_fps[2] = {1, 1};
+	float mul = (float) ctx->params.gop / ctx->rate_ctrl_p.current_framerate;
 
-		hal_video_md_trigger();
+	if ((ctx->rate_ctrl_p.sample_bitrate > (ctx->rate_ctrl_p.rate_ctrl.maximun_bitrate * mul) && switch_fps[ctx->params.stream_id] == 1)) {
+		fps = ctx->rate_ctrl_p.current_framerate / 2;
+		VIDEO_DBG_INFO("\r\nch = %d sample rate = %ld	maximun bitrate = %ld	fps = %d\r\n",
+					   ctx->params.stream_id, ctx->rate_ctrl_p.sample_bitrate, ctx->rate_ctrl_p.rate_ctrl.maximun_bitrate, fps);
+		video_ctrl(ctx->params.stream_id, VIDEO_FPS, fps);
+		switch_fps[ctx->params.stream_id] ^= 1;
+	} else if ((ctx->rate_ctrl_p.sample_bitrate < (ctx->rate_ctrl_p.rate_ctrl.target_bitrate * mul) && switch_fps[ctx->params.stream_id] == 0)) {
+		fps = ctx->rate_ctrl_p.current_framerate;
+		VIDEO_DBG_INFO("\r\nch = %d sample rate = %ld	target bitrate = %ld	fps = %d\r\n",
+					   ctx->params.stream_id, ctx->rate_ctrl_p.sample_bitrate, ctx->rate_ctrl_p.rate_ctrl.target_bitrate, fps);
+		video_ctrl(ctx->params.stream_id, VIDEO_FPS, fps);
+		switch_fps[ctx->params.stream_id] ^= 1;
 	}
-#endif
 }
 
+void video_rate_control_moniter_sample_rate(video_ctx_t *ctx, uint32_t frame_size)
+{
+	static uint32_t cnt_sr[2] = {0, 0};
+	static uint32_t cnt_br[2] = {0, 0};
+	static uint32_t sum_sr[2] = {0, 0};
+	static uint32_t sum_br[2] = {0, 0};
+
+	if (frame_size > 0) {
+		cnt_br[ctx->params.stream_id]++;
+		sum_br[ctx->params.stream_id] += frame_size;
+		if (ctx->rate_ctrl_p.rate_ctrl_en) {
+			cnt_sr[ctx->params.stream_id]++;
+			sum_sr[ctx->params.stream_id] += frame_size;
+			if (cnt_sr[ctx->params.stream_id] >= ctx->rate_ctrl_p.rate_ctrl.sampling_time) {
+				ctx->rate_ctrl_p.sample_bitrate = sum_sr[ctx->params.stream_id] * 8;
+				sum_sr[ctx->params.stream_id] = 0;
+				cnt_sr[ctx->params.stream_id] = 0;
+				video_rate_control_process(ctx);
+			}
+			if (cnt_br[ctx->params.stream_id] >= ctx->rate_ctrl_p.current_framerate) {
+				ctx->rate_ctrl_p.current_bitrate = sum_br[ctx->params.stream_id] * 8;
+				sum_br[ctx->params.stream_id] = 0;
+				cnt_br[ctx->params.stream_id] = 0;
+			}
+		} else {
+			if (cnt_br[ctx->params.stream_id] >= ctx->rate_ctrl_p.current_framerate) {
+				ctx->rate_ctrl_p.current_bitrate = sum_br[ctx->params.stream_id] * 8;
+				sum_br[ctx->params.stream_id] = 0;
+				cnt_br[ctx->params.stream_id] = 0;
+			}
+		}
+	}
+}
+static int ch4_recieve_add[2] = {0};
+static uint32_t ch4_last_frame_tick = 0;
 void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 {
 
@@ -149,6 +190,19 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 		return;
 	}
 
+	if (video_get_stream_info(4)) {
+		if (enc2out->ch == 4) {
+			ch4_last_frame_tick = timestamp;
+		}
+
+		if (timestamp - ch4_last_frame_tick > 1000) {
+			//printf("\r\nch4 no response %d ms\r\n", timestamp - ch4_last_frame_tick);
+			video_ispbuf_release(4, ch4_recieve_add[0]);
+			video_ispbuf_release(4, ch4_recieve_add[1]);
+			ch4_last_frame_tick = timestamp;
+		}
+	}
+
 	if (ctx->params.direct_output == 1) {
 		goto show_log;
 	}
@@ -156,18 +210,16 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 	// Snapshot JPEG
 	if (enc2out->codec & CODEC_JPEG && enc2out->jpg_len > 0) { // JPEG
 		if (ctx->snapshot_cb != NULL) {
-#if 0
 			if (ctx->meta_cb) {
 				video_meta_t parm;
 				parm.type = AV_CODEC_ID_MJPEG;
 				parm.video_addr = (uint32_t)enc2out->jpg_addr;
 				parm.video_len = enc2out->jpg_len;
 				parm.meta_offset = enc2out->meta_offset;
-				//parm.isp_meta_data = &(enc2out->isp_meta_data);
-				//parm.isp_statis_meta = &(enc2out->statis_data);
+				parm.isp_meta_data = &(enc2out->isp_meta_data);
+				parm.isp_statis_meta = &(enc2out->statis_data);
 				ctx->meta_cb(&parm);
 			}
-#endif
 			ctx->snapshot_cb((uint32_t)enc2out->jpg_addr, enc2out->jpg_len);
 			video_encbuf_release(enc2out->ch, CODEC_JPEG, enc2out->jpg_len);
 		} else {
@@ -195,18 +247,18 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 				output_item->hw_timestamp = enc2out->enc_time;
 				output_item->type = AV_CODEC_ID_MJPEG;
 				output_item->priv_data = enc2out->jpg_slot;//JPEG buffer used slot
-#if 0
+
 				if (ctx->meta_cb) {
 					video_meta_t parm;
 					parm.type = AV_CODEC_ID_MJPEG;
 					parm.video_addr = (uint32_t)enc2out->jpg_addr;
 					parm.video_len = enc2out->jpg_len;
 					parm.meta_offset = enc2out->meta_offset;
-					//parm.isp_meta_data = &(enc2out->isp_meta_data);
-					//parm.isp_statis_meta = &(enc2out->statis_data);
+					parm.isp_meta_data = &(enc2out->isp_meta_data);
+					parm.isp_statis_meta = &(enc2out->statis_data);
 					ctx->meta_cb(&parm);
 				}
-#endif
+
 				if (xQueueSend(mctx->output_ready, (void *)&output_item, 0) != pdTRUE) {
 					video_encbuf_release(enc2out->ch, enc2out->codec, enc2out->jpg_len);
 				} else {
@@ -234,6 +286,7 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 			if (enc2out->codec == CODEC_H264 || enc2out->codec == (CODEC_H264 | CODEC_JPEG)) {
 				output_item->type = AV_CODEC_ID_H264;
 				output_item->size = enc2out->enc_len;
+				video_rate_control_moniter_sample_rate(ctx, output_item->size);
 			} else if (enc2out->codec == CODEC_HEVC || enc2out->codec == (CODEC_HEVC | CODEC_JPEG)) {
 				output_item->type = AV_CODEC_ID_H265;
 				output_item->size = enc2out->enc_len;
@@ -270,18 +323,16 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 						VIDEO_DBG_ERROR("\r\n(%d/%d) %x %x %x %x\r\n", enc2out->enc_len, enc2out->finish, *ptr, *(ptr + 1), *(ptr + 2), *(ptr + 3));
 					}
 				}
-#if 0				
 				if (ctx->meta_cb) {
 					video_meta_t parm;
 					parm.meta_offset = enc2out->meta_offset;
 					parm.type = output_item->type;
 					parm.video_addr = (uint32_t)enc2out->enc_addr;
 					parm.video_len = enc2out->enc_len;
-					//parm.isp_meta_data = &(enc2out->isp_meta_data);
-					//parm.isp_statis_meta = &(enc2out->statis_data);
+					parm.isp_meta_data = &(enc2out->isp_meta_data);
+					parm.isp_statis_meta = &(enc2out->statis_data);
 					ctx->meta_cb(&parm);
 				}
-#endif				
 				/* } */
 				if (ctx->params.use_static_addr) {
 					output_item->data_addr = (uint32_t)enc2out->enc_addr;
@@ -296,6 +347,14 @@ void video_frame_complete_cb(void *param1, void  *param2, uint32_t arg)
 			} else {
 				if (ctx->params.use_static_addr) {
 					output_item->data_addr = (uint32_t)enc2out->isp_addr;
+					if (ch4_recieve_add[0] == 0) {
+						ch4_recieve_add[0] = output_item->data_addr;
+					}
+					if (ch4_recieve_add[1] == 0) {
+						if (output_item->data_addr != ch4_recieve_add[0]) {
+							ch4_recieve_add[1] = output_item->data_addr;
+						}
+					}
 				} else {
 					output_item->data_addr = (uint32_t)tempaddr;//malloc(enc2out->enc_len);
 					memcpy((void *)output_item->data_addr, (char *)enc2out->isp_addr, output_item->size);
@@ -412,6 +471,7 @@ int video_control(void *p, int cmd, int arg)
 	switch (cmd) {
 	case CMD_VIDEO_SET_PARAMS:
 		memcpy(&ctx->params, (void *)arg, sizeof(video_params_t));
+		ctx->rate_ctrl_p.current_framerate = ctx->params.fps;
 		break;
 	case CMD_VIDEO_GET_PARAMS:
 		memcpy((void *)arg, &ctx->params, sizeof(video_params_t));
@@ -436,7 +496,7 @@ int video_control(void *p, int cmd, int arg)
 		}
 		enc_queue_cnt[ch] = 0;
 		vTaskDelay(10);
-
+		ctx->rate_ctrl_p.rate_ctrl_en = 0;
 		video_close(ch);
 	}
 	break;
@@ -458,6 +518,7 @@ int video_control(void *p, int cmd, int arg)
 	case CMD_VIDEO_FPS: {
 		int ch = ctx->params.stream_id;
 		video_ctrl(ch, VIDEO_FPS, arg);
+		ctx->rate_ctrl_p.current_framerate = arg;
 	}
 	break;
 	case CMD_VIDEO_ISPFPS: {
@@ -510,9 +571,9 @@ int video_control(void *p, int cmd, int arg)
 	case CMD_VIDEO_SNAPSHOT_CB:
 		ctx->snapshot_cb = (int (*)(uint32_t, uint32_t))arg;
 		break;
-	// case CMD_VIDEO_META_CB:
-		// ctx->meta_cb = (void (*)(void *))arg;
-		// break;
+	case CMD_VIDEO_META_CB:
+		ctx->meta_cb = (void (*)(void *))arg;
+		break;
 	case CMD_VIDEO_UPDATE:
 
 		break;
@@ -528,6 +589,12 @@ int video_control(void *p, int cmd, int arg)
 		int ch = arg;
 		int ret = 0;
 		ctx->params.stream_id = ch;
+		ctx->rate_ctrl_p.rate_ctrl_en = 0;
+		if (ch == 4) {
+			printf("ch4 init buff address\r\n");
+			ch4_recieve_add[0] = 0;
+			ch4_recieve_add[1] = 0;
+		}
 		ret = video_open(&ctx->params, video_frame_complete_cb, ctx);
 #if MULTI_SENSOR
 		if (ret < 0 && video_get_video_sensor_status() == 0) { //Change the sensor procedure
@@ -576,34 +643,35 @@ int video_control(void *p, int cmd, int arg)
 #endif
 	}
 	break;
-	/*
-	case CMD_VIDEO_MD_SET_ROI: {
-		uint32_t *roi = (uint32_t *)arg;
-		md_set(MD2_PARAM_ROI, roi);
-	}
-	break;
-	case CMD_VIDEO_MD_SET_SENSITIVITY: {
-		uint32_t sensitivity = (uint32_t)arg;
-		md_set(MD2_PARAM_SENSITIVITY, &sensitivity);
-	}
-	break;
-	case CMD_VIDEO_MD_START: {
-		if (hal_video_md_cb(md_output_cb) != OK) {
-			VIDEO_DBG_ERROR("hal_video_md_cb_register fail\n");
-		} else {
-			md_start();
-		}
-	}
-	break;
-	case CMD_VIDEO_MD_STOP: {
-		md_stop();
-	}
-	break;
 	case CMD_VIDEO_SET_TIMESTAMP_OFFSET: {
 		ctx->timestamp_offset = arg;
 	}
 	break;
-	*/
+	case CMD_VIDEO_SET_RATE_CONTROL: {
+		memcpy(&ctx->rate_ctrl_p.rate_ctrl, (void *)arg, sizeof(rate_ctrl_t));
+		ctx->rate_ctrl_p.sample_bitrate = 0;
+		ctx->rate_ctrl_p.rate_ctrl_en = 1;
+	}
+	break;
+	case CMD_VIDEO_GET_CURRENT_BITRATE: {
+		*((uint32_t *)arg) = ctx->rate_ctrl_p.current_bitrate;
+	}
+	break;
+	case CMD_VIDEO_GET_REMAIN_QUEUE_LENGTH: {
+		*((uint32_t *)arg) = uxQueueSpacesAvailable(mctx->output_ready);
+	}
+	break;
+	case CMD_VIDEO_GET_MAX_QP: {
+		*((uint32_t *)arg) = video_get_maxqp(ctx->params.stream_id);
+	}
+	break;
+	case CMD_VIDEO_SET_MAX_QP: {
+		encode_rc_parm_t rc_parm;
+		memset(&rc_parm, 0x0, sizeof(encode_rc_parm_t));
+		rc_parm.maxQp = *((uint32_t *)arg);
+		video_ctrl(ctx->params.stream_id, VIDEO_SET_RCPARAM, (int)&rc_parm);
+	}
+	break;
 }
 return 0;
 }
@@ -745,18 +813,18 @@ int video_voe_presetting(int v1_enable, int v1_w, int v1_h, int v1_bps, int v1_s
 	int voe_heap_size = 0;
 	isp_info_t info;
 
-	if (USE_SENSOR == SENSOR_GC4023) {
+	if (USE_SENSOR == SENSOR_GC4653) {
 		info.sensor_width = 2560;
 		info.sensor_height = 1440;
 		info.sensor_fps = 15;
-	} else if (USE_SENSOR == SENSOR_PS5270) {
+	} else if (USE_SENSOR == SENSOR_SC301) {
+		info.sensor_width = 2048;
+		info.sensor_height = 1536;
+		info.sensor_fps = 30;
+	} else if (USE_SENSOR == SENSOR_JXF51) {
 		info.sensor_width = 1536;
 		info.sensor_height = 1536;
-		info.sensor_fps = 15;
-	}  else if (USE_SENSOR == SENSOR_PS5420) {
-		info.sensor_width = 1936;
-		info.sensor_height = 1936;
-		info.sensor_fps = 15;
+		info.sensor_fps = 30;
 	} else {
 		info.sensor_width = 1920;
 		info.sensor_height = 1080;
@@ -765,10 +833,6 @@ int video_voe_presetting(int v1_enable, int v1_w, int v1_h, int v1_bps, int v1_s
 
 #if OSD_ENABLE
 	info.osd_enable = 1;
-#endif
-
-#if MD_ENABLE
-	info.md_enable = 1;
 #endif
 
 #if HDR_ENABLE
