@@ -48,7 +48,6 @@
 #define TX_PAGE_NUM 	AUDIO_DMA_PAGE_NUM
 #define RX_PAGE_SIZE 	AUDIO_DMA_PAGE_SIZE //64*N bytes, max: 4095. 128, 4032
 #define RX_PAGE_NUM 	AUDIO_DMA_PAGE_NUM
-#define FRAME_LENGTH_MS(samplerate, wordlength)    ((AUDIO_DMA_PAGE_SIZE / wordlength) / (samplerate / 1000)) // 1 sample = wordlength(bytes)
 
 static uint8_t dma_txdata[TX_PAGE_SIZE * TX_PAGE_NUM]__attribute__((aligned(0x20)));
 static uint8_t dma_rxdata[RX_PAGE_SIZE * RX_PAGE_NUM]__attribute__((aligned(0x20)));
@@ -666,10 +665,10 @@ static void audio_rx_handle_thread(void *param)
 		// use left mic data to do process in stereo mic signal, will modify after stereo signal process is ready
 		if (ctx->params.use_mic_type == USE_AUDIO_STEREO_DMIC) {
 			dma_rxdata_proc_buf = dma_rxdata_buf_l;
+		} else if (ctx->params.use_mic_type == USE_AUDIO_LEFT_DMIC) {
+			dma_rxdata_proc_buf = dma_rxdata_buf_l;
 		} else if (ctx->params.use_mic_type == USE_AUDIO_RIGHT_DMIC) {
 			dma_rxdata_proc_buf = dma_rxdata_buf_r;
-		} else { //USE_AUDIO_LEFT_DMIC or USE_AUDIO_AMIC
-			dma_rxdata_proc_buf = dma_rxdata_buf_l;
 		}
 		uint32_t audio_rx_ts = proc_rx_buf.timestamp;
 		//uint32_t audio_rx_ts = xTaskGetTickCount();
@@ -929,10 +928,10 @@ int audio_control(void *p, int cmd, int arg)
 		ctx->run_vad = arg;
 		break;
 	case CMD_AUDIO_SET_AEC_LEVEL:
-		sample_rate = audio_get_samplerate(ctx->params.sample_rate);
 		ctx->run_aec = 0;
-		vTaskDelay(FRAME_LENGTH_MS(sample_rate, ctx->word_length));     // wait for the AEC process of previous frames
+		vTaskDelay(10);     // wait for the AEC process of previous frames
 		AEC_destory();
+		sample_rate = audio_get_samplerate(ctx->params.sample_rate);
 #if defined(CONFIG_PLATFORM_8735B) && (defined(CONFIG_NEWAEC) && CONFIG_NEWAEC)
 		ctx->rxcfg.aec_cfg.PPLevel = arg;
 		AEC_init(FRAMESIZE, sample_rate, &(ctx->rxcfg.aec_cfg), &(ctx->rxcfg.agc_cfg), &(ctx->rxcfg.ns_cfg), 1.0f);
@@ -1005,12 +1004,11 @@ int audio_control(void *p, int cmd, int arg)
 		} while (0);
 		break;
 	case CMD_AUDIO_SET_RESET:
-		sample_rate = audio_get_samplerate(ctx->params.sample_rate);
 #if ENABLE_ASP==1
 		ctx->run_ns = 0;
 		ctx->run_agc = 0;
 		ctx->run_aec = 0;
-		vTaskDelay(FRAME_LENGTH_MS(sample_rate, ctx->word_length));     // wait for the AEC process of previous frames
+		vTaskDelay(10);     // wait for the AEC process of previous frames
 		if (pcm_rx_cache && (ctx->enable_rxasp || ctx->params.enable_record)) {
 			xQueueReset(pcm_rx_cache);
 		}
@@ -1019,6 +1017,7 @@ int audio_control(void *p, int cmd, int arg)
 		audio_deinit(ctx->audio);
 
 		if (ctx->params.sample_rate == ASR_8KHZ || ctx->params.sample_rate == ASR_16KHZ) {
+			sample_rate = audio_get_samplerate(ctx->params.sample_rate);
 #if defined(CONFIG_PLATFORM_8735B) && (defined(CONFIG_NEWAEC) && CONFIG_NEWAEC)
 			ctx->enable_rxasp = 0;
 			/* reset all voice algorithm */

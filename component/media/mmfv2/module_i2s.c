@@ -21,8 +21,8 @@
 
 //------------------------------------------------------------------------------
 
-#define AUDIO_DMA_PAGE_NUM 4
-#define AUDIO_DMA_PAGE_SIZE (640)	//64*N bytes, max: 4095. 128, 4032  
+#define AUDIO_DMA_PAGE_NUM 2
+#define AUDIO_DMA_PAGE_SIZE (320)	//64*N bytes, max: 4095. 128, 4032  
 
 #define TX_PAGE_SIZE 	AUDIO_DMA_PAGE_SIZE //64*N bytes, max: 4095. 128, 4032 
 #define TX_PAGE_NUM 	AUDIO_DMA_PAGE_NUM
@@ -322,7 +322,6 @@ int i2s_control(void *p, int cmd, int arg)
 			ctx->word_length = 4;
 		} else {
 			printf("[I2S Ctrl Err]There is no proper definition of i2s word_length.\n\r");
-			goto i2s_control_fail;
 		}
 
 		if (ctx->params.out_word_length == WL_16b) {
@@ -333,7 +332,6 @@ int i2s_control(void *p, int cmd, int arg)
 			out_word_length = 4;
 		} else {
 			printf("[I2S Ctrl Err]There is no proper definition of i2s out_word_length.\n\r");
-			goto i2s_control_fail;
 		}
 
 		if (((float)ctx->word_length / (float)out_word_length) < 1) {

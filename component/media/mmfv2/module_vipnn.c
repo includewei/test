@@ -21,14 +21,14 @@
 // TODO move to vipnn context
 #define DBG_LEVEL	LOG_MSG
 
+#define LOG_DBG		5
 #define LOG_OFF		4
 #define LOG_ERR		3
 #define LOG_MSG		2
 #define LOG_INF		1
 #define LOG_ALL		0
-#define LOG_DBG		-1
 
-#define dprintf(level, ...) if((level >= DBG_LEVEL) || (level==LOG_DBG && level==DBG_LEVEL)) do{printf(__VA_ARGS__);}while(0)
+#define dprintf(level, ...) if(level >= DBG_LEVEL || (level==LOG_DBG && level==DBG_LEVEL)) do{printf(__VA_ARGS__);}while(0)
 
 static int vipnn_inited = 0;
 static _mutex nn_mutex;
@@ -61,7 +61,7 @@ void vipnn_mark(char *model_name, int num)
 //#define vipnn_mark() mm_printf("vnn %s %d\n\r",ctx->params.model->name, __LINE__);
 #define vipnn_mark()
 
-static int __vipnn_handle(void *p, void *input, void *output)
+int __vipnn_handle(void *p, void *input, void *output)
 {
 	vipnn_ctx_t *ctx = (vipnn_ctx_t *)p;
 	mm_queue_item_t *input_item = (mm_queue_item_t *)input;
@@ -203,8 +203,6 @@ static int __vipnn_handle(void *p, void *input, void *output)
 			input_data = last_model_output->input_data;
 
 			input_param = &cas_input_param;
-		} else {
-			input_param->priv = (void *)input_data;
 		}
 
 		dprintf(LOG_INF, "input %x w %d h %d\n\r", input_data, input_param->img.width, input_param->img.height);
@@ -235,7 +233,7 @@ static int __vipnn_handle(void *p, void *input, void *output)
 		rtw_mutex_get(&nn_mutex);
 		// run network
 		NN_MEASURE_START(0);
-#if 0
+#if 1
 		CHK_NN((status = vip_trigger_network(ctx->network)) == VIP_SUCCESS);
 		CHK_NN((status = vip_wait_network(ctx->network)) == VIP_SUCCESS);
 #else
@@ -271,7 +269,7 @@ static int __vipnn_handle(void *p, void *input, void *output)
 
 		vipnn_mark();
 
-		if (ctx->module_out_en && (ctx->module_out_type == VIPNN_NORMAL_OUTPUT)) {
+		if (ctx->module_out_en) {
 			//vipnn_out_buf_t tensor_out_next;
 			vipnn_out_buf_t *tensor_out_next = (vipnn_out_buf_t *)(output_item->data_addr + i * sizeof(vipnn_out_buf_t));
 
@@ -304,9 +302,6 @@ static int __vipnn_handle(void *p, void *input, void *output)
 				}
 			}
 			memcpy(&tensor_out_next->vipnn_res, post_res, sizeof(vipnn_res_t));
-
-		} else if (ctx->module_out_en && (ctx->module_out_type == VIPNN_RAW_OUTPUT)) {
-			memcpy((void *)output_item->data_addr, post_res, sizeof(vipnn_res_t));
 		}
 
 	}
@@ -319,7 +314,7 @@ static int __vipnn_handle(void *p, void *input, void *output)
 	vipnn_mark();
 	/*------------------------------------------------------*/
 	if (ctx->module_out_en && post_res) {
-		output_item->size = (ctx->module_out_type == VIPNN_NORMAL_OUTPUT) ? (sizeof(vipnn_out_buf_t) * loop_cnt) : sizeof(vipnn_res_t);
+		output_item->size = sizeof(vipnn_out_buf_t) * loop_cnt;
 		//memcpy(output_item->data_addr, &tensor_out_next, output_item->size);
 		output_item->timestamp = input_item->timestamp;
 		output_item->type = AV_CODEC_ID_NN_RAW;
@@ -361,21 +356,14 @@ int vipnn_control(void *p, int cmd, int arg)
 		*(vipnn_status_t *)arg = ctx->status;
 		break;
 	case CMD_VIPNN_SET_CONFIDENCE_THRES:
-		if (ctx->params.model->set_confidence_thresh) {
-			ctx->params.model->set_confidence_thresh((void *)arg);
-		}
+		ctx->params.model->set_confidence_thresh((void *)arg);
 		break;
 	case CMD_VIPNN_SET_NMS_THRES:
-		if (ctx->params.model->set_nms_thresh) {
-			ctx->params.model->set_nms_thresh((void *)arg);
-		}
+		ctx->params.model->set_nms_thresh((void *)arg);
 		break;
 	case CMD_VIPNN_SET_OUTPUT:
 		ctx->module_out_en = (bool)arg;
 		((mm_context_t *)ctx->parent)->module->output_type = MM_TYPE_VSINK;
-		break;
-	case CMD_VIPNN_SET_OUTPUT_TYPE:
-		ctx->module_out_type = (vipnn_out_type_t)arg;
 		break;
 	case CMD_VIPNN_SET_CASCADE:
 		ctx->cas_mode = arg;
@@ -412,10 +400,6 @@ void vipnn_deinited(void *p)
 		vip_destroy_buffer(ctx->output_buffers[i]);
 	}
 
-	if (ctx->params.model->release) {
-		ctx->params.model->release();
-	}
-
 	ctx->status = VIPNN_DEINITED;
 }
 
@@ -423,20 +407,20 @@ void *vipnn_destroy(void *p)
 {
 	vipnn_ctx_t *ctx = (vipnn_ctx_t *)p;
 
+	if (ctx->status != VIPNN_DEINITED) {
+		vipnn_deinited(ctx);
+	}
+
+	vipnn_module_cnt--;
+	if (vipnn_module_cnt == 0 && vipnn_inited == 1) {
+		vip_destroy();  // destroy viplite engine if it is last opened vipnn module
+		printf("vip_destroy done\r\n");
+		rtw_mutex_free(&nn_mutex);
+		vipnn_inited = 0;
+	}
+
 	if (ctx) {
-		if (ctx->status != VIPNN_DEINITED) {
-			vipnn_deinited(ctx);
-		}
-
 		free(ctx);
-
-		vipnn_module_cnt--;
-		if (vipnn_module_cnt == 0 && vipnn_inited == 1) {
-			vip_destroy();  // destroy viplite engine if it is last opened vipnn module
-			printf("vip_destroy done\r\n");
-			rtw_mutex_free(&nn_mutex);
-			vipnn_inited = 0;
-		}
 	}
 	return NULL;
 }
@@ -565,7 +549,7 @@ static vip_int32_t init_io_buffers(void *p)
 			dprintf(LOG_MSG, ", none-quant\n\r");
 		}
 		vip_create_buffer(param, sizeof(vip_buffer_create_params_t), &ctx->input_buffers[i]);
-		dprintf(LOG_MSG, "input buffer %d = %p, vid memory %x \n\r", i, ctx->input_buffers[i], ctx->input_buffers[i]->memory.physical);
+		dprintf(LOG_MSG, "input buffer %d = %x, vid memory %x \n\r", i, ctx->input_buffers[i], ctx->input_buffers[i]->memory.physical);
 	}
 
 	for (i = 0; i < ctx->output_count; i++) {
@@ -605,7 +589,7 @@ static vip_int32_t init_io_buffers(void *p)
 			dprintf(LOG_MSG, ", none-quant\n\r");
 		}
 		vip_create_buffer(param, sizeof(vip_buffer_create_params_t), &ctx->output_buffers[i]);
-		dprintf(LOG_MSG, "output buffer %d = %p, vid memory %x \n\r", i, ctx->output_buffers[i], ctx->output_buffers[i]->memory.physical);
+		dprintf(LOG_MSG, "output buffer %d = %x, vid memory %x \n\r", i, ctx->output_buffers[i], ctx->output_buffers[i]->memory.physical);
 	}
 
 	vipnn_dump_network_io_params(ctx);
@@ -617,6 +601,14 @@ int vipnn_deoply_network(void *p)
 	vipnn_ctx_t *ctx = (vipnn_ctx_t *)p;
 	vip_status_e status = VIP_SUCCESS;
 
+	/*
+	// from memory
+	if(ctx->params.model_type == VIPNN_MODEL_MEM)
+		status = vip_create_network(ctx->params.model_mem, ctx->params.model_size, VIP_CREATE_NETWORK_FROM_MEMORY, &ctx->network);
+	// from file
+	else if(ctx->params.model_type == VIPNN_MODEL_FILE)
+		status = vip_create_network(ctx->params.model_file, 0, VIP_CREATE_NETWORK_FROM_FILE, &ctx->network);
+	*/
 	if (ctx->params.model->model_src == MODEL_SRC_MEM) {
 		void *nn_model = ctx->params.model->nb();
 		status = vip_create_network(nn_model, ctx->params.model->nb_size(), VIP_CREATE_NETWORK_FROM_MEMORY, &ctx->network);
@@ -626,7 +618,7 @@ int vipnn_deoply_network(void *p)
 	}
 	ONERROR(status, "error: vip_create_network.", vipnn_deploy_error);
 
-	dprintf(LOG_INF, "network %p\n\r", ctx->network);
+	dprintf(LOG_INF, "network %x\n\r", ctx->network);
 
 	status = vip_query_network(ctx->network, VIP_NETWORK_PROP_NETWORK_NAME, ctx->network_name);
 	ONERROR(status, "error: vip_query_network VIP_NETWORK_PROP_NETWORK_NAME.", vipnn_deploy_error);

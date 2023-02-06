@@ -72,7 +72,6 @@ int voe_fw_reload = 0;
 int video_load_fw(unsigned int sensor_start_addr);
 unsigned char *video_load_sensor(unsigned int sensor_start_addr);
 unsigned char *video_load_iq(unsigned int iq_start_addr);
-static void isp_set_dn_initial_mode(int mode);
 /////////////////////////////////
 #include "section_config.h"
 SDRAM_DATA_SECTION unsigned char sensor_buf[FW_SENSOR_SIZE];
@@ -885,12 +884,6 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 			voe_info_init = 1;
 		}
 		voe_info.stream_is_open[ch] = 1;
-		if (isp_boot->fcs_start_time) { //If it enable the fcs mode that it will show the fcs info.
-			hal_video_print(1);
-			video_dprintf(VIDEO_LOG_MSG, " fcs_start_time %d fcs_voe_time %d\r\n", isp_boot->fcs_start_time, isp_boot->fcs_voe_time);
-			hal_video_time_info(1);
-			hal_video_print(0);
-		}
 		return OK;
 	}
 
@@ -998,25 +991,11 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 		hal_video_isp_set_isp_meta_out(ch, 1);
 	}
 
-	if (v_stream->dn_init_mode) {
-		isp_set_dn_initial_mode(1);
-		video_dprintf(VIDEO_LOG_INF, "Set night mode\r\n");
-	}
-
-	/* if (v_adp) {
-		v_adp->cmd[ch]->roiMapDeltaQpBlockUnit = 2; //0:64x64, 1:32x32, 2:16x16
-		v_adp->cmd[ch]->roiMapDeltaQpEnable = 1;
-	} */
 
 	video_dprintf(VIDEO_LOG_INF, "hal_video_open\r\n");
 	if (hal_video_open(ch) != OK) {
 		video_dprintf(VIDEO_LOG_ERR, "hal_video_open fail\n");
 		return -1;
-	}
-
-	if (v_stream->dn_init_mode) {
-		video_dprintf(VIDEO_LOG_INF, "dn_mode %d gray_mode %d all_init_iq_set_flag %d\r\n", v_adp->cmd[ch]->init_daynight_mode, v_adp->cmd[ch]->gray_mode,
-					  v_adp->cmd[ch]->all_init_iq_set_flag);
 	}
 
 	if (voe_info_init == 0) {
@@ -1212,19 +1191,20 @@ void *video_deinit(void)
 void voe_set_iq_sensor_fw(int id)
 {
 	extern int __voe_code_start__[];
+	unsigned int p_fcs_data, p_iq_data, p_sensor_data = 0;
+	p_fcs_data    = (int)(isp_boot->p_fcs_ld_info.fcs_hdr_start + (isp_boot->p_fcs_ld_info.sensor_set[id].fcs_data_offset));
+	p_iq_data     = (int)(p_fcs_data + (isp_boot->p_fcs_ld_info.sensor_set[id].iq_start_addr));
+	p_sensor_data = (int)(p_fcs_data + (isp_boot->p_fcs_ld_info.sensor_set[id].sensor_start_addr));
+	video_dprintf(VIDEO_LOG_INF, "ch %d p_fcs_data %x p_sensor_data %x\r\n", id, p_iq_data, p_sensor_data);
 
-	int iq_data, sensor_data;
-	voe_get_sensor_info(id, &iq_data, &sensor_data);
-	video_dprintf(VIDEO_LOG_INF, "ch %d iq_data %x sensor_data %x\r\n", id, iq_data, sensor_data);
 	unsigned char *iq_addr = NULL;
 	unsigned char *sensor_addr = NULL;
-	iq_addr = video_load_iq(iq_data);
-	sensor_addr = video_load_sensor(sensor_data);
+	iq_addr = video_load_iq(p_iq_data);
+	sensor_addr = video_load_sensor(p_sensor_data);
 	if (iq_addr == NULL || sensor_addr == NULL) {
 		video_dprintf(VIDEO_LOG_ERR, "It can't allocate the buffer\r\n");
 		return;
 	}
-
 #if CONFIG_TUNING
 #ifdef TUNING_USB_MODE
 	if (g_uvcd_iq) {
@@ -1631,22 +1611,6 @@ void video_get_fcs_queue_info(int *start_time, int *end_time)
 	*start_time = fcs_queue_start_time;
 	*end_time = fcs_queue_end_time;
 	video_dprintf(VIDEO_LOG_INF, "fcs start_time %d end_time %d\r\n", fcs_queue_start_time, fcs_queue_end_time);
-}
-
-static void isp_set_dn_initial_mode(int mode) //0 day mode 1 night mode
-{
-	if (isp_boot->fcs_status) {
-		video_dprintf(VIDEO_LOG_ERR, "It is fcs mode, don't support\r\n");
-	} else {
-		if (mode == 0 || mode == 1) {
-			hal_video_isp_set_init_iq_mode(0, 2);
-			hal_video_isp_set_dn_mode(0, mode);
-			hal_video_isp_set_gray_mode(0, mode);
-			video_dprintf(VIDEO_LOG_INF, "Set isp mode %d\r\n", mode);
-		} else {
-			video_dprintf(VIDEO_LOG_ERR, "Don't support mode %d\r\n", mode);
-		}
-	}
 }
 
 #if NONE_FCS_MODE

@@ -88,12 +88,8 @@ static rtsp2_params_t rtsp2_v1_params = {
 #define NN_TYPE VIDEO_RGB
 
 #define NN_MODEL_OBJ   yolov4_tiny  // yolov7_tiny
-#define NN_WIDTH	576//416
-#define NN_HEIGHT	320//416
-
-define_model(yolov4_tiny_320p)
-#define USE_OBJDET_MODEL use_model(yolov4_tiny_320p)
-
+#define NN_WIDTH	416
+#define NN_HEIGHT	416
 static float nn_confidence_thresh = 0.5;
 static float nn_nms_thresh = 0.3;
 static int desired_class_list[] = {0, 2, 5, 7};
@@ -239,7 +235,7 @@ static void nn_set_object(void *p, void *img_param)
 			}
 		}
 	}
-	canvas_update(RTSP_CHANNEL, 0, 1);
+	canvas_update(RTSP_CHANNEL, 0);
 
 }
 
@@ -375,7 +371,6 @@ void mmf2_video_example_vipnn_rtsp_init(void)
 	int ch_width[3] = {RTSP_WIDTH, 0, 0}, ch_height[3] = {RTSP_HEIGHT, 0, 0};
 	osd_render_dev_init(ch_enable, char_resize_w, char_resize_h);
 	osd_render_task_start(ch_enable, ch_width, ch_height);
-	canvas_create_bitmap_all(RTSP_CHANNEL, 0, 0, 0, RTSP_WIDTH, RTSP_HEIGHT, RTS_OSD2_BLK_FMT_1BPP);
 #endif
 
 	return;

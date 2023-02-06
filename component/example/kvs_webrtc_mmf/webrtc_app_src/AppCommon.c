@@ -870,16 +870,6 @@ CleanUp:
 STATUS runApp(PAppConfiguration pAppConfiguration)
 {
 	STATUS retStatus = STATUS_SUCCESS;
-	retStatus = app_signaling_create(&pAppConfiguration->appSignaling);
-	if (retStatus != STATUS_SUCCESS) {
-		DLOGD("operation returned status code: 0x%08x ", retStatus);
-	}
-
-	retStatus = app_signaling_fetch(&pAppConfiguration->appSignaling);
-	if (retStatus != STATUS_SUCCESS) {
-		DLOGD("operation returned status code: 0x%08x ", retStatus);
-	}
-
 	retStatus = app_signaling_connect(&pAppConfiguration->appSignaling);
 	if (retStatus != STATUS_SUCCESS) {
 		DLOGD("operation returned status code: 0x%08x ", retStatus);
@@ -1098,12 +1088,7 @@ STATUS quitApp(VOID)
 	STATUS retStatus = STATUS_SUCCESS;
 	UINT32 counter = 0;
 	DLOGD("Quit webrtc app.");
-
 	if (gAppConfiguration != NULL) {
-		retStatus = app_signaling_shutdown(&gAppConfiguration->appSignaling);
-		if (retStatus != STATUS_SUCCESS) {
-			DLOGE("shutdown signaling client failed!");
-		}
 		ATOMIC_STORE_BOOL(&gAppConfiguration->sigInt, TRUE);
 		CVAR_BROADCAST(gAppConfiguration->cvar);
 	}

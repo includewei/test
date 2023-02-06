@@ -14,9 +14,6 @@ extern void wlan_network(void);
 
 extern void console_init(void);
 
-// tick count initial value used when start scheduler
-uint32_t initial_tick_count = 0;
-
 #ifdef _PICOLIBC__
 int errno;
 #endif
@@ -55,17 +52,6 @@ void setup(void)
 #endif
 }
 
-void set_initial_tick_count(void)
-{
-	// Check DWT_CTRL(0xe0001000) CYCCNTENA(bit 0). If DWT cycle counter is enabled, set tick count initial value based on DWT cycle counter.
-	if ((*((volatile uint32_t *) 0xe0001000)) & 1) {
-		(*((volatile uint32_t *) 0xe0001000)) &= (~((uint32_t) 1)); // stop DWT cycle counter
-		uint32_t dwt_cyccnt = (*((volatile uint32_t *) 0xe0001004));
-		uint32_t systick_load = (configCPU_CLOCK_HZ / configTICK_RATE_HZ) - 1UL;
-		initial_tick_count = dwt_cyccnt / systick_load;
-	}
-}
-
 /**
   * @brief  Main program.
   * @param  None
@@ -82,8 +68,7 @@ void main(void)
 	/* Execute application example */
 	app_example();
 
-	/* set tick count initial value before start scheduler */
-	set_initial_tick_count();
+
 	vTaskStartScheduler();
 	while (1);
 }

@@ -243,6 +243,7 @@ list(
 	${sdk_root}/component/at_cmd/atcmd_isp.c
 	${sdk_root}/component/at_cmd/atcmd_ftl.c
 	${sdk_root}/component/at_cmd/atcmd_ethernet.c
+	${sdk_root}/component/at_cmd/atcmd_stub.c
 	${sdk_root}/component/at_cmd/log_service.c
 	${sdk_root}/component/soc/8735b/misc/driver/rtl_console.c
 	${sdk_root}/component/soc/8735b/misc/driver/low_level_io.c
@@ -603,7 +604,6 @@ list(
 list(
 	APPEND app_sources		
 	${sdk_root}/component/video/driver/RTL8735B/video_api.c
-	${sdk_root}/component/video/driver/RTL8735B/video_snapshot.c
 )
 
 #MMF_MODULE
@@ -737,8 +737,6 @@ list(
 	${prj_root}/src/test_model/nn_utils/nms.c
 	${prj_root}/src/test_model/nn_utils/tensor.c
 	${prj_root}/src/test_model/nn_utils/class_name.c
-
-	${prj_root}/src/test_model/roi_delta_qp/roi_delta_qp.c
 )
 #NN module
 list(
@@ -791,7 +789,7 @@ elseif(DEFINED SELF_TEST AND SELF_TEST)
 	message(STATUS "SELF_TEST = ${SELF_TEST}")
     include(${prj_root}/src/self_test/${SELF_TEST}/${SELF_TEST}.cmake)
     if(NOT DEBUG)
-        set(SELF_TEST OFF CACHE STRING INTERNAL FORCE)
+        set(VIDEO_EXAMPLE OFF CACHE STRING INTERNAL FORCE)
     endif()
 elseif(DEFINED DOORBELL_CHIME AND DOORBELL_CHIME)
     message(STATUS "Build DOORBELL_CHIME project")
@@ -1087,7 +1085,7 @@ target_link_options(
 	"LINKER:SHELL:-T ${ld_script}"
 	"LINKER:SHELL:-Map=${CMAKE_CURRENT_BINARY_DIR}/${app}.map"
 	"LINKER:-wrap,realloc"
-	"LINKER:-wrap,_realloc_r"	
+	"LINKER:-wrap,_realloc_r"
 	#"SHELL:${CMAKE_CURRENT_SOURCE_DIR}/build/import.lib"
 )
 
@@ -1146,7 +1144,6 @@ add_custom_command(TARGET ${app} POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${app}> ${app}.axf
 	COMMAND ${CMAKE_OBJCOPY} -j .bluetooth_trace.text -Obinary ${app}.axf APP.trace
 	COMMAND ${CMAKE_OBJCOPY} -R .bluetooth_trace.text ${app}.axf 
-	COMMAND ${CMAKE_READELF} -s -W $<TARGET_FILE:${app}>  > ${app}.symbols
 
 	#COMMAND [ -d output ] || mkdir output
 	COMMAND ${CMAKE_COMMAND} -E remove_directory output && ${CMAKE_COMMAND} -E make_directory  output

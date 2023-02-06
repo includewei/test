@@ -105,17 +105,6 @@ static void tcp_remove_sacks_gt(struct tcp_pcb *pcb, u32_t seq);
 #endif /* TCP_OOSEQ_BYTES_LIMIT || TCP_OOSEQ_PBUFS_LIMIT */
 #endif /* LWIP_TCP_SACK_OUT */
 
-/* Added by Realtek start */
-#if defined(CONFIG_LWIP_TCP_RESUME) && (CONFIG_LWIP_TCP_RESUME == 1)
-static u16_t tcp_resume_port = 0;
-
-void tcp_set_resume_port(u16_t port)
-{
-  tcp_resume_port = port;
-}
-#endif
-/* Added by Realtek end */
-
 /**
  * The initial input processing of TCP. It verifies the TCP header, demultiplexes
  * the segment between the PCBs and passes it on to tcp_process(), which implements
@@ -241,16 +230,6 @@ tcp_input(struct pbuf *p, struct netif *inp)
   seqno = tcphdr->seqno = lwip_ntohl(tcphdr->seqno);
   ackno = tcphdr->ackno = lwip_ntohl(tcphdr->ackno);
   tcphdr->wnd = lwip_ntohs(tcphdr->wnd);
-
-/* Added by Realtek start */
-#if defined(CONFIG_LWIP_TCP_RESUME) && (CONFIG_LWIP_TCP_RESUME == 1)
-  // drop packet before tcp resume done
-  if(tcp_resume_port && (tcphdr->dest == tcp_resume_port)) {
-    pbuf_free(p);
-    return;
-  }
-#endif
-/* Added by Realtek end */
 
   flags = TCPH_FLAGS(tcphdr);
   tcplen = p->tot_len;

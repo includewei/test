@@ -130,7 +130,6 @@
 #define VOE_ISP_SET_AE_WEIGHT			 0x250
 #define VOE_ISP_SET_MASK				 0x251
 
-#define VOE_ISP_SET_ZOOM_CROP			 0x252
 
 //OSD
 #define VOE_OSD_QUERY                    0x260

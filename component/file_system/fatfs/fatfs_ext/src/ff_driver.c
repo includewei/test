@@ -2,65 +2,39 @@
 #include "platform_stdlib.h"
 
 ff_disk_drv  disk = {0};
-static _mutex ff_init_mutex = NULL;
 
-static void ff_lock(void)
-{
-	if (ff_init_mutex == NULL) {
-		rtw_mutex_init(&ff_init_mutex);
-	}
-	rtw_mutex_get(&ff_init_mutex);
-}
-
-static void ff_unlock(void)
-{
-	if (ff_init_mutex == NULL) {
-		rtw_mutex_init(&ff_init_mutex);
-	}
-	rtw_mutex_put(&ff_init_mutex);
-}
 // return drv_num assigned
 int FATFS_RegisterDiskDriver(ll_diskio_drv *drv)
 {
-	int index = 0;
-	int drv_num = -1;
-	ff_lock();
+	unsigned char drv_num = -1;
+
 	if (disk.nbr < _VOLUMES) {
-		for (index = 0; index < _VOLUMES; index++) {
-			if (!disk.drv[index]) {
-				drv->drv_num = index;	// record driver number for a specific disk
-				disk.drv[index] = drv;
-				disk.nbr++;
-				drv_num = index;
-				break;
-			}
-		}
+		drv->drv_num = disk.nbr;	// record driver number for a specific disk
+		disk.drv[disk.nbr] = drv;
+		disk.nbr++;
+		drv_num = drv->drv_num;
 	}
-	ff_unlock();
 	printf("FATFS Register: disk driver %d\n\r", drv_num);
 	return drv_num;
 }
 
 int FATFS_UnRegisterDiskDriver(unsigned char drv_num)
 {
-	int index = 0;
-	int ret = -1;
-	ff_lock();
+	int index;
+
 	if (disk.nbr >= 1) {
 		for (index = 0; index < _VOLUMES; index++) {
 			if (disk.drv[index]) {
 				if (disk.drv[index]->drv_num == drv_num) {
-					disk.drv[index] = NULL;
+					disk.drv[index] = 0;
 					disk.nbr--;
-					ret = 0;
-					goto EXIT;
+					return 0;
 				}
 			}
 		}
+		return -1; // fail
 	}
-EXIT:
-	ff_unlock();
-	return ret; // return result 0:successful 1:fail
+	return -1; // no disk driver registered
 }
 
 

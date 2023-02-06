@@ -419,7 +419,7 @@ int hal_video_md_trigger(void);
 // Show VOE information
 int hal_video_mem_info(void);
 int hal_video_buf_info(void);
-int hal_video_time_info(int level);
+int hal_video_time_info(void);
 int hal_video_print(int mode);
 
 
@@ -447,7 +447,6 @@ int hal_video_set_ae_weight(uint8_t *weight_array, int weight_num);
 int hal_video_config_grid_mask(int enable, isp_grid_t grid, uint8_t *bitmap);
 int hal_video_config_rect_mask(int enable, uint32_t id, isp_rect_t rect);
 int hal_video_set_mask(int ch, BOOL fast_en);
-int hal_video_set_dynamic_zoom(int ch, isp_crop_t corp_info);
 
 extern hal_video_adapter_t vv_adapter;
 

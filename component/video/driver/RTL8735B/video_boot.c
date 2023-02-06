@@ -305,9 +305,7 @@ int video_btldr_process(voe_fcs_load_ctrl_t *pvoe_fcs_ld_ctrl, int *code_start)
 		addr = video_boot_malloc(voe_heap_size);
 		video_boot_stream.voe_heap_addr = addr;
 		video_boot_stream.voe_heap_size = voe_heap_size;
-		if (video_boot_stream.fcs_start_time) { //Measure the fcs time
-			video_boot_stream.fcs_voe_time = (* ((volatile uint32_t *) 0xe0001004)) / (500000) + video_boot_stream.fcs_start_time;
-		}
+
 		ret = hal_video_init((long unsigned int *)addr, voe_heap_size);
 		video_boot_stream.fcs_status = 1;
 	}

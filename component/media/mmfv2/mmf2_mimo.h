@@ -7,8 +7,6 @@
 
 #include "dlist.h"
 
-#define MIMO_CTRL_TIMEOUT 100
-
 typedef struct mm_mimo_item_s {
 	// list node
 	struct list_head node;
@@ -17,7 +15,7 @@ typedef struct mm_mimo_item_s {
 	uint32_t data;
 
 	// ref count
-	int32_t ref_cnt;
+	uint32_t ref_cnt;
 
 	// log
 	uint32_t use_log;
@@ -26,9 +24,6 @@ typedef struct mm_mimo_item_s {
 typedef struct mm_mimo_queue_s {
 	// list entry
 	struct list_head head;
-
-	// item counter
-	int count;
 
 	// protection
 	SemaphoreHandle_t lock;
@@ -54,7 +49,6 @@ typedef struct mm_mimo_s {
 	char            taskname[4][16];
 	xTaskHandle     task[4];
 	uint32_t    	secure_context;
-	uint32_t        timeout_count[4];
 	void			*ctrl_lock;
 } mm_mimo_t;
 

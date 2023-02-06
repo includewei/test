@@ -894,7 +894,6 @@
  *       library may modify the way the ECDH context layout is configured
  *       and may modify the layout of the new context type.
  */
-//ESSENTIAL2: disabled this
 //#define MBEDTLS_ECDH_LEGACY_CONTEXT
 
 /**
@@ -2742,7 +2741,6 @@
  * \warning   DES is considered a weak cipher and its use constitutes a
  *            security risk. We recommend considering stronger ciphers instead.
  */
-//ESSENTIAL2: enabled this
 #define MBEDTLS_DES_C
 
 /**

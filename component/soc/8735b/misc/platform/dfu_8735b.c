@@ -195,11 +195,11 @@ static int ota_upgrade_from_usb(unsigned char *buf, unsigned int size, int index
 	int ret = 0;
 	int wr_status = 0;
 	dfu->read_bytes = size;
-	if (dfu->boot_type) {
+	if(dfu->boot_type){
 		memcpy(dfu->fw_buf + dfu->update_size, buf, size);
-	} else {
+	}else{
 		//int nor_flash_update(unsigned char *fw_buf, int fw_size, int index)
-		nor_flash_update(buf, size, index);
+		nor_flash_update(buf,size,index);
 	}
 	dfu->update_size += dfu->read_bytes;
 	return 0;

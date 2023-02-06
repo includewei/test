@@ -11,8 +11,6 @@
 #include "mmf2_pro2_video_config.h"
 #include "video_example_media_framework.h"
 #include "avcodec.h"
-#include "roi_delta_qp/roi_delta_qp.h"
-#include "log_service.h"
 
 #include "model_scrfd.h"
 
@@ -91,9 +89,6 @@ static rtsp2_params_t rtsp2_v1_params = {
 #define NN_WIDTH    576//640
 #define NN_HEIGHT   320//640
 
-define_model(scrfd320p)
-#define USE_FACEDET_MODEL use_model(scrfd320p)
-
 static video_params_t video_v4_params = {
 	.stream_id 		= NN_CHANNEL,
 	.type 			= NN_TYPE,
@@ -121,7 +116,6 @@ static nn_data_param_t roi_nn = {
 	}
 };
 
-static void atcmd_userctrl_init(void);
 static mm_context_t *video_v1_ctx			= NULL;
 static mm_context_t *rtsp2_v1_ctx			= NULL;
 static mm_context_t *video_rgb_ctx			= NULL;
@@ -158,8 +152,6 @@ static void nn_set_object(void *p, void *img_param)
 	int roi_x = (int)(im->img.roi.xmin * ratio + (im_w - roi_w) / 2);
 	int roi_y = (int)(im->img.roi.ymin * ratio + (im_h - roi_h) / 2);
 
-	roi_delta_qp_set_param(RTSP_CHANNEL, 0, 0, RTSP_WIDTH, RTSP_HEIGHT, ROI_DELTA_QP_MAX);
-
 	printf("object num = %d\r\n", face_res->obj_num);
 	canvas_clean_all(RTSP_CHANNEL, 0);
 	if (face_res->obj_num > 0) {
@@ -181,8 +173,6 @@ static void nn_set_object(void *p, void *img_param)
 				snprintf(text_str, sizeof(text_str), "%s %d", "face", (int)(face_res->result[6 * i + 1 ] * 100));
 				canvas_set_text(RTSP_CHANNEL, 0, xmin, ymin - 32, text_str, COLOR_CYAN);
 
-				roi_delta_qp_set_param(RTSP_CHANNEL, xmin, ymin, (xmax - xmin), (ymax - ymin), ROI_DELTA_QP_DEFAULT);
-
 				for (int j = 0; j < 5; j++) {
 					int x = (int)(face_res->landmark[i].pos[j].x * roi_w) + roi_x;
 					int y = (int)(face_res->landmark[i].pos[j].y * roi_h) + roi_y;
@@ -191,13 +181,11 @@ static void nn_set_object(void *p, void *img_param)
 			}
 		}
 	}
-	canvas_update(RTSP_CHANNEL, 0, 1);
+	canvas_update(RTSP_CHANNEL, 0);
 }
 
 void mmf2_video_example_vipnn_facedet_init(void)
 {
-	USE_FACEDET_MODEL;
-	atcmd_userctrl_init();
 
 	int voe_heap_size = video_voe_presetting(1, RTSP_WIDTH, RTSP_HEIGHT, RTSP_BPS, 0,
 						0, 0, 0, 0, 0,
@@ -290,40 +278,10 @@ void mmf2_video_example_vipnn_facedet_init(void)
 	int ch_width[3] = {RTSP_WIDTH, 0, 0}, ch_height[3] = {RTSP_HEIGHT, 0, 0};
 	osd_render_dev_init(ch_enable, char_resize_w, char_resize_h);
 	osd_render_task_start(ch_enable, ch_width, ch_height);
-	canvas_create_bitmap_all(RTSP_CHANNEL, 0, 0, 0, RTSP_WIDTH, RTSP_HEIGHT, RTS_OSD2_BLK_FMT_1BPP);
+
 	return;
 mmf2_example_vnn_facedetect_fail:
 
 	return;
 }
 
-static void fSB(void *arg)
-{
-	if (!strcmp(arg, "ON")) {
-		printf("turn on roi delta qp \r\n");
-
-		encode_rc_parm_t rc_parm;
-		memset(&rc_parm, 0, sizeof(encode_rc_parm_t));
-		rc_parm.minQp = 0;
-		rc_parm.maxQp = 51;
-		mm_module_ctrl(video_v1_ctx, CMD_VIDEO_SET_RCPARAM, (int)&rc_parm);
-
-		/* roi delta qp init and start */
-		roi_delta_qp_init(RTSP_CHANNEL, RTSP_WIDTH, RTSP_HEIGHT);
-		roi_delta_qp_start();
-	} else if (!strcmp(arg, "OFF")) {
-		printf("turn off roi delta qp \r\n");
-		roi_delta_qp_stop();
-	} else {
-		printf("invalid cmd");
-	}
-}
-
-static log_item_t userctrl_items[] = {
-	{"SB", fSB, },
-};
-
-static void atcmd_userctrl_init(void)
-{
-	log_service_add_table(userctrl_items, sizeof(userctrl_items) / sizeof(userctrl_items[0]));
-}

@@ -322,7 +322,7 @@ void wifi_set_user_config(void)
 	wifi_user_config.rtw_lps_level = LPS_NORMAL;
 	wifi_user_config.rtw_power_mgnt = PS_MODE_MAX;//PS_MODE_MIN
 #endif
-	wifi_user_config.rtw_ps_timeout = 120;// default: 20
+	wifi_user_config.rtw_ps_timeout = 20;// default: 20
 	wifi_user_config.smart_ps = 2;
 
 	/* AP */

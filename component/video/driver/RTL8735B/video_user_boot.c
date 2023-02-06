@@ -19,7 +19,6 @@
 #include "hal_flash.h"
 //#define USE_2K_SENSOR
 #define CHANGE_PARAMETER
-//#define MEASURE_FCS_TIME
 video_boot_stream_t video_boot_stream = {
 	.video_params[STREAM_V1].stream_id = STREAM_V1,
 	.video_params[STREAM_V1].type = CODEC_H264,
@@ -257,13 +256,6 @@ void user_boot_config_init(void *parm)
 	//Insert your code into here
 	//dbg_printf("user_boot_config_init\r\n");
 	video_boot_stream_t *fcs_data = NULL;
-#ifdef MEASURE_FCS_TIME
-	video_boot_stream.fcs_start_time = hal_read_cur_time() / 1000;
-	(* ((volatile uint32_t *) 0xe000edfc)) |= (1 << 24);       // DEMCR, bit 24 TRCENA
-	(* ((volatile uint32_t *) 0xe0001004)) = 0;       // DWT_CYCCNT
-	(* ((volatile uint32_t *) 0xe0001000)) |= 1;       // DWT_CTRL, bit 0 CYCCNTENA
-#endif
-
 #ifdef FCS_PARTITION
 	unsigned char *boot_data = NULL;
 	boot_data = (unsigned char *)parm;

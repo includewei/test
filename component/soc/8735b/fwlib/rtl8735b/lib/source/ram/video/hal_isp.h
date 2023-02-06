@@ -283,14 +283,7 @@ typedef struct {
 
 } isp_rect_t;
 
-typedef struct {
 
-	int start_x;
-	int start_y;
-	int width;
-	int height;
-
-} isp_crop_t;
 
 
 typedef struct {

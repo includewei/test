@@ -8,7 +8,7 @@
 - Clone the following repository for KVS webrtc
 	- amazon-kinesis-video-streams-webrtc-sdk-c
     ```
-    git clone -b webrtc-on-freertos-wss-1220-R https://github.com/ambiot-mini/amazon-kinesis-video-streams-webrtc-sdk-c.git
+    git clone -b webrtc-on-freertos-wss-0513-R https://github.com/ambiot-mini/amazon-kinesis-video-streams-webrtc-sdk-c.git
     ```
     - cisco/libsrtp
     ```

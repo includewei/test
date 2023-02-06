@@ -44,7 +44,6 @@ if(BUILD_TZ)
 	set(fw application/firmware_tz.bin)
 	set(isp_iq application/firmware_isp_iq.bin)
 	set(app_dep application.s application.ns)
-	set(symbols application/application.ns.symbols)
 	
 	set(bttrace application/APP.trace)
 	add_subdirectory (application)
@@ -57,7 +56,6 @@ else()
 	set(fw application/firmware_ntz.bin)
 	set(isp_iq application/firmware_isp_iq.bin)
 	set(app_dep application.ntz)
-	set(symbols application/application.ntz.symbols)
 	
 	set(bttrace application/APP.trace)
 	add_subdirectory (application)
@@ -98,7 +96,6 @@ add_custom_target(
 	COMMAND ${CMAKE_COMMAND} -E copy ${fcs_param} .
 	COMMAND ${CMAKE_COMMAND} -E copy ${fw} ./firmware.bin
 	COMMAND ${CMAKE_COMMAND} -E copy ${isp_iq} ./firmware_isp_iq.bin
-	COMMAND ${CMAKE_COMMAND} -E copy ${symbols} ./application.symbols
 
 	COMMAND ${CMAKE_COMMAND} -E copy ${bttrace} ./APP.trace
 	
@@ -126,35 +123,12 @@ add_custom_target(
 	DEPENDS ${ELF2BIN}
 )
 
-if(UNITEST)
-add_custom_target(
-	auto_model_cfg
-	
-	${CMAKE_COMMAND} -E cmake_echo_color --cyan "auto NN model config start"
-	COMMAND ${CMAKE_COMMAND} -E copy ${POSTBUILD_FWFS_NN} amebapro2_fwfs_nn_models.json
-	COMMAND ${NNMDLCFG} amebapro2_fwfs_nn_models.json application.symbols
-	
-	DEPENDS plain_img
-	DEPENDS ${POSTBUILD_FWFS_NN}
-)
-else()
-add_custom_target(
-	auto_model_cfg
-	
-	${CMAKE_COMMAND} -E cmake_echo_color --cyan "skip model config"
-	COMMAND ${CMAKE_COMMAND} -E copy ${POSTBUILD_FWFS_NN} amebapro2_fwfs_nn_models.json
-	
-	DEPENDS plain_img
-	DEPENDS ${POSTBUILD_FWFS_NN}
-)
-endif()
-
 add_custom_target(
 	flash_nn
 	#COMMAND ${PLAT_COPY} ${NN_MODEL_PATH}/*.nb .
 	#COMMAND ${CMAKE_COMMAND} -P ${prj_root}/GCC-RELEASE/copy_nb.cmake
 	COMMAND ${CMAKE_COMMAND} -E copy ${POSTBUILD_NNMDL} amebapro2_nn_model.json
-	
+	COMMAND ${CMAKE_COMMAND} -E copy ${POSTBUILD_FWFS_NN} amebapro2_fwfs_nn_models.json
 	COMMAND ${ELF2BIN} convert amebapro2_fwfs_nn_models.json FWFS fwfs_nn_model.bin
 	COMMAND ${ELF2BIN} convert amebapro2_nn_model.json FIRMWARE nn_model.bin
 	COMMAND ${ELF2BIN} combine amebapro2_partitiontable.json ${target}.nn.bin PT_PT=partition.bin,CER_TBL=certable.bin,KEY_CER1=certificate.bin,PT_BL_PRI=boot.bin,PT_FW1=firmware.bin,PT_NN_MDL=nn_model.bin,PT_ISP_IQ=firmware_isp_iq.bin,PT_FCSDATA=boot_fcs.bin
@@ -169,7 +143,6 @@ add_custom_target(
 	COMMAND ${CHKSUM} ./isp_iq_ota.bin
 	
 	DEPENDS plain_img
-	DEPENDS auto_model_cfg
 	DEPENDS ${ELF2BIN}
 	DEPENDS ${POSTBUILD_NNMDL}
 	DEPENDS ${POSTBUILD_FWFS_NN}

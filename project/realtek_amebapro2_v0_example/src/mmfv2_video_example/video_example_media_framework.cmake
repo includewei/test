@@ -10,7 +10,6 @@ list(
 ### add flags ###
 list(
 	APPEND app_example_flags
-	UNITEST_VIDEO_EXAMPLE
 )
 
 ### add header files ###
