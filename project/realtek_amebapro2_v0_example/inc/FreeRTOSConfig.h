@@ -69,6 +69,7 @@ extern uint32_t SystemCoreClock;
 #define configMAX_PRIORITIES							( 11 )
 #define configIDLE_SHOULD_YIELD							1
 #define configUSE_16_BIT_TICKS							0 /* Only for 8 and 16-bit hardware. */
+#define configNUM_THREAD_LOCAL_STORAGE_POINTERS         5
 
 /* Constants that describe the hardware and memory usage. */
 #define configCPU_CLOCK_HZ								SystemCoreClock
