@@ -1003,6 +1003,18 @@ int video_open(video_params_t *v_stream, output_callback_t output_cb, void *ctx)
 		video_dprintf(VIDEO_LOG_INF, "Set night mode\r\n");
 	}
 
+	if ((codec & (CODEC_HEVC | CODEC_H264)) != 0) {
+		if (v_stream->level) {
+			v_adp->cmd[ch]->level = v_stream->level;
+		}
+		if (v_stream->profile) {
+			v_adp->cmd[ch]->profile = v_stream->profile;
+		}
+		if (v_stream->cavlc) {
+			v_adp->cmd[ch]->enableCabac = 0;
+		}
+	}
+
 	/* if (v_adp) {
 		v_adp->cmd[ch]->roiMapDeltaQpBlockUnit = 2; //0:64x64, 1:32x32, 2:16x16
 		v_adp->cmd[ch]->roiMapDeltaQpEnable = 1;

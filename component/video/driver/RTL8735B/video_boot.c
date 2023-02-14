@@ -221,6 +221,16 @@ int video_boot_open(video_boot_params_t *v_stream)
 		v_adp->cmd[ch]->drop_frame_num = video_boot_stream.video_drop_frame[ch];
 	}
 
+	if (v_stream->level) {
+		v_adp->cmd[ch]->level = v_stream->level;
+	}
+	if (v_stream->profile) {
+		v_adp->cmd[ch]->profile = v_stream->profile;
+	}
+	if (v_stream->cavlc) {
+		v_adp->cmd[ch]->enableCabac = 0;
+	}
+
 	dcache_clean_invalidate_by_addr((uint32_t *)v_adp->cmd[ch], sizeof(commandLine_s));
 
 	//v_stream->out_buf_size = out_buf_size;

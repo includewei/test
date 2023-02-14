@@ -107,6 +107,9 @@ typedef struct video_param_s {
 	} roi;
 	uint32_t meta_size;
 	uint32_t dn_init_mode;
+	uint32_t level;
+	uint32_t profile;
+	uint32_t cavlc;
 } video_params_t;
 
 typedef struct voe_info_s {
