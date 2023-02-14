@@ -513,16 +513,31 @@ void fATII(void *arg)
 				Erase_Fastconnect_data();
 				printf("[ATII] erase AP info.\r\n");
 			} else {
-				int *iq_tmp = malloc(CMD_DATA_SIZE);
+				int *iq_tmp = malloc(CMD_DATA_SIZE*4);
 				if (iq_tmp) {
-					memset(iq_tmp, 0, CMD_DATA_SIZE);
-					printf("[ATII] erase 64K.\r\n");
-					ftl_common_write(TUNING_IQ_FW, (u8*)iq_tmp, CMD_DATA_SIZE);
+					memset(iq_tmp, 0, CMD_DATA_SIZE*4);
+					ftl_common_write(TUNING_IQ_FW, (u8*)iq_tmp, CMD_DATA_SIZE*4);
+					printf("[ATII] erase 256K..Done.\r\n");
 					free(iq_tmp);
 				}
 			}
 		}
 		printf("[atcmd_isp] not CONFIG_TUNING.\r\n");
+	} else if (strcmp(argv[1], "meta") == 0) {
+extern isp_statis_meta_t jpg_meta;
+		isp_statis_meta_t jmeta = jpg_meta;
+		printf("[%s]exposure_h:%d exposure_l:%d\r\n", __FUNCTION__, jmeta.exposure_h, jmeta.exposure_l);
+		printf("[%s]gain_h:%d gain_l:%d\r\n", __FUNCTION__, jmeta.gain_h, jmeta.gain_l);
+		printf("[%s]wb_r_gain:%d wb_b_gain:%d wb_g_gain:%d\r\n", __FUNCTION__, jmeta.wb_r_gain, jmeta.wb_b_gain, jmeta.wb_g_gain);
+		printf("[%s]colot_temperature:%d\r\n", __FUNCTION__, jmeta.colot_temperature);
+		printf("[%s]y_average:%d\r\n", __FUNCTION__, jmeta.y_average);
+		printf("[%s]white_num:%d\r\n", __FUNCTION__, jmeta.white_num);
+		printf("[%s]rg_sum:%d bg_sum:%d\r\n", __FUNCTION__, jmeta.rg_sum, jmeta.bg_sum);
+		printf("[%s]hdr_mode:%d\r\n", __FUNCTION__, jmeta.hdr_mode);
+		printf("[%s]sensor_fps:%d max_fps:%d\r\n", __FUNCTION__, jmeta.sensor_fps, jmeta.max_fps);
+		printf("[%s]frame_count:%d\r\n", __FUNCTION__, jmeta.frame_count);
+		printf("[%s]time_stamp:%d\r\n", __FUNCTION__, jmeta.time_stamp);
+		printf("[%s]rmean:%d gmean:%d bmean:%d\r\n", __FUNCTION__, jmeta.rmean, jmeta.gmean, jmeta.bmean);
 #endif
 	} else if (strcmp(argv[1], "i2c") == 0) {
 		struct rts_isp_i2c_reg reg;
@@ -542,26 +557,125 @@ void fATII(void *arg)
 			ret = hal_video_i2c_read(&reg);
 			printf("ret: %d, read addr:0x%04X, data:0x%04X.\r\n", ret, reg.addr, reg.data);
 		}
+	} else if (strcmp(argv[1], "info") == 0) {
+		if (strcmp(argv[2], "af") == 0) {
+			af_statis_t af_result;
+			int ret = hal_video_get_AF_statis(&af_result);
+			if (!ret) {
+				printf("fr %d af0 %d %d af1 %d %d\n", af_result.frame_count, af_result.sum0, af_result.num0, af_result.sum1, af_result.num1);
+			} else {
+				printf("get info fail hal_video_get_AF_statis.\r\n");
+			}
+		} else if (strcmp(argv[2], "ae") == 0) {
+			ae_statis_t ae_result;
+			int ret = hal_video_get_AE_statis(&ae_result);
+			if (!ret) {
 #if 0
-//ESSENTIAL2: v9.5c_patch_support_tuning_tool_(v02)(96431) introduced the jpg_meta testing in example_media_uvcd.c
-// but the v9.5c_AcuraSensor_BringUp_1361_(V02)(96523) removed jpg_meta testing in  example_media_uvcd.c
-	} else if (strcmp(argv[1], "meta") == 0) {
-extern isp_statis_meta_t jpg_meta;
-		isp_statis_meta_t jmeta = jpg_meta;
-		printf("[%s]exposure_h:%d exposure_l:%d\r\n", __FUNCTION__, jmeta.exposure_h, jmeta.exposure_l);
-		printf("[%s]gain_h:%d gain_l:%d\r\n", __FUNCTION__, jmeta.gain_h, jmeta.gain_l);
-		printf("[%s]wb_r_gain:%d wb_b_gain:%d wb_g_gain:%d\r\n", __FUNCTION__, jmeta.wb_r_gain, jmeta.wb_b_gain, jmeta.wb_g_gain);
-		printf("[%s]colot_temperature:%d\r\n", __FUNCTION__, jmeta.colot_temperature);
-		printf("[%s]y_average:%d\r\n", __FUNCTION__, jmeta.y_average);
-		printf("[%s]white_num:%d\r\n", __FUNCTION__, jmeta.white_num);
-		printf("[%s]rg_sum:%d bg_sum:%d\r\n", __FUNCTION__, jmeta.rg_sum, jmeta.bg_sum);
-		printf("[%s]hdr_mode:%d\r\n", __FUNCTION__, jmeta.hdr_mode);
-		printf("[%s]sensor_fps:%d max_fps:%d\r\n", __FUNCTION__, jmeta.sensor_fps, jmeta.max_fps);
-		printf("[%s]frame_count:%d\r\n", __FUNCTION__, jmeta.frame_count);
-		printf("[%s]time_stamp:%d\r\n", __FUNCTION__, jmeta.time_stamp);
-		printf("[%s]rmean:%d gmean:%d bmean:%d\r\n", __FUNCTION__, jmeta.rmean, jmeta.gmean, jmeta.bmean);
+				printf("fr %d ae win %d #0 %d #15 %d #119 %d #136 %d #240 %d #255 %d\n", \
+					   ae_result.frame_count, ae_result.win_cnt, ae_result.y_mean[0], ae_result.y_mean[15], \
+					   ae_result.y_mean[119], ae_result.y_mean[136], ae_result.y_mean[240], ae_result.y_mean[255]);
+#else
+				printf("fr %d ae win %d \n", ae_result.frame_count, ae_result.win_cnt);
+				for (int j = 0; j < 16; j += 3) {
+					for (int k = 0; k < 16; k += 3) {
+						dbg_printf("%d ", ae_result.y_mean[j * 16 + k]);
+					}
+					dbg_printf("\n");
+				}
 #endif
+			} else {
+				printf("get info fail hal_video_get_AE_statis.\r\n");
+			}
+		} else if (strcmp(argv[2], "awb") == 0) {
+			awb_statis_t awb_result;
+			int ret = hal_video_get_AWB_statis(&awb_result);
+			if (!ret) {
+#if 0
+				printf("r %d %d g %d %d n %d %d \n", \
+					   awb_result.r_mean[119], awb_result.r_mean[136], awb_result.g_mean[119], awb_result.g_mean[136], awb_result.b_mean[119], awb_result.b_mean[136]);
+#else
+				printf("awb r \n");
+				for (int j = 0; j < 16; j += 3) {
+					for (int k = 0; k < 16; k += 3) {
+						dbg_printf("%d ", awb_result.r_mean[j * 16 + k]);
+					}
+					dbg_printf("\n");
+				}
+				printf("awb g \n");
+				for (int j = 0; j < 16; j += 3) {
+					for (int k = 0; k < 16; k += 3) {
+						dbg_printf("%d ", awb_result.g_mean[j * 16 + k]);
+					}
+					dbg_printf("\n");
+				}
+				printf("awb b \n");
+				for (int j = 0; j < 16; j += 3) {
+					for (int k = 0; k < 16; k += 3) {
+						dbg_printf("%d ", awb_result.b_mean[j * 16 + k]);
+					}
+					dbg_printf("\n");
+				}
 
+#endif
+			} else {
+				printf("get info fail hal_video_get_AWB_statis.\r\n");
+			}
+		}
+		if (strcmp(argv[2], "mipi") == 0) {
+			int value;
+			value = HAL_READ32(0x40300000, 0xC0198);
+			printf("frame_cnt: 0x%08X (%d) \r\n", value, value);
+			value = HAL_READ32(0x40300000, 0xC019C);
+			printf("pixel_cnt: 0x%08X (%d) \r\n", value, value);
+			value = HAL_READ32(0x40300000, 0xC01A0);
+			printf("line_cnt: 0x%08X (%d) \r\n", value, value);
+		} else if (strcmp(argv[2], "sys") == 0) {
+			int value;
+			value = HAL_READ32(0x40300000, 0x20);
+			printf("frame_cnt(input): 0x%08X (%d) \r\n", value, value);
+			value = HAL_READ32(0x40300000, 0x28);
+			printf("frame_idle: 0x%08X (%d) \r\n", value, value);
+		}
+	} else if (strcmp(argv[1], "func_en") == 0) {
+		int RegVale = HAL_READ32(0x40300000, 0x00004);
+		printf("Value:0x%08X  LSC:%d  NR:%d  DPC:%d  EE:%d  Gamma:%d \r\n"
+		, RegVale, (RegVale&0x18)==0x18, (RegVale&0x20000)==0x20000, (RegVale&0x8000)==0x8000, (RegVale&0x4000)==0x4000, (RegVale&0x05)==0x05);
+		if (argc == 7) {
+			if(atoi(argv[2]) == 1) //bit: 3&4
+				RegVale = RegVale | 0x18;
+			else
+				RegVale = RegVale & (~0x18);
+				
+			if(atoi(argv[3]) == 1) //bit: 17
+				RegVale = RegVale | 0x20000;
+			else
+				RegVale = RegVale & (~0x20000);
+			
+			if(atoi(argv[4]) == 1) //bit: 15
+				RegVale = RegVale | 0x8000;
+			else
+				RegVale = RegVale & (~0x8000);
+				
+			if(atoi(argv[5]) == 1) //bit: 14
+				RegVale = RegVale | 0x4000;
+			else
+				RegVale = RegVale & (~0x4000);
+				
+			if(atoi(argv[6]) == 1) //bit: 2&0
+				RegVale = RegVale | 0x05;
+			else
+				RegVale = RegVale & (~0x05);
+				
+			HAL_WRITE32(0x40300000, 0x00004, RegVale);
+			
+			RegVale = HAL_READ32(0x40300000, 0x00004);
+			//bLSCEn, char bNREn, char bDPCEn, char bEEEn, char bGammaEn
+			printf("{Changed] Value:0x%08X  LSC:%d  NR:%d  DPC:%d  EE:%d  Gamma:%d \r\n"
+			, RegVale, (RegVale&0x18)==0x18, (RegVale&0x20000)==0x20000, (RegVale&0x8000)==0x8000, (RegVale&0x4000)==0x4000, (RegVale&0x05)==0x05);
+		} else {
+			printf("incorrect argument number.(%d)\r\nPlease follow below format:\r\n", argc);
+			printf("[Example] ATII=func_en,bLSC,bNR,bDPC,bEE,bGamma\r\n", argc);
+		}
 	}
 
 }
