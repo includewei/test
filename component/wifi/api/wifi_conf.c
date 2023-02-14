@@ -405,14 +405,6 @@ int wifi_on(rtw_mode_t mode)
 		ret = rltk_wlan_start(idx);
 		if (ret == 0) {
 			_wifi_is_on = 1;
-#if CONFIG_AUTO_RECONNECT
-			//setup reconnection flag
-			wifi_config_autoreconnect(1, AUTO_RECONNECT_COUNT, AUTO_RECONNECT_INTERVAL);
-#endif
-			//Used by FAST RECONNECTION
-			if (p_wifi_do_fast_connect && wifi_mode == RTW_MODE_STA) {
-				p_wifi_do_fast_connect();
-			}
 		}
 		if (ret < 0) {
 			RTW_API_INFO("\n\rERROR: Start WIFI Failed!");
@@ -429,6 +421,14 @@ int wifi_on(rtw_mode_t mode)
 			RTW_API_INFO("\n\rWIFI initialized\n");
 			if (wifi_user_config.channel_plan) {
 				rltk_wlan_change_channel_plan(wifi_user_config.channel_plan);
+			}
+#if CONFIG_AUTO_RECONNECT
+			//setup reconnection flag
+			wifi_config_autoreconnect(1, AUTO_RECONNECT_COUNT, AUTO_RECONNECT_INTERVAL);
+#endif
+			//Used by FAST RECONNECTION
+			if (p_wifi_do_fast_connect && wifi_mode == RTW_MODE_STA) {
+				p_wifi_do_fast_connect();
 			}
 			break;
 		}
