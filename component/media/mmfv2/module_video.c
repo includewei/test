@@ -813,18 +813,18 @@ int video_voe_presetting(int v1_enable, int v1_w, int v1_h, int v1_bps, int v1_s
 	int voe_heap_size = 0;
 	isp_info_t info;
 
-	if (USE_SENSOR == SENSOR_GC4653) {
+	if (USE_SENSOR == SENSOR_GC4023) {
 		info.sensor_width = 2560;
 		info.sensor_height = 1440;
 		info.sensor_fps = 15;
-	} else if (USE_SENSOR == SENSOR_SC301) {
-		info.sensor_width = 2048;
-		info.sensor_height = 1536;
-		info.sensor_fps = 30;
-	} else if (USE_SENSOR == SENSOR_JXF51) {
+	} else if (USE_SENSOR == SENSOR_PS5270) {
 		info.sensor_width = 1536;
 		info.sensor_height = 1536;
-		info.sensor_fps = 30;
+		info.sensor_fps = 15;
+	}  else if (USE_SENSOR == SENSOR_PS5420) {
+		info.sensor_width = 1936;
+		info.sensor_height = 1936;
+		info.sensor_fps = 15;
 	} else {
 		info.sensor_width = 1920;
 		info.sensor_height = 1080;

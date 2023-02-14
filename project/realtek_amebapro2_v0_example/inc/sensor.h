@@ -36,7 +36,7 @@ extern "C" {
 #define SENSOR_GC4023		0x01
 #define SENSOR_PS5420		0x02
 #define SENSOR_PS5270		0x03
-#define SENSOR_GC2333		0x04
+#define SENSOR_SC2333		0x04
 #define SENSOR_GC4653		0x05
 #define SENSOR_SC301		0x06
 #define SENSOR_JXF51		0x07
@@ -45,7 +45,7 @@ extern "C" {
 #define MULTI_ENABLE        0x01
 
 #define MULTI_SENSOR  		MULTI_DISABLE
-#define USE_SENSOR      	SENSOR_PS5270
+#define USE_SENSOR      	SENSOR_GC4023
 #define NONE_FCS_MODE       0
 #define FW1_IQ_ADDR        0xF20000
 #define FW2_IQ_ADDR        0xF60000
