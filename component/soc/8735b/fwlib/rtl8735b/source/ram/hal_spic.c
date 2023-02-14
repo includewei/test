@@ -264,8 +264,12 @@ void spic_config_user_mode(phal_spic_adaptor_t phal_spic_adaptor)
 		phal_spic_adaptor->write_delay = 80;
 	} else if (spic_bit_mode == SpicOneIOMode) {
 		phal_spic_adaptor->write_delay = 160; //Low speed one IO mode
-	} else { // 125MHz STR with One IO program
-		phal_spic_adaptor->write_delay = 48;
+	} else { //STR with One IO program
+		if (baudr == 1) {
+			phal_spic_adaptor->write_delay = 48;//125/100MHz STR with One IO program
+		} else {
+			phal_spic_adaptor->write_delay = 80;//62.5/50MHz STR with One IO program
+		}
 	}
 }
 

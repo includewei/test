@@ -101,7 +101,7 @@ void flash_init(flash_t *obj)
 {
 	hal_status_t ret;
 	if (pglob_spic_adaptor == NULL) {
-		ret = spic_init(&hal_spic_adaptor, SpicQuadIOMode, SpicQuadIOPin);
+		ret = spic_init(&hal_spic_adaptor, SPIC_BIT_MODE_SETTING, SpicQuadIOPin);
 		if (ret != HAL_OK) {
 			DBG_SPIF_ERR("flash_init err(%d)\r\n", ret);
 		} else {
