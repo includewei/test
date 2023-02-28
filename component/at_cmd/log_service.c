@@ -44,7 +44,6 @@ extern void inic_ipc_mp_command(char *token, unsigned int cmd_len, int show_msg)
 extern int wext_private_command(const char *ifname, char *cmd, int show_msg);
 #endif
 #endif
-extern void at_ftl_init(void);
 
 void at_log_init(void);
 
@@ -89,7 +88,7 @@ log_init_t log_init_table[] = {
 #endif
 	at_log_init,
 	//	at_app_init,
-#if CONFIG_ETHERNET
+#if (CONFIG_ETHERNET == 1 && ETHERNET_INTERFACE == MII_INTERFACE)
 	at_ethernet_init,
 #endif
 
@@ -219,24 +218,6 @@ void *log_action(char *cmd)
 	return act;
 }
 
-#define DELETE      127
-#define BACKSPACE   8
-static void log_remove_backspace(char *cmd)
-{
-    char *p = cmd;
-    char *pnext = cmd;
-    while (*pnext != '\0') {
-        if (*pnext == BACKSPACE || *pnext == DELETE) {
-            if(p != cmd)
-                p--;
-        }
-        else
-            *p++ = *pnext;
-        pnext++;
-    }
-    *p = '\0';
-}
-
 void *log_handler(char *cmd)
 {
 	log_act_t action = NULL;
@@ -248,16 +229,11 @@ void *log_handler(char *cmd)
 	char tok[33] = {0};//'\0'
 	strncpy(copy, cmd, LOG_SERVICE_BUFLEN - 1);
 
-    log_remove_backspace(copy);
 #if defined(USE_STRSEP)
 	token = _strsep(&copy, "=");
 	param = copy;
 #else
-	if (strchr(copy, '='))
-		token = strtok(copy, "=");  // ATCMD type
-	else
-		token = strtok(copy, " ");  // ESSENTIAL2: allow for command line type
-
+	token = strtok(copy, "=");
 	param = strtok(NULL, "\0");
 #endif
 	//if (token && (strlen(token) <= 4)) {
