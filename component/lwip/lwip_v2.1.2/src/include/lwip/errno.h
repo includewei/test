@@ -180,16 +180,6 @@ extern "C" {
 #define  ENOTRECOVERABLE 141  /* State not recoverable */
 #define  EOWNERDEAD      142  /* Previous owner died */
 
-#if defined(ESSENTIAL2)
-//taken from amebapro2_toolchain/asdk-10.3.0/linux/newlib/arm-none-eabi/include/sys/errno.h
-#include <sys/reent.h>
-
-#ifndef _REENT_ONLY
-#define errno (*__errno())
-extern int *__errno (void);
-#endif
-#endif
-
 #ifndef errno
 extern int errno;
 #endif
